@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { NFTRecord } from "../types";
 import "./MainDashboard.css";
+import { parseNFTData } from "./AgentInfoDashboard";
 
 interface MainDashboardProps {
   agents: NFTRecord[];
@@ -38,17 +39,16 @@ const MainDashboard = ({
 }: MainDashboardProps) => {
   const [metricsData, setMetricsData] = useState({
     agentsSecured: 0,
-    totalInteractions: 0,
-    intrusions: 0,
+    globalTotalInteractions: 0,
+    globalIntrusions: 0,
   });
-
-  console.log("Agents passed to MainDashboard:", agents);
+  const [enrichedAgents, setEnrichedAgents] = useState<NFTRecord[]>([]);
 
   // Fetch each NFT chain
   async function fetchChain(id: string) {
     try {
       const res = await fetch(
-        `https://chain-connector-1.rubix.net/api/get-nft-token-chain-data?nft=${id}`
+        `https://chain-connector-1.rubix.net/api/get-nft-token-chain-data?nft=${id}`,
       );
       const data = await res.json();
       return data.NFTDataReply || [];
@@ -62,33 +62,64 @@ const MainDashboard = ({
   async function computeMetrics() {
     if (!agents.length) return;
 
-    let totalInteractions = 0;
-    let intrusions = 0;
+    let globalTotalInteractions = 0;
+    let globalIntrusions = 0;
 
-    const chains = await Promise.all(agents.map((a) => fetchChain(a.id)));
+    const updatedAgents: NFTRecord[] = await Promise.all(
+      agents.map(async (agent) => {
+        const interactedAgentsSet = new Set<string>();
 
-    chains.forEach((chain) => {
-      const validBlocks = chain.filter((b: any) => b.BlockNo !== 0);
-      totalInteractions += validBlocks.length;
+        const chain = await fetchChain(agent.id);
 
-      validBlocks.forEach((block: any) => {
-        try {
-          const parsed = JSON.parse(block.NFTData);
-          const bad =
-            parsed?.verification?.status === "failed" ||
-            (parsed?.verification?.trust_issues?.length ?? 0) > 0 ||
-            (parsed?.responses?.[0]?.envelope?.host_trust_issues?.length ?? 0) >
-              0;
+        const validBlocks = chain.filter((b: any) => b.BlockNo !== 0);
 
-          if (bad) intrusions++;
-        } catch {}
-      });
-    });
+        const agentInteractions = validBlocks.length;
+        let agentIntrusions = 0;
 
+        validBlocks.forEach((block: any) => {
+          try {
+            const parsedData = parseNFTData(block.NFTData);
+
+            const parsed = JSON.parse(block.NFTData);
+
+            const bad =
+              parsed?.verification?.status === "failed" ||
+              (parsed?.verification?.trust_issues?.length ?? 0) > 0 ||
+              (parsed?.responses?.[0]?.envelope?.host_trust_issues?.length ??
+                0) > 0;
+
+            if (bad) agentIntrusions++;
+            if (parsedData.interactedAgent) {
+              interactedAgentsSet.add(parsedData.interactedAgent);
+            }
+
+          } catch {}
+        });
+
+        // accumulate global numbers
+        globalTotalInteractions += agentInteractions;
+        globalIntrusions += agentIntrusions;
+
+        // return enriched agent
+        console.log("test22", agent.id, interactedAgentsSet.size);
+        return {
+          ...agent,
+          total_interactions: agentInteractions,
+          intrusion_count: agentIntrusions,
+          agents_interacted: interactedAgentsSet.size,
+          chainData: chain,
+        };
+      }),
+    );
+
+    // store enriched agents for UI
+    setEnrichedAgents(updatedAgents);
+
+    // store global metrics
     setMetricsData({
-      agentsSecured: agents.length,
-      totalInteractions,
-      intrusions,
+      agentsSecured: updatedAgents.length,
+      globalTotalInteractions,
+      globalIntrusions,
     });
   }
 
@@ -103,7 +134,6 @@ const MainDashboard = ({
 
   return (
     <div className="main-dashboard">
-      
       <form className="main-search-form" onSubmit={handleSearchSubmit}>
         <input
           type="text"
@@ -113,7 +143,6 @@ const MainDashboard = ({
           className="main-search-input"
         />
       </form>
-
 
       {/* METRICS */}
       <section className="hub">
@@ -130,7 +159,7 @@ const MainDashboard = ({
             <div className="card-body">
               <h3>{cards[1].title}</h3>
               <p>{cards[1].description}</p>
-              <h2>{metricsData.intrusions}</h2>
+              <h2>{metricsData.globalIntrusions}</h2>
             </div>
           </a>
 
@@ -138,7 +167,7 @@ const MainDashboard = ({
             <div className="card-body">
               <h3>{cards[2].title}</h3>
               <p>{cards[2].description}</p>
-              <h2>{metricsData.totalInteractions}</h2>
+              <h2>{metricsData.globalTotalInteractions}</h2>
             </div>
           </a>
         </div>
@@ -151,11 +180,11 @@ const MainDashboard = ({
         <div className="agents-table-container">
           {isLoading ? (
             <div className="loading-text">Loading agents…</div>
-          ) : agents.length === 0 ? (
+          ) : enrichedAgents.length === 0 ? (
             <div className="empty-text">No agents found</div>
           ) : (
             <div className="agents-list-wrapper">
-              {agents.map((agent, index) => (
+              {enrichedAgents.map((agent, index) => (
                 <AgentListItem
                   key={agent.id}
                   agent={agent}
@@ -230,7 +259,21 @@ const AgentListItem = ({ agent, index, onClick }: AgentListItemProps) => {
         <div className="agent-item-label">Agent Name</div>
         <div className="agent-item-id">{displayName}</div>
       </div>
+
+      <div className="agent-item-info">
+        <div className="agent-item-label">Interactions</div>
+        <div className="agent-item-id">{agent.total_interactions}</div>
+      </div>
+      <div className="agent-item-info">
+        <div className="agent-item-label">Intrusions</div>
+        <div className="agent-item-id">{agent.intrusion_count}</div>
+      </div>
+        <div className="agent-item-info">
+        <div className="agent-item-label">Agents Interacted</div>
+        <div className="agent-item-id">{agent.agents_interacted}</div>
+      </div>
     </div>
+    
   );
 };
 

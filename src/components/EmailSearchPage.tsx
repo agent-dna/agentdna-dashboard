@@ -10,6 +10,7 @@ interface EmailSearchPageProps {
 }
 
 const EmailSearchPage = ({ email, results, loading, onBack, onOpenNFT }: EmailSearchPageProps) => {
+  console.log("EmailSearchPage - results:", results);
   return (
     <div className="email-search-container">
       {/* RESULTS SECTION */}
@@ -40,7 +41,7 @@ const EmailSearchPage = ({ email, results, loading, onBack, onOpenNFT }: EmailSe
                   e.currentTarget.style.boxShadow = "none";
                 }}
               >
-                <div className="agent-item-number">{index + 1}</div>
+                <div className="agent-item-number">{index + 1 }</div>
 
                 <div className="agent-item-info">
                   <div className="agent-item-label">Agent Name</div>
@@ -49,7 +50,27 @@ const EmailSearchPage = ({ email, results, loading, onBack, onOpenNFT }: EmailSe
                   </div>
                 </div>
 
-               
+                  <div className="agent-item-info">
+                  <div className="agent-item-label">Interactions</div>
+                  <div className="agent-item-id">
+                    { agent.chainData ? agent.total_interactions : 0 }
+                  </div>
+                </div>
+                
+                 <div className="agent-item-info">
+                  <div className="agent-item-label">Intrusions</div>
+                  <div className="agent-item-id">
+                    { agent.chainData ? agent.intrusion_count : 0 }
+                  </div>
+                </div>
+
+                  <div className="agent-item-info">
+                  <div className="agent-item-label">Agents Interacted</div>
+                  <div className="agent-item-id">
+                    { agent.chainData ? agent.agents_interacted : 0 }
+                  </div>
+                </div>
+
               </div>
             ))}
           </div>

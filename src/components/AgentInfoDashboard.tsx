@@ -16,7 +16,7 @@ interface AgentInfoDashboardProps {
 /* -----------------------------------------
    Helper: Parse NFTData JSON Safely
 ------------------------------------------ */
-function parseNFTData(nftRaw: string) {
+export function parseNFTData(nftRaw: string) {
   try {
     const json = JSON.parse(nftRaw);
     const {added, removed} = diffWords(json?.host?.envelope?.original_message ?? "Not provided", json?.responses?.[0]?.envelope?.original_message ?? "Not provided")
@@ -112,7 +112,7 @@ const AgentInfoDashboard = ({
      Filter valid blocks
   ------------------------------------------ */
   const filtered = (chainData ?? []).filter((b) => b.BlockNo !== 0);
-
+  const interactedAgentsSet = new Set<string>();
   let maliciousCount = 0;
   let genuineCount = 0;
 
@@ -120,7 +120,9 @@ const AgentInfoDashboard = ({
     const parsed = parseNFTData(b.NFTData);
     const isMalicious =
       parsed.status === "failed" || parsed.trustIssues.length > 0;
-
+    if (parsed.interactedAgent) {
+      interactedAgentsSet.add(parsed.interactedAgent);
+    }
     if (isMalicious) maliciousCount++;
     else genuineCount++;
   });
@@ -140,6 +142,11 @@ const AgentInfoDashboard = ({
     title: "Genuine Interactions",
     description: "Total number of interactions between agents",
     data: genuineCount.toString(),
+  },
+  {
+    title: "Agents Interacted",
+    description: "Total number of agents interacted with",
+    data: interactedAgentsSet.size.toString(),
   },
 ];
 
@@ -171,6 +178,13 @@ const AgentInfoDashboard = ({
               <h3>{cards[2].title}</h3>
               <p>{cards[2].description}</p>
               <h2>{cards[2].data}</h2>
+            </div>
+          </a>
+           <a className="card center card-link">
+            <div className="card-body">
+              <h3>{cards[3].title}</h3>
+              <p>{cards[3].description}</p>
+              <h2>{cards[3].data}</h2>
             </div>
           </a>
         </div>
