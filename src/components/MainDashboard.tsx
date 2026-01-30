@@ -40,6 +40,86 @@ const MainDashboard = ({
   );
 
   const [activeTab, setActiveTab] = useState<TabType>("interactions");
+   const fetchTools = async (
+  setToolsData: (data: AgentInfo[]) => void,
+  setLoading?: (v: boolean) => void
+) => {
+  try {
+    setLoading?.(true);
+
+    const res = await fetch(`${BACKEND_URL}/tools`);
+    const json = await res.json();
+
+    if (!json.status || !Array.isArray(json.data)) {
+      setToolsData([]);
+      return;
+    }
+
+    const tools: AgentInfo[] = json.data.map((tool: any) => ({
+      agent_name: tool.tool_name,
+      agent_did: tool.tool_did,
+      total_interactions: tool.total_interactions,
+      intrusion_count: tool.total_intrusions,
+      agents_interacted: tool.agents_interacted,
+      reliability_factor: computeReliability(
+        tool.total_interactions,
+        tool.total_intrusions
+      ),
+    }));
+
+    setToolsData(tools);
+  } catch (err) {
+    console.error("Failed to fetch tools", err);
+    setToolsData([]);
+  } finally {
+    setLoading?.(false);
+  }
+};
+
+ const fetchAgents = async (
+  setAgentsData: (data: AgentInfo[]) => void,
+  setLoading?: (v: boolean) => void
+) => {
+  try {
+    setLoading?.(true);
+
+    const res = await fetch(`${BACKEND_URL}/agents`);
+    const json = await res.json();
+
+    if (!json.status || !Array.isArray(json.data)) {
+      setAgentsData([]);
+      return;
+    }
+
+    const agents: AgentInfo[] = json.data.map((agent: any) => ({
+      agent_name: agent.agent_name,
+      agent_did: agent.agent_did,
+      total_interactions: agent.total_interactions,
+      intrusion_count: agent.total_intrusions,
+      agents_interacted: agent.tools_interacted,
+      reliability_factor: computeReliability(
+        agent.total_interactions,
+        agent.total_intrusions
+      ),
+    }));
+
+    setAgentsData(agents);
+  } catch (err) {
+    console.error("Failed to fetch agents", err);
+    setAgentsData([]);
+  } finally {
+    setLoading?.(false);
+  }
+};
+
+const computeReliability = (
+  total: number,
+  intrusions: number
+): number => {
+  if (total === 0) return 0;
+  return Number((((total - intrusions) / total) * 100).toFixed(2));
+};
+
 
   // -------------------------------------------------------
   // FETCH ALL NFT RECORDS FOR MAIN DASHBOARD
@@ -50,8 +130,7 @@ const MainDashboard = ({
         const response = await fetch(
           `${BACKEND_URL}/interactions`,
         );
-
-
+  
         const json = await response.json();
 
          if (!json.status || !json.data) {
@@ -107,82 +186,90 @@ const MainDashboard = ({
     fetchInteractions();
   }, []);
 
-  useEffect(() => {
-    const get_Agents_Tools_Metrices = async () => {
-      try {
-        const interactions_data = interactions;
-        let agentsObj: Record<string, AgentInfo> = {};
-        let toolsObj: Record<string, AgentInfo> = {};
-        let agentsSetForTools: Record<string, Set<string>> = {};
-        const toolsSetForAgents: Record<string, Set<string>> = {};
+  // useEffect(() => {
+    // const get_Agents_Tools_Metrices = async () => {
+    //   try {
+    //     const interactions_data = interactions;
+    //     let agentsObj: Record<string, AgentInfo> = {};
+    //     let toolsObj: Record<string, AgentInfo> = {};
+    //     let agentsSetForTools: Record<string, Set<string>> = {};
+    //     const toolsSetForAgents: Record<string, Set<string>> = {};
 
-        const agentsSet = new Set<string>();
-        const toolsSet = new Set<string>();
-        interactions_data.forEach((interaction: InteractiontInfo) => {
-          console.log("test10 : interactions", interaction)
-          agentsSet.add(interaction.host_id);
-          toolsSet.add(interaction.remote_did);
+    //     const agentsSet = new Set<string>();
+    //     const toolsSet = new Set<string>();
+    //     interactions_data.forEach((interaction: InteractiontInfo) => {
+    //       console.log("test10 : interactions", interaction)
+    //       agentsSet.add(interaction.host_id);
+    //       toolsSet.add(interaction.remote_did);
 
-          agentsSetForTools[interaction.host_id] =
-          agentsSetForTools[interaction.host_id] || new Set<string>();
-          agentsSetForTools[interaction.host_id].add(interaction.remote_did);
+    //       agentsSetForTools[interaction.host_id] =
+    //       agentsSetForTools[interaction.host_id] || new Set<string>();
+    //       agentsSetForTools[interaction.host_id].add(interaction.remote_did);
 
-          toolsSetForAgents[interaction.remote_did] =
-          toolsSetForAgents[interaction.remote_did] || new Set<string>();
-          toolsSetForAgents[interaction.remote_did].add(interaction.host_id);
-          const agentId = interaction.host_did;
-          const toolId = interaction.remote_did;
-          const total = (agentsObj[agentId]?.total_interactions || 0) + 1;
-          const intrusions =
-            (agentsObj[agentId]?.intrusion_count || 0) +
-            (interaction.intrusion_cause ? 1 : 0);
+    //       toolsSetForAgents[interaction.remote_did] =
+    //       toolsSetForAgents[interaction.remote_did] || new Set<string>();
+    //       toolsSetForAgents[interaction.remote_did].add(interaction.host_id);
+    //       const agentId = interaction.host_did;
+    //       const toolId = interaction.remote_did;
+    //       const total = (agentsObj[agentId]?.total_interactions || 0) + 1;
+    //       const intrusions =
+    //         (agentsObj[agentId]?.intrusion_count || 0) +
+    //         (interaction.intrusion_cause ? 1 : 0);
 
-          const reliability =
-            total > 0 ? ((total - intrusions) / total) * 100 : 0;
-            const agentName = interaction.host_name
-          agentsObj[agentId] = {
-            agent_name: `${agentName}`,
-            agent_did: agentId,
-            total_interactions: total,
-            intrusion_count: intrusions,
-            agents_interacted: agentsSetForTools[agentId]?.size || 0,
-            reliability_factor: Number(reliability.toFixed(2)), // clean UI number
-          };
-          const toolTotal = (toolsObj[toolId]?.total_interactions || 0) + 1;
-          const toolIntrusions =
-            (toolsObj[toolId]?.intrusion_count || 0) +
-            (interaction.intrusion_cause ? 1 : 0);
+    //       const reliability =
+    //         total > 0 ? ((total - intrusions) / total) * 100 : 0;
+    //         const agentName = interaction.host_name
+    //       agentsObj[agentId] = {
+    //         agent_name: `${agentName}`,
+    //         agent_did: agentId,
+    //         total_interactions: total,
+    //         intrusion_count: intrusions,
+    //         agents_interacted: agentsSetForTools[agentId]?.size || 0,
+    //         reliability_factor: Number(reliability.toFixed(2)), // clean UI number
+    //       };
+    //       const toolTotal = (toolsObj[toolId]?.total_interactions || 0) + 1;
+    //       const toolIntrusions =
+    //         (toolsObj[toolId]?.intrusion_count || 0) +
+    //         (interaction.intrusion_cause ? 1 : 0);
 
-          const toolReliability =
-            toolTotal > 0
-              ? ((toolTotal - toolIntrusions) / toolTotal) * 100
-              : 0;
-          const toolName = interaction.remote_name
-          toolsObj[toolId] = {
-            agent_name: `${toolName}`,
-            agent_did: toolId,
-            total_interactions: toolTotal,
-            intrusion_count: toolIntrusions,
-            agents_interacted: toolsSetForAgents[toolId]?.size || 0,
-            reliability_factor: Number(toolReliability.toFixed(2)),
-          };
-        });
+    //       const toolReliability =
+    //         toolTotal > 0
+    //           ? ((toolTotal - toolIntrusions) / toolTotal) * 100
+    //           : 0;
+    //       const toolName = interaction.remote_name
+    //       toolsObj[toolId] = {
+    //         agent_name: `${toolName}`,
+    //         agent_did: toolId,
+    //         total_interactions: toolTotal,
+    //         intrusion_count: toolIntrusions,
+    //         agents_interacted: toolsSetForAgents[toolId]?.size || 0,
+    //         reliability_factor: Number(toolReliability.toFixed(2)),
+    //       };
+    //     });
 
 
-        setAgentsData(Object.values(agentsObj));
-        setToolsData(Object.values(toolsObj));
+    //     setAgentsData(Object.values(agentsObj));
+    //     setToolsData(Object.values(toolsObj));
 
-      } catch (err) {
+    //   } catch (err) {
   
-        //         setAgentsData({});
-        // setToolsData({});
-        // setInteractionsData();
-      } finally {
-        setIsLoadingList(false);
-      }
-    };
-    get_Agents_Tools_Metrices();
-  }, [interactions]);
+    //     //         setAgentsData({});
+    //     // setToolsData({});
+    //     // setInteractionsData();
+    //   } finally {
+    //     setIsLoadingList(false);
+    //   }
+    // };
+
+
+    
+  //   fetchTools();
+  // }, [interactions]);
+
+  useEffect(() => {
+  fetchAgents(setAgentsData, setIsLoadingList);
+  fetchTools(setToolsData, setIsLoadingList);
+}, []);
 
   useEffect(() => {
   }, [metricsData]);

@@ -3,7 +3,6 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import AgentInfoDashboard from "../components/AgentInfoDashboard";
 import { BACKEND_URL } from "../App";
 
-
 const AgentProfilePage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -21,15 +20,43 @@ const AgentProfilePage = () => {
     reliabilityFactor: 0,
   });
 
+  type AgentLookup = Record<string, { name: string; did: string }>;
+
+  const fetchAgentLookup = async (): Promise<AgentLookup> => {
+    const res = await fetch(`${BACKEND_URL}/agents`);
+    const json = await res.json();
+
+    if (!json.status || !Array.isArray(json.data)) {
+      return {};
+    }
+
+    const lookup: AgentLookup = {};
+
+    json.data.forEach((agent: any) => {
+      lookup[agent.agent_did] = {
+        name: agent.agent_name,
+        did: agent.agent_did,
+      };
+    });
+
+    return lookup;
+  };
+
   useEffect(() => {
     const fetchAgentDetails = async () => {
       if (!id) return;
 
+      const agentLookup = await fetchAgentLookup();
+
+      // 2️⃣ Resolve agent name even if no interactions exist
+      const agentMeta = agentLookup[id];
+
+      setSelectedAgentName(agentMeta?.name || "Unknown Agent");
+      setSelectedAgentDID(agentMeta?.did || id);
+
       setIsLoadingData(true);
       try {
-        const res = await fetch(
-          `${BACKEND_URL}/interactions/agent/${id}`,
-        );
+        const res = await fetch(`${BACKEND_URL}/interactions/agent/${id}`);
 
         const json = await res.json();
 
@@ -43,20 +70,19 @@ const AgentProfilePage = () => {
 
         const interactedAgentsSet = new Set<string>();
 
-        interactionsData.forEach((interaction : any ) => {
+        interactionsData.forEach((interaction: any) => {
           totalInteractions += 1;
-          console.log("test7", interaction)
+          console.log("test7", interaction);
           if (interaction.intrusion_cause) {
-
             totalIntrusions += 1;
           }
 
-         interactedAgentsSet.add(interaction.host_did);
+          interactedAgentsSet.add(interaction.host_did);
+        });
 
-        }); 
-        
-        console.log("test5", totalIntrusions, totalInteractions)
-        let factor = (( totalInteractions - totalIntrusions) / totalInteractions ) * 100 ;
+        console.log("test5", totalIntrusions, totalInteractions);
+        let factor =
+          ((totalInteractions - totalIntrusions) / totalInteractions) * 100;
 
         setMetricsData({
           toolsInteracted: interactedAgentsSet.size,
@@ -65,8 +91,8 @@ const AgentProfilePage = () => {
           reliabilityFactor: factor,
         });
 
-        setSelectedAgentName(interactionsData[0].host_name || "Unknown Agent");
-        setSelectedAgentDID(interactionsData[0].host_did || null);
+        // setSelectedAgentName(interactionsData[0].host_name || "Unknown Agent");
+        // setSelectedAgentDID(interactionsData[0].host_did || null);
       } catch {
         setSelectedAgentName("Unknown Agent");
       } finally {
@@ -94,10 +120,9 @@ const AgentProfilePage = () => {
   //   navigate(`/agent/${encodeURIComponent(id)}`);
   // };
 
-   const handleOpenTool = (id: string) => {
+  const handleOpenTool = (id: string) => {
     navigate(`/tool/${encodeURIComponent(id)}`);
   };
-
 
   const handleSearchAgent = (agentId: string) => {
     navigate(`/agent/${encodeURIComponent(agentId)}`);
@@ -119,7 +144,9 @@ const AgentProfilePage = () => {
               <div className="card-body">
                 <h3>Reliability Factor </h3>
                 <p>How reliable is the agent</p>
-                <h2>{metricsData.reliabilityFactor.toFixed(2)}</h2>
+                {Number.isFinite(metricsData.reliabilityFactor)
+                  ? metricsData.reliabilityFactor.toFixed(2)
+                  : "-"}{" "}
               </div>
             </a>
 

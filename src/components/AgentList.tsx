@@ -33,7 +33,9 @@ export const AgentListItem = ({
       <div className="agent-item-info">
         <div className="agent-item-label">Reliability Factor</div>
         <div className="agent-item-id">
-          {factor.toFixed(2)}
+           {Number.isFinite(factor)
+    ? factor.toFixed(2)
+    : "-"}
           </div>
       </div>
       <div className="agent-item-info">
