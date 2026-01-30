@@ -4,7 +4,6 @@ import type { InteractionsListItemProps } from "./AgentList";
 export const InteractionsListItem = ({
   interaction,
   index,
-  onClick,
 }: InteractionsListItemProps) => {
   const hostName = interaction.host_name?.trim() || interaction.host_did;
   const remoteName = interaction.remote_name?.trim() || interaction.remote_did;
@@ -12,9 +11,14 @@ export const InteractionsListItem = ({
     ? `${interaction.intrusion_cause}`
     : "Genuine";
   const time = epochToGMT(interaction.epoch)
+  const hasIntrusion = Boolean(interaction.intrusion_cause);
 
   return (
-    <div className="interaction-list-item" onClick={onClick}>
+    <div
+    className={`interaction-list-item ${
+      hasIntrusion ? "interaction-intrusion" : ""
+    }`}
+  >
       <div className="interaction-col number">{index + 1}</div>
 
       <div className="interaction-col">

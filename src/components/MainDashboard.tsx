@@ -278,7 +278,6 @@ const MainDashboard = ({
               key={index}
               interaction={interaction}
               index={index}
-              onClick={() => onOpenAgent(index.toString())}
             />
           ))
         ))}

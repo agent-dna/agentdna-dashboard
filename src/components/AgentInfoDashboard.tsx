@@ -19,7 +19,7 @@ interface AgentInteractionsDashboardProps {
 
 const AgentInteractionsDashboard = ({
   selectedAgentDID,
-  selectedAgentName,
+  // selectedAgentName,
   onOpenTool,
 }: AgentInteractionsDashboardProps) => {
   const [activeTab, setActiveTab] = useState<TabType>("interactions");
@@ -132,7 +132,6 @@ const AgentInteractionsDashboard = ({
               key={idx}
               interaction={i}
               index={idx}
-              onClick={() => {}}
             />
           ))
         ))}
@@ -168,7 +167,6 @@ const AgentInteractionsDashboard = ({
               key={idx}
               interaction={i}
               index={idx}
-              onClick={() => {}}
             />
           ))
         ))}

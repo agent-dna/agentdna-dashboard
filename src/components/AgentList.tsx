@@ -10,7 +10,6 @@ export interface AgentListItemProps {
 export interface InteractionsListItemProps {
   interaction: InteractiontInfo;
   index: number;
-  onClick: () => void;
 }
 
 export const AgentListItem = ({

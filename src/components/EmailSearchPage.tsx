@@ -152,7 +152,6 @@ const EmailPage = ({ email, onOpenAgent }: EmailPageProps) => {
               key={idx}
               interaction={i}
               index={idx}
-              onClick={() => onOpenAgent(i.host_id)}
             />
           ))
         ))}
@@ -203,7 +202,6 @@ const EmailPage = ({ email, onOpenAgent }: EmailPageProps) => {
               key={idx}
               interaction={i}
               index={idx}
-              onClick={() => onOpenAgent(i.host_id)}
             />
           ))
         ))}
