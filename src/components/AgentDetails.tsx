@@ -1,6 +1,7 @@
 import type { NFTChainData, MetricCard } from '../types'
 import './AgentInfoDashboard.css'
 
+
 interface AgentInfoDashboardProps {
   onBackToDashboard: () => void
   onSearchAgent: (id: string) => void

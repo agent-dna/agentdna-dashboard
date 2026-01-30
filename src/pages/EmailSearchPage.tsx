@@ -1,96 +1,72 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import EmailSearchPageComponent from "../components/EmailSearchPage";
-import type { NFTRecord } from "../types";
+import EmailPage from "../components/EmailSearchPage";
+import { BACKEND_URL } from "../App";
+
 
 const EmailSearchPage = () => {
-  const cards = [
-    {
-      title: "Total Agents Interacted",
-      description: "Number of agents interacted with your application",
-      data: 121,
-    },
-    {
-      title: "Intrusions Detected",
-      description: "Total number of intrusion attempts detected",
-      data: 15,
-    },
-    {
-      title: "Total Interactions ",
-      description: "Total number of interactions between agents",
-      data: 3421,
-    },
-  ];
-
   const { email } = useParams<{ email: string }>();
   const navigate = useNavigate();
-  const [emailSearchList, setEmailSearchList] = useState<NFTRecord[]>([]);
+
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
+ 
+  const [metricsData, setMetricsData] = useState({
+    agentsInteracted: 0,
+    totalInteractions: 0,
+    intrusions: 0,
+    globalAgentsInteracted: 0,
+  });
 
-  // Fetch email search results
   useEffect(() => {
-    if (!email) {
-      navigate("/");
-      return;
-    }
+  const fetchMetrics = async () => {
+      if (!email) return;
 
-    const fetchEmailResults = async () => {
-      const decodedEmail = decodeURIComponent(email);
       setIsLoadingEmail(true);
-      setEmailSearchList([]);
-
       try {
         const res = await fetch(
-          `https://chain-connector-1.rubix.net/get-nft-by-email?email=${encodeURIComponent(
-            decodedEmail
-          )}`
+          `${BACKEND_URL}/metrics/${encodeURIComponent(email)}`,
         );
+        let json = await res.json();
+        if (!json.status) {
 
-        const data = await res.json();
-
-        if (Array.isArray(data.nfts)) {
-          const filtered = data.nfts.filter(
-            (n: any) => n?.nft_id && n.nft_id.trim() !== ""
-          );
-
-          const formatted = filtered.map((n: any) => ({
-            id: n.nft_id.trim(),
-            owner_did: "",
-            nft_value: 0,
-            nft_metadata: "",
-            nft_file_name: "",
-            nft_name: n.nft_name?.trim() || undefined,
-          }));
-
-          setEmailSearchList(formatted);
-        } else {
-          setEmailSearchList([]);
         }
-      } catch (err) {
-        console.error("Email search error:", err);
-        setEmailSearchList([]);
+        const data = json.data;
+
+        setMetricsData({
+          agentsInteracted: data.total_agents || 0,
+          totalInteractions: data.total_interactions || 0,
+          intrusions: data.total_intrusions || 0,
+          globalAgentsInteracted: data.interacted_tools || 0,
+        });
+
+      } catch {
+        setMetricsData({
+          agentsInteracted: 0,
+          totalInteractions: 0,
+          intrusions: 0,
+          globalAgentsInteracted: 0,
+        });
+      } finally {
+        setIsLoadingEmail(false);
       }
 
-      setIsLoadingEmail(false);
-    };
+  } 
+ 
+    fetchMetrics();
+}, [email]);
 
-    fetchEmailResults();
-  }, [email, navigate]);
 
   const handleBack = () => {
     navigate("/");
   };
 
   const handleOpenNFT = (id: string) => {
-    // Pass state to indicate we came from email search
     navigate(`/agent/${encodeURIComponent(id)}`, {
       state: { fromEmailSearch: true, email },
     });
   };
 
-  if (!email) {
-    return null;
-  }
+  if (!email) return null;
 
   return (
     <>
@@ -101,40 +77,47 @@ const EmailSearchPage = () => {
           Monitor and manage your autonomous agents securely.
         </p>
 
-        {/* <section className="hub">
-        <div className="hub-grid">
-          <a className="card center card-link">
-            <div className="card-body">
-              <h3>{cards[0].title}</h3>
-              <p>{cards[0].description}</p>
-              <h2>{cards[0].data}</h2>
-            </div>
-          </a>
+        <section className="hub">
+          <div className="hub-grid">
+            <a className="card center card-link">
+              <div className="card-body">
+                <h3>Agents Deployed</h3>
+                <p>Total number of agents deployed</p>
+                <h2>{metricsData.agentsInteracted}</h2>
+              </div>
+            </a>
 
-          <a className="card center card-link">
-            <div className="card-body">
-              <h3>{cards[1].title}</h3>
-              <p>{cards[1].description}</p>
-              <h2>{cards[1].data}</h2>
-            </div>
-          </a>
+            <a className="card center card-link">
+              <div className="card-body">
+                <h3>Intrusions Detected</h3>
+                <p>Total number of intrusion attempts detected</p>
+                <h2>{metricsData.intrusions}</h2>
+              </div>
+            </a>
 
-          <a className="card center card-link">
-            <div className="card-body">
-              <h3>{cards[2].title}</h3>
-              <p>{cards[2].description}</p>
-              <h2>{cards[2].data}</h2>
-            </div>
-          </a>
-        </div>
-      </section> */}
+            <a className="card center card-link">
+              <div className="card-body">
+                <h3>Total Interactions</h3>
+                <p>Total number of interactions between agents</p>
+                <h2>{metricsData.totalInteractions}</h2>
+              </div>
+            </a>
+              <a className="card center card-link">
+              <div className="card-body">
+                <h3>Total Agents Interacted </h3>
+                <p>Total number of agents interacted with</p>
+                <h2>{metricsData.globalAgentsInteracted}</h2>
+              </div>
+            </a>
+          </div>
+        </section>
       </section>
-      <EmailSearchPageComponent
+
+      <EmailPage
         email={decodeURIComponent(email)}
         onBack={handleBack}
-        results={emailSearchList}
         loading={isLoadingEmail}
-        onOpenNFT={handleOpenNFT}
+        onOpenAgent={handleOpenNFT}
       />
     </>
   );
