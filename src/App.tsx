@@ -6,6 +6,11 @@ import AgentProfilePage from "./pages/AgentProfilePage";
 import EmailSearchPage from "./pages/EmailSearchPage";
 import logo from "./assets/a4d2293fc03eb10393506a75b7c4bd9ad839d7ba-efzz4AxP.png";
 import { useEffect } from "react";
+import ToolProfilePage from "./pages/ToolProfile";
+
+
+export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -52,10 +57,12 @@ function App() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/agent/:id" element={<AgentProfilePage />} />
+          <Route path="/tool/:id" element={<ToolProfilePage />} />
           <Route path="/search/:email" element={<EmailSearchPage />} />
+
         </Routes>
       </div>
-      <footer className="footer">© 2025 AgentDNA. All rights reserved.</footer>
+      <footer className="footer">© 2026 AgentDNA. All rights reserved.</footer>
     </BrowserRouter>
   );
 }

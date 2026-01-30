@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import AgentInfoDashboard from "../components/AgentInfoDashboard";
+import ToolInfoDashboard from "../components/ToolInfoDashboard";
 import { BACKEND_URL } from "../App";
 
-
-const AgentProfilePage = () => {
+const ToolProfilePage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -15,7 +14,7 @@ const AgentProfilePage = () => {
   const [selectedAgentDID, setSelectedAgentDID] = useState<string | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [metricsData, setMetricsData] = useState({
-    toolsInteracted: 0,
+    agentsInteracted: 0,
     totalInteractions: 0,
     intrusions: 0,
     reliabilityFactor: 0,
@@ -28,7 +27,7 @@ const AgentProfilePage = () => {
       setIsLoadingData(true);
       try {
         const res = await fetch(
-          `${BACKEND_URL}/interactions/agent/${id}`,
+          `${BACKEND_URL}/interactions/tool/${id}`,
         );
 
         const json = await res.json();
@@ -36,6 +35,7 @@ const AgentProfilePage = () => {
         if (!json.status) {
           return;
         }
+
         const interactionsData = json.data;
 
         let totalInteractions = 0;
@@ -45,28 +45,27 @@ const AgentProfilePage = () => {
 
         interactionsData.forEach((interaction : any ) => {
           totalInteractions += 1;
-          console.log("test7", interaction)
-          if (interaction.intrusion_cause == "") {
 
+          if (interaction.intrusion_cause) {
             totalIntrusions += 1;
           }
 
-         interactedAgentsSet.add(interaction.host_did);
+          interactedAgentsSet.add(interaction.host_did);
 
-        }); 
-        
-        console.log("test5", totalIntrusions, totalInteractions)
+          // track all unique agents involved in these interactions
+        });
+
         let factor = (( totalInteractions - totalIntrusions) / totalInteractions ) * 100 ;
 
         setMetricsData({
-          toolsInteracted: interactedAgentsSet.size,
+          agentsInteracted: interactedAgentsSet.size,
           totalInteractions,
           intrusions: totalIntrusions,
           reliabilityFactor: factor,
         });
 
-        setSelectedAgentName(interactionsData[0].host_name || "Unknown Agent");
-        setSelectedAgentDID(interactionsData[0].host_did || null);
+        setSelectedAgentName(interactionsData[0].remote_name || "Unknown Tool");
+        setSelectedAgentDID(interactionsData[0].remote_did || null);
       } catch {
         setSelectedAgentName("Unknown Agent");
       } finally {
@@ -90,14 +89,9 @@ const AgentProfilePage = () => {
     }
   };
 
-  // const handleOpenAgent = (id: string) => {
-  //   navigate(`/agent/${encodeURIComponent(id)}`);
-  // };
-
-   const handleOpenTool = (id: string) => {
-    navigate(`/tool/${encodeURIComponent(id)}`);
+  const handleOpenAgent = (id: string) => {
+    navigate(`/agent/${encodeURIComponent(id)}`);
   };
-
 
   const handleSearchAgent = (agentId: string) => {
     navigate(`/agent/${encodeURIComponent(agentId)}`);
@@ -110,7 +104,7 @@ const AgentProfilePage = () => {
   return (
     <>
       <section className="hero">
-        <h1 className="hero-title">Agent Profile </h1>
+        <h1 className="hero-title">Tool Profile </h1>
         <h2 className="hero-title-h2">{selectedAgentName}</h2>
 
         <section className="hub">
@@ -142,16 +136,16 @@ const AgentProfilePage = () => {
               <div className="card-body">
                 <h3>Total Tools Interacted </h3>
                 <p>Total number of agents interacted with</p>
-                <h2>{metricsData.toolsInteracted}</h2>
+                <h2>{metricsData.agentsInteracted}</h2>
               </div>
             </a>
           </div>
         </section>
       </section>
-      <AgentInfoDashboard
+      <ToolInfoDashboard
         selectedAgentName={selectedAgentName}
         selectedAgentDID={selectedAgentDID}
-        onOpenTool={handleOpenTool}
+        onOpenAgent={handleOpenAgent}
         onBackToDashboard={handleBackToDashboard}
         onSearchAgent={handleSearchAgent}
         searchValue={query}
@@ -162,4 +156,4 @@ const AgentProfilePage = () => {
   );
 };
 
-export default AgentProfilePage;
+export default ToolProfilePage;

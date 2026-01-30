@@ -39,18 +39,41 @@ export type NFTDataResponse = {
   NFTDataReply: NFTChainData[];
 };
 
-export type NFTRecord = {
-  id: string;
-  owner_did: string;
-  nft_value: number;
-  nft_metadata: string;
-  nft_file_name: string;
-  total_interactions?: number;
-  intrusion_count?: number;
-  agents_interacted?: number;
-  nft_name?: string;
-  chainData?: NFTChainData[];
+// export type NFTRecord = {
+//   id: string;
+//   owner_did: string;
+//   nft_value: number;
+//   nft_metadata: string;
+//   nft_file_name: string;
+//   total_interactions?: number;
+//   intrusion_count?: number;
+//   agents_interacted?: number;
+//   nft_name?: string;
+//   chainData?: NFTChainData[];
+// };
+
+export type InteractiontInfo = {
+  host_name: string;
+  remote_name: string;
+  intrusion_cause: string;
+  epoch: number;
+  host_id : string;
+  host_did: string;
+  remote_did: string;
 };
+ 
+export type AgentInfo = {
+  agent_name: string;
+  agent_did: string;
+  total_interactions: number;
+  intrusion_count: number;
+  agents_interacted: number;
+  reliability_factor?: number 
+}
+
+
+
+
 
 export type ViewState = "dashboard" | "details" | "agent-info";
 

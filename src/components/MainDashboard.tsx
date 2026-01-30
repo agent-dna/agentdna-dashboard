@@ -1,131 +1,190 @@
 import { useState, useEffect } from "react";
-import type { NFTRecord } from "../types";
+import type { AgentInfo, InteractiontInfo } from "../types";
 import "./MainDashboard.css";
-import { parseNFTData } from "./AgentInfoDashboard";
+import { AgentListItem } from "./AgentList";
+import { ToolListItem } from "./ToolsList";
+import { InteractionsListItem } from "./InteractionsList";
+import { BACKEND_URL } from "../App";
 
 interface MainDashboardProps {
-  agents: NFTRecord[];
   onOpenAgent: (id: string) => void;
+  onOpenTool: (id: string) => void;
   onSearchByEmail: (email: string) => void;
   searchValue: string;
   onSearchChange: (value: string) => void;
-  isLoading: boolean;
 }
-const cards = [
-  {
-    title: "Secured Agents",
-    description: "Number of agents secured with AgentDNA",
-    data: 121,
-  },
-  {
-    title: "Intrusions Detected",
-    description: "Total number of intrusion attempts detected",
-    data: 15,
-  },
-  {
-    title: "Total Interactions ",
-    description: "Total number of interactions between agents",
-    data: 3421,
-  },
-];
+
+type TabType = "interactions" | "agents" | "tools";
 
 const MainDashboard = ({
-  agents,
   onOpenAgent,
+  onOpenTool,
   onSearchByEmail,
   searchValue,
   onSearchChange,
-  isLoading,
 }: MainDashboardProps) => {
   const [metricsData, setMetricsData] = useState({
     agentsSecured: 0,
     globalTotalInteractions: 0,
     globalIntrusions: 0,
+    globalRemoteAgents: 0,
   });
-  const [enrichedAgents, setEnrichedAgents] = useState<NFTRecord[]>([]);
 
-  // Fetch each NFT chain
-  async function fetchChain(id: string) {
-    try {
-      const res = await fetch(
-        `https://chain-connector-1.rubix.net/api/get-nft-token-chain-data?nft=${id}`,
-      );
-      const data = await res.json();
-      return data.NFTDataReply || [];
-    } catch (err) {
-      console.error("Chain error:", err);
-      return [];
-    }
-  }
+  const [interactions, setInteractions] = useState<InteractiontInfo[]>([]);
 
-  // Compute metrics (interactions + malicious blocks)
-  async function computeMetrics() {
-    if (!agents.length) return;
+  const [isLoadingList, setIsLoadingList] = useState(true);
+  const [toolsData, setToolsData] = useState<AgentInfo[]>([]);
+  const [agentsData, setAgentsData] = useState<AgentInfo[]>([]);
+  const [interactionsData, setInteractionsData] = useState<InteractiontInfo[]>(
+    [],
+  );
 
-    let globalTotalInteractions = 0;
-    let globalIntrusions = 0;
+  const [activeTab, setActiveTab] = useState<TabType>("interactions");
 
-    const updatedAgents: NFTRecord[] = await Promise.all(
-      agents.map(async (agent) => {
-        const interactedAgentsSet = new Set<string>();
+  // -------------------------------------------------------
+  // FETCH ALL NFT RECORDS FOR MAIN DASHBOARD
+  // -------------------------------------------------------
+  useEffect(() => {
+    const fetchInteractions = async () => {
+      try {
+        const response = await fetch(
+          `${BACKEND_URL}/interactions`,
+        );
 
-        const chain = await fetchChain(agent.id);
 
-        const validBlocks = chain.filter((b: any) => b.BlockNo !== 0);
+        const json = await response.json();
 
-        const agentInteractions = validBlocks.length;
-        let agentIntrusions = 0;
+         if (!json.status || !json.data) {
+          setInteractions([]);
+         }
 
-        validBlocks.forEach((block: any) => {
-          try {
-            const parsedData = parseNFTData(block.NFTData);
+        if (Array.isArray(json.data)) {
+          setInteractions(json.data);
+          setInteractionsData(json.data);
 
-            const parsed = JSON.parse(block.NFTData);
+        } else {
+          setInteractions([]);
+        }
+      } catch {
+        setInteractions([]);
+      }
+    };
 
-            const bad =
-              parsed?.verification?.status === "failed" ||
-              (parsed?.verification?.trust_issues?.length ?? 0) > 0 ||
-              (parsed?.responses?.[0]?.envelope?.host_trust_issues?.length ??
-                0) > 0;
+    const fetchMetrices = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/metrics`);
+        const json = await response.json();
 
-            if (bad) agentIntrusions++;
-            if (parsedData.interactedAgent) {
-              interactedAgentsSet.add(parsedData.interactedAgent);
-            }
+        if (!json.status || !json.data) {
+          setMetricsData({
+            agentsSecured: 0,
+            globalTotalInteractions: 0,
+            globalIntrusions: 0,
+            globalRemoteAgents: 0,
+          });
+          return;
+        }
 
-          } catch {}
+        setMetricsData({
+          agentsSecured: json.data.total_agents,
+          globalTotalInteractions: json.data.total_interactions,
+          globalIntrusions: json.data.total_intrusions,
+          globalRemoteAgents: json.data.total_tools,
         });
+      } catch (err) {
+        console.error("Failed to fetch metrics", err);
+        setMetricsData({
+          agentsSecured: 0,
+          globalTotalInteractions: 0,
+          globalIntrusions: 0,
+          globalRemoteAgents: 0,
+        });
+      }
+    };
 
-        // accumulate global numbers
-        globalTotalInteractions += agentInteractions;
-        globalIntrusions += agentIntrusions;
+    fetchMetrices();
 
-        // return enriched agent
-        console.log("test22", agent.id, interactedAgentsSet.size);
-        return {
-          ...agent,
-          total_interactions: agentInteractions,
-          intrusion_count: agentIntrusions,
-          agents_interacted: interactedAgentsSet.size,
-          chainData: chain,
-        };
-      }),
-    );
-
-    // store enriched agents for UI
-    setEnrichedAgents(updatedAgents);
-
-    // store global metrics
-    setMetricsData({
-      agentsSecured: updatedAgents.length,
-      globalTotalInteractions,
-      globalIntrusions,
-    });
-  }
+    fetchInteractions();
+  }, []);
 
   useEffect(() => {
-    computeMetrics();
-  }, [agents]);
+    const get_Agents_Tools_Metrices = async () => {
+      try {
+        const interactions_data = interactions;
+        let agentsObj: Record<string, AgentInfo> = {};
+        let toolsObj: Record<string, AgentInfo> = {};
+        let agentsSetForTools: Record<string, Set<string>> = {};
+        const toolsSetForAgents: Record<string, Set<string>> = {};
+
+        const agentsSet = new Set<string>();
+        const toolsSet = new Set<string>();
+        interactions_data.forEach((interaction: InteractiontInfo) => {
+          agentsSet.add(interaction.host_id);
+          toolsSet.add(interaction.remote_did);
+
+          agentsSetForTools[interaction.host_id] =
+          agentsSetForTools[interaction.host_id] || new Set<string>();
+          agentsSetForTools[interaction.host_id].add(interaction.remote_did);
+
+          toolsSetForAgents[interaction.remote_did] =
+          toolsSetForAgents[interaction.remote_did] || new Set<string>();
+          toolsSetForAgents[interaction.remote_did].add(interaction.host_id);
+          const agentId = interaction.host_did;
+          const toolId = interaction.remote_did;
+          const total = (agentsObj[agentId]?.total_interactions || 0) + 1;
+          const intrusions =
+            (agentsObj[agentId]?.intrusion_count || 0) +
+            (interaction.intrusion_cause ? 1 : 0);
+
+          const reliability =
+            total > 0 ? ((total - intrusions) / total) * 100 : 0;
+          agentsObj[agentId] = {
+            agent_name: `Agent ${agentId.substring(0, 6)}`,
+            agent_did: agentId,
+            total_interactions: total,
+            intrusion_count: intrusions,
+            agents_interacted: agentsSetForTools[agentId]?.size || 0,
+            reliability_factor: Number(reliability.toFixed(2)), // clean UI number
+          };
+          const toolTotal = (toolsObj[toolId]?.total_interactions || 0) + 1;
+          const toolIntrusions =
+            (toolsObj[toolId]?.intrusion_count || 0) +
+            (interaction.intrusion_cause ? 1 : 0);
+
+          const toolReliability =
+            toolTotal > 0
+              ? ((toolTotal - toolIntrusions) / toolTotal) * 100
+              : 0;
+          toolsObj[toolId] = {
+            agent_name: `Tool ${toolId.substring(0, 6)}`,
+            agent_did: toolId,
+            total_interactions: toolTotal,
+            intrusion_count: toolIntrusions,
+            agents_interacted: toolsSetForAgents[toolId]?.size || 0,
+            reliability_factor: Number(toolReliability.toFixed(2)),
+          };
+        });
+
+
+        setAgentsData(Object.values(agentsObj));
+        setToolsData(Object.values(toolsObj));
+
+      } catch (err) {
+  
+        //         setAgentsData({});
+        // setToolsData({});
+        // setInteractionsData();
+      } finally {
+        setIsLoadingList(false);
+      }
+    };
+    get_Agents_Tools_Metrices();
+  }, [interactions]);
+
+  useEffect(() => {
+  }, [metricsData]);
+
+  // ---------------- SEARCH ----------------
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +193,7 @@ const MainDashboard = ({
 
   return (
     <div className="main-dashboard">
+      {/* SEARCH */}
       <form className="main-search-form" onSubmit={handleSearchSubmit}>
         <input
           type="text"
@@ -149,131 +209,111 @@ const MainDashboard = ({
         <div className="hub-grid">
           <a className="card center card-link">
             <div className="card-body">
-              <h3>{cards[0].title}</h3>
-              <p>{cards[0].description}</p>
+              <h3>Secured Agents</h3>
+              <p>Number of agents secured with AgentDNA</p>
               <h2>{metricsData.agentsSecured}</h2>
             </div>
           </a>
 
           <a className="card center card-link">
             <div className="card-body">
-              <h3>{cards[1].title}</h3>
-              <p>{cards[1].description}</p>
+              <h3>Intrusions Detected</h3>
+              <p>Total number of intrusion attempts detected</p>
               <h2>{metricsData.globalIntrusions}</h2>
             </div>
           </a>
 
           <a className="card center card-link">
             <div className="card-body">
-              <h3>{cards[2].title}</h3>
-              <p>{cards[2].description}</p>
+              <h3>Total Interactions</h3>
+              <p>Total number of interactions between agents</p>
+              <h2>{metricsData.globalTotalInteractions}</h2>
+            </div>
+          </a>
+
+          <a className="card center card-link">
+            <div className="card-body">
+              <h3>Total Tools</h3>
+              <p>Total number of Tools agents </p>
               <h2>{metricsData.globalTotalInteractions}</h2>
             </div>
           </a>
         </div>
       </section>
 
-      {/* AGENT LIST */}
-      <div className="agents-list-section">
-        <h2 className="agents-list-title">Secured Agents</h2>
-
-        <div className="agents-table-container">
-          {isLoading ? (
-            <div className="loading-text">Loading agents…</div>
-          ) : enrichedAgents.length === 0 ? (
-            <div className="empty-text">No agents found</div>
-          ) : (
-            <div className="agents-list-wrapper">
-              {enrichedAgents.map((agent, index) => (
-                <AgentListItem
-                  key={agent.id}
-                  agent={agent}
-                  index={index}
-                  onClick={() => {
-                    console.log("CLICKED:", agent.id);
-                    onOpenAgent(agent.id);
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+      {/* TABS */}
+      <div className="tabs">
+        <button
+          className={`tab-btn ${activeTab === "interactions" ? "active" : ""}`}
+          onClick={() => setActiveTab("interactions")}
+        >
+          Interactions
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "agents" ? "active" : ""}`}
+          onClick={() => setActiveTab("agents")}
+        >
+          Agents
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "tools" ? "active" : ""}`}
+          onClick={() => setActiveTab("tools")}
+        >
+          Tools
+        </button>
       </div>
+
+      {/* LIST of Interactions */}
+      {activeTab === "interactions" &&
+        (isLoadingList ? (
+          <div className="loading-text">Loading Interactions</div>
+        ) : interactionsData.length === 0 ? (
+          <div className="empty-text">No Interactions found</div>
+        ) : (
+          interactionsData.map((interaction, index) => (
+            <InteractionsListItem
+              key={index}
+              interaction={interaction}
+              index={index}
+              onClick={() => onOpenAgent(index.toString())}
+            />
+          ))
+        ))}
+
+      {/* LIST of Agents */}
+      {activeTab === "agents" &&
+        (isLoadingList ? (
+          <div className="loading-text">Loading agents…</div>
+        ) : agentsData.length === 0 ? (
+          <div className="empty-text">No agents found</div>
+        ) : (
+          agentsData.map((agent, index) => (
+            <AgentListItem
+              key={index}
+              agent={agent}
+              index={index}
+              onClick={() => onOpenAgent(agent.agent_did)}
+            />
+          ))
+        ))}
+
+      {/* LIST of Tools */}
+      {activeTab === "tools" &&
+        (isLoadingList ? (
+          <div className="loading-text">Loading Tools</div>
+        ) : toolsData.length === 0 ? (
+          <div className="empty-text">No Tools found</div>
+        ) : (
+          toolsData.map((tool, index) => (
+            <ToolListItem
+              key={index}
+              agent={tool}
+              index={index}
+              onClick={() => onOpenTool(tool.agent_did)}
+            />
+          ))
+        ))}
     </div>
-  );
-};
-
-/* ---------------------- METRIC CARD ---------------------- */
-
-const MetricCard = ({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color?: string;
-}) => (
-  <div className="main-metric-card">
-    <div className="main-metric-label">{label}</div>
-    <div className="main-metric-value" style={{ color }}>
-      {value.toLocaleString()}
-    </div>
-  </div>
-);
-
-/* ---------------------- AGENT LIST ITEM ---------------------- */
-
-interface AgentListItemProps {
-  agent: NFTRecord;
-  index: number;
-  onClick: () => void;
-}
-
-const AgentListItem = ({ agent, index, onClick }: AgentListItemProps) => {
-  // Show nft_name if available, otherwise show id
-  let displayName = agent.nft_name?.trim() || agent.id;
-
-  return (
-    <div
-      className="agent-list-item"
-      onClick={onClick}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background =
-          "linear-gradient(135deg, rgba(5, 15, 30, 0.9), rgba(10, 25, 45, 0.8))";
-        e.currentTarget.style.borderColor = "rgba(69, 255, 232, 0.6)";
-        e.currentTarget.style.transform = "translateY(-4px) translateX(4px)";
-        e.currentTarget.style.boxShadow = "0 8px 32px rgba(69, 255, 232, 0.25)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background =
-          "linear-gradient(135deg, rgba(5, 15, 30, 0.6), rgba(10, 25, 45, 0.5))";
-        e.currentTarget.style.borderColor = "rgba(69, 255, 232, 0.25)";
-        e.currentTarget.style.transform = "translateY(0) translateX(0)";
-        e.currentTarget.style.boxShadow = "none";
-      }}
-    >
-      <div className="agent-item-number">{index + 1}</div>
-
-      <div className="agent-item-info">
-        <div className="agent-item-label">Agent Name</div>
-        <div className="agent-item-id">{displayName}</div>
-      </div>
-
-      <div className="agent-item-info">
-        <div className="agent-item-label">Interactions</div>
-        <div className="agent-item-id">{agent.total_interactions}</div>
-      </div>
-      <div className="agent-item-info">
-        <div className="agent-item-label">Intrusions</div>
-        <div className="agent-item-id">{agent.intrusion_count}</div>
-      </div>
-        <div className="agent-item-info">
-        <div className="agent-item-label">Agents Interacted</div>
-        <div className="agent-item-id">{agent.agents_interacted}</div>
-      </div>
-    </div>
-    
   );
 };
 

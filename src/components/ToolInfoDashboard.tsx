@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import type { InteractiontInfo, AgentInfo } from "../types";
-import { ToolListItem } from "./ToolsList";
 import { InteractionsListItem } from "./InteractionsList";
+import { AgentListItem } from "./AgentList";
 import { BACKEND_URL } from "../App";
 
-type TabType = "interactions" | "tools" | "intrusions";
+type TabType = "interactions" | "agents" | "intrusions";
 
-interface AgentInteractionsDashboardProps {
+interface ToolInteractionsDashboardProps {
   selectedAgentName?: string | null;
   selectedAgentDID: string | null;
-  onOpenTool: (id: string) => void;
+  onOpenAgent: (id: string) => void;
   onBackToDashboard: () => void;
   onSearchAgent: (id: string) => void;
   searchValue: string;
@@ -17,11 +17,11 @@ interface AgentInteractionsDashboardProps {
   isLoading: boolean;
 }
 
-const AgentInteractionsDashboard = ({
+const ToolInteractionsDashboard = ({
   selectedAgentDID,
   selectedAgentName,
-  onOpenTool,
-}: AgentInteractionsDashboardProps) => {
+  onOpenAgent,
+}: ToolInteractionsDashboardProps) => {
   const [activeTab, setActiveTab] = useState<TabType>("interactions");
 
   const [interactionsData, setInteractionsData] = useState<InteractiontInfo[]>(
@@ -42,12 +42,10 @@ const AgentInteractionsDashboard = ({
           `${BACKEND_URL}/interactions/agent/${selectedAgentDID}`,
         );
         const json = await res.json();
-
         if (!json.status || !Array.isArray(json.data)) {
           setInteractionsData([]);
           return;
         }
-
         setInteractionsData(json.data);
       } catch {
         setInteractionsData([]);
@@ -61,13 +59,11 @@ const AgentInteractionsDashboard = ({
 
   // 2. Build Tools + Intrusions from interactions
   useEffect(() => {
-    console.log("test2", interactionsData);
     let toolsObj: Record<string, AgentInfo> = {};
     let toolsSetForAgents: Record<string, Set<string>> = {};
     let intrusions: InteractiontInfo[] = [];
 
     if (!interactionsData) {
-      console.log("test3", interactionsData);
       return;
     }
 
@@ -90,7 +86,6 @@ const AgentInteractionsDashboard = ({
       };
     });
 
-    console.log("test4", interactionsData);
     setToolsData(Object.values(toolsObj));
     setIntrusionsData(intrusions);
   }, [interactionsData]);
@@ -106,10 +101,10 @@ const AgentInteractionsDashboard = ({
           Interactions
         </button>
         <button
-          className={`tab-btn ${activeTab === "tools" ? "active" : ""}`}
-          onClick={() => setActiveTab("tools")}
+          className={`tab-btn ${activeTab === "agents" ? "active" : ""}`}
+          onClick={() => setActiveTab("agents")}
         >
-          Tools
+          Agents
         </button>
 
         <button
@@ -138,19 +133,19 @@ const AgentInteractionsDashboard = ({
         ))}
 
       {/* Tools */}
-      {activeTab === "tools" &&
+      {activeTab === "agents" &&
         (isLoadingLocal ? (
           <div className="loading-text">Loading tools…</div>
         ) : toolsData.length === 0 ? (
           <div className="empty-text">No tools found</div>
         ) : (
           toolsData.map((tool: AgentInfo, idx) => (
-            <ToolListItem
+            <AgentListItem
               key={idx}
               agent={tool}
               index={idx}
               onClick={() => {
-                onOpenTool(tool.agent_did);
+                onOpenAgent(tool.agent_did);
               }}
             />
           ))
@@ -176,4 +171,4 @@ const AgentInteractionsDashboard = ({
   );
 };
 
-export default AgentInteractionsDashboard;
+export default ToolInteractionsDashboard;
