@@ -1,15 +1,14 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import dotenv from 'dotenv'
-
-dotenv.config()
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-
   server: {
-    port: parseInt(process.env.DASHBOARD_SERVER_PORT!, 10) || 2345,      // change port
-    host: true,      // allow access from network (0.0.0.0)
-    strictPort: true, // prevents auto-switching if port is busy
-  }
-})
+    port: Number(process.env.VITE_PORT) || 4003,
+    host: true,
+    strictPort: true,
+    allowedHosts: [
+      "dashboard-dev.agentdna.io",
+    ],
+  },
+});
