@@ -46,7 +46,7 @@ const AgentProfilePage = () => {
         interactionsData.forEach((interaction : any ) => {
           totalInteractions += 1;
           console.log("test7", interaction)
-          if (interaction.intrusion_cause == "") {
+          if (interaction.intrusion_cause) {
 
             totalIntrusions += 1;
           }

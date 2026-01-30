@@ -18,6 +18,7 @@ export const AgentListItem = ({
   index,
   onClick,
 }: AgentListItemProps) => {
+  console.log("name", agent)
   const displayName = agent.agent_name?.trim() || agent.agent_did;
   const factor = ((agent.total_interactions - agent.intrusion_count) / agent.total_interactions) * 100
 

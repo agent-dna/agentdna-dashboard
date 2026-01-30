@@ -39,7 +39,7 @@ const ToolInteractionsDashboard = ({
       setIsLoadingLocal(true);
       try {
         const res = await fetch(
-          `${BACKEND_URL}/interactions/agent/${selectedAgentDID}`,
+          `${BACKEND_URL}/interactions/tool/${selectedAgentDID}`,
         );
         const json = await res.json();
         if (!json.status || !Array.isArray(json.data)) {
@@ -76,8 +76,8 @@ const ToolInteractionsDashboard = ({
       toolsSetForAgents[toolId].add(interaction.host_id);
 
       toolsObj[toolId] = {
-        agent_name: `Tool ${toolId.slice(0, 6)}`,
-        agent_did: toolId,
+        agent_name: `${interaction.host_name}`,
+        agent_did: interaction.host_did,
         total_interactions: (toolsObj[toolId]?.total_interactions || 0) + 1,
         intrusion_count:
           (toolsObj[toolId]?.intrusion_count || 0) +

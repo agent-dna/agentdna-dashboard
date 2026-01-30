@@ -119,6 +119,7 @@ const MainDashboard = ({
         const agentsSet = new Set<string>();
         const toolsSet = new Set<string>();
         interactions_data.forEach((interaction: InteractiontInfo) => {
+          console.log("test10 : interactions", interaction)
           agentsSet.add(interaction.host_id);
           toolsSet.add(interaction.remote_did);
 
@@ -138,8 +139,9 @@ const MainDashboard = ({
 
           const reliability =
             total > 0 ? ((total - intrusions) / total) * 100 : 0;
+            const agentName = interaction.host_name
           agentsObj[agentId] = {
-            agent_name: `Agent ${agentId.substring(0, 6)}`,
+            agent_name: `${agentName}`,
             agent_did: agentId,
             total_interactions: total,
             intrusion_count: intrusions,
@@ -155,8 +157,9 @@ const MainDashboard = ({
             toolTotal > 0
               ? ((toolTotal - toolIntrusions) / toolTotal) * 100
               : 0;
+          const toolName = interaction.remote_name
           toolsObj[toolId] = {
-            agent_name: `Tool ${toolId.substring(0, 6)}`,
+            agent_name: `${toolName}`,
             agent_did: toolId,
             total_interactions: toolTotal,
             intrusion_count: toolIntrusions,

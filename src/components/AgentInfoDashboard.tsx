@@ -80,7 +80,7 @@ const AgentInteractionsDashboard = ({
       toolsSetForAgents[toolId].add(interaction.host_id);
 
       toolsObj[toolId] = {
-        agent_name: `Tool ${toolId.slice(0, 6)}`,
+        agent_name: `${interaction.remote_name}`,
         agent_did: toolId,
         total_interactions: (toolsObj[toolId]?.total_interactions || 0) + 1,
         intrusion_count:

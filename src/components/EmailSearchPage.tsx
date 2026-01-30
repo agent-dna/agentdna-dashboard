@@ -77,7 +77,7 @@ const EmailPage = ({ email, onOpenAgent }: EmailPageProps) => {
       toolsSetForAgents[toolId].add(agentId);
 
       agentsObj[agentId] = {
-        agent_name: `Agent ${agentId.slice(0, 6)}`,
+        agent_name: `${interaction.host_name}`,
         agent_did: agentId,
         total_interactions: (agentsObj[agentId]?.total_interactions || 0) + 1,
         intrusion_count:
@@ -87,7 +87,7 @@ const EmailPage = ({ email, onOpenAgent }: EmailPageProps) => {
       };
 
       toolsObj[toolId] = {
-        agent_name: `Tool ${toolId.slice(0, 6)}`,
+        agent_name: `${interaction.remote_name}`,
         agent_did: toolId,
         total_interactions: (toolsObj[toolId]?.total_interactions || 0) + 1,
         intrusion_count:
