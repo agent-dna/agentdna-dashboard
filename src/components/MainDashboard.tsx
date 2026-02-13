@@ -324,8 +324,8 @@ const computeReliability = (
           <a className="card center card-link">
             <div className="card-body">
               <h3>Total Tools</h3>
-              <p>Total number of Tools agents </p>
-              <h2>{metricsData.globalTotalInteractions}</h2>
+              <p>Total number of Tools</p>
+              <h2>{metricsData.globalRemoteAgents}</h2>
             </div>
           </a>
         </div>
