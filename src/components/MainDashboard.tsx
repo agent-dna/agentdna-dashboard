@@ -16,6 +16,55 @@ interface MainDashboardProps {
 
 type TabType = "interactions" | "agents" | "tools";
 
+const PAGE_SIZE = 10;
+
+const btnStyle = (active: boolean): React.CSSProperties => ({
+  padding: "6px 14px",
+  borderRadius: 6,
+  border: active ? "1px solid #2ff3e0" : "1px solid rgba(255,255,255,0.2)",
+  background: active ? "rgba(47,243,224,0.18)" : "rgba(255,255,255,0.06)",
+  color: active ? "#2ff3e0" : "#e9f0ff",
+  cursor: "pointer",
+  fontSize: 13,
+  fontFamily: "inherit",
+  opacity: 1,
+});
+
+interface PaginationBarProps {
+  page: number;
+  total: number;
+  setPage: (p: number) => void;
+}
+
+const PaginationBar = ({ page, total, setPage }: PaginationBarProps) => {
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (pages <= 1) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        gap: 6,
+        padding: "20px 0",
+        flexWrap: "wrap",
+      }}
+    >
+      <button disabled={page === 1} onClick={() => setPage(page - 1)} style={btnStyle(false)}>
+        ← Prev
+      </button>
+      {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
+        <button key={p} onClick={() => setPage(p)} style={btnStyle(p === page)}>
+          {p}
+        </button>
+      ))}
+      <button disabled={page === pages} onClick={() => setPage(page + 1)} style={btnStyle(false)}>
+        Next →
+      </button>
+    </div>
+  );
+};
+
 const MainDashboard = ({
   onOpenAgent,
   onOpenTool,
@@ -30,7 +79,10 @@ const MainDashboard = ({
     globalRemoteAgents: 0,
   });
 
-  const [interactions, setInteractions] = useState<InteractiontInfo[]>([]);
+  // local interactions list is stored in `interactionsData` below; keep a page state for pagination
+  const [interactionsPage, setInteractionsPage] = useState(1);
+  const [agentsPage, setAgentsPage] = useState(1);
+  const [toolsPage, setToolsPage] = useState(1);
 
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [toolsData, setToolsData] = useState<AgentInfo[]>([]);
@@ -133,19 +185,18 @@ const computeReliability = (
   
         const json = await response.json();
 
-         if (!json.status || !json.data) {
-          setInteractions([]);
-         }
+        if (!json.status || !json.data) {
+          setInteractionsData([]);
+          return;
+        }
 
         if (Array.isArray(json.data)) {
-          setInteractions(json.data);
           setInteractionsData(json.data);
-
         } else {
-          setInteractions([]);
+          setInteractionsData([]);
         }
       } catch {
-        setInteractions([]);
+        setInteractionsData([]);
       }
     };
 
@@ -276,6 +327,29 @@ const computeReliability = (
 
   // ---------------- SEARCH ----------------
 
+  // Slice for pagination
+  const interactionsSlice = interactionsData.slice(
+    (interactionsPage - 1) * PAGE_SIZE,
+    interactionsPage * PAGE_SIZE
+  );
+  const agentsSlice = agentsData.slice((agentsPage - 1) * PAGE_SIZE, agentsPage * PAGE_SIZE);
+  const toolsSlice = toolsData.slice((toolsPage - 1) * PAGE_SIZE, toolsPage * PAGE_SIZE);
+
+  // Keep page valid when data changes
+  useEffect(() => {
+    const interactionsPages = Math.max(1, Math.ceil(interactionsData.length / PAGE_SIZE));
+    if (interactionsPage > interactionsPages) setInteractionsPage(interactionsPages);
+    if (interactionsPage < 1) setInteractionsPage(1);
+
+    const agentsPages = Math.max(1, Math.ceil(agentsData.length / PAGE_SIZE));
+    if (agentsPage > agentsPages) setAgentsPage(agentsPages);
+    if (agentsPage < 1) setAgentsPage(1);
+
+    const toolsPages = Math.max(1, Math.ceil(toolsData.length / PAGE_SIZE));
+    if (toolsPage > toolsPages) setToolsPage(toolsPages);
+    if (toolsPage < 1) setToolsPage(1);
+  }, [interactionsData, agentsData, toolsData]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchValue.trim()) onSearchByEmail(searchValue.trim());
@@ -360,13 +434,20 @@ const computeReliability = (
         ) : interactionsData.length === 0 ? (
           <div className="empty-text">No Interactions found</div>
         ) : (
-          interactionsData.map((interaction, index) => (
-            <InteractionsListItem
-              key={index}
-              interaction={interaction}
-              index={index}
+          <>
+            {interactionsSlice.map((interaction, idx) => (
+              <InteractionsListItem
+                key={idx}
+                interaction={interaction}
+                index={(interactionsPage - 1) * PAGE_SIZE + idx}
+              />
+            ))}
+            <PaginationBar
+              page={interactionsPage}
+              total={interactionsData.length}
+              setPage={setInteractionsPage}
             />
-          ))
+          </>
         ))}
 
       {/* LIST of Agents */}
@@ -376,14 +457,17 @@ const computeReliability = (
         ) : agentsData.length === 0 ? (
           <div className="empty-text">No agents found</div>
         ) : (
-          agentsData.map((agent, index) => (
-            <AgentListItem
-              key={index}
-              agent={agent}
-              index={index}
-              onClick={() => onOpenAgent(agent.agent_did)}
-            />
-          ))
+          <>
+            {agentsSlice.map((agent, idx) => (
+              <AgentListItem
+                key={idx}
+                agent={agent}
+                index={(agentsPage - 1) * PAGE_SIZE + idx}
+                onClick={() => onOpenAgent(agent.agent_did)}
+              />
+            ))}
+            <PaginationBar page={agentsPage} total={agentsData.length} setPage={setAgentsPage} />
+          </>
         ))}
 
       {/* LIST of Tools */}
@@ -393,14 +477,17 @@ const computeReliability = (
         ) : toolsData.length === 0 ? (
           <div className="empty-text">No Tools found</div>
         ) : (
-          toolsData.map((tool, index) => (
-            <ToolListItem
-              key={index}
-              agent={tool}
-              index={index}
-              onClick={() => onOpenTool(tool.agent_did)}
-            />
-          ))
+          <>
+            {toolsSlice.map((tool, idx) => (
+              <ToolListItem
+                key={idx}
+                agent={tool}
+                index={(toolsPage - 1) * PAGE_SIZE + idx}
+                onClick={() => onOpenTool(tool.agent_did)}
+              />
+            ))}
+            <PaginationBar page={toolsPage} total={toolsData.length} setPage={setToolsPage} />
+          </>
         ))}
     </div>
   );

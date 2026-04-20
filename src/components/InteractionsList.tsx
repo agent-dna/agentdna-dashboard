@@ -9,7 +9,7 @@ export const InteractionsListItem = ({
   const remoteName = interaction.remote_name?.trim() || interaction.remote_did;
   const intrusionStatus = interaction.intrusion_cause
     ? `${interaction.intrusion_cause}`
-    : "Genuine";
+    : "None";
   const time = epochToGMT(interaction.epoch)
   const hasIntrusion = Boolean(interaction.intrusion_cause);
 
