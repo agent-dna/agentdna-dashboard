@@ -1,8 +1,40 @@
 import logo from "../assets/a4d2293fc03eb10393506a75b7c4bd9ad839d7ba-efzz4AxP.png";
+import { Key, Play } from "lucide-react";
 
 export default function Footer() {
   return (
-    <footer className="bg-[#131313]/60 backdrop-blur-2xl py-6 px-6 md:px-10 border-t border-white/5">
+    <>
+        <section className="w-full mb-10">
+          <div className="glass-panel w-full rounded-2xl border border-primary-fixed/40 flex flex-col md:flex-row items-center justify-between gap-8 shadow-[0_0_50px_rgba(68,252,221,0.1)] p-8 md:p-12 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary-fixed/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="space-y-3 text-center md:text-left relative z-10">
+              <h2 className="text-4xl md:text-6xl font-headline font-bold tracking-tighter uppercase text-on-surface">Secure your agent</h2>
+              <p className="text-on-surface-variant font-headline tracking-[0.3em] uppercase text-xs">Get the beta access of agentdna</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-6 relative z-10">
+              <a
+                href="https://agentdna.io/beta"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-8 py-4 bg-primary-fixed text-surface font-headline text-sm font-bold uppercase tracking-[0.2em] rounded shadow-[0_0_15px_rgba(68,252,221,0.4)] hover:shadow-[0_0_30px_rgba(68,252,221,0.6)] transition-all transform active:scale-95 group flex items-center gap-3"
+              >
+                Get your keys
+                <Key size={18} className="transition-transform group-hover:rotate-45" />
+              </a>
+              <a
+                href="https://hub.agentdna.io/tutorials"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-8 py-4 border border-primary-fixed/40 hover:border-primary-fixed text-primary-fixed font-headline text-sm font-bold uppercase tracking-[0.2em] rounded transition-all transform active:scale-95 group flex items-center gap-3 bg-primary-fixed/5 hover:bg-primary-fixed/10"
+              >
+                Tutorials
+                <Play size={18} />
+              </a>
+            </div>
+          </div>
+        </section>
+
+      <footer className="bg-[#131313]/60 backdrop-blur-2xl py-6 px-6 md:px-10 border-t border-white/5">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="space-y-1 text-center md:text-left">
           <a href="/">
@@ -36,6 +68,7 @@ export default function Footer() {
           </a>
         </div>
       </div>
-    </footer>
+      </footer>
+      </>
   );
 }

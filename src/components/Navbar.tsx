@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import logo from '../assets/a4d2293fc03eb10393506a75b7c4bd9ad839d7ba-efzz4AxP.png';
 
 export default function Navbar() {
-  const location = useLocation();
+  // const location = useLocation();
   const navigate = useNavigate();
-  const isDashboard = location.pathname === '/';
+  // removed isDashboard (Dashboard link removed from navbar)
   const [query, setQuery] = useState('');
 
   const handleSearch = (e: React.FormEvent) => {
@@ -16,20 +16,10 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 w-full z-50 flex items-center px-8 h-20 bg-[#131313]/60 backdrop-blur-2xl border-b border-white/5 shadow-[0_4px_40px_rgba(68,252,221,0.08)]">
-      {/* Left: Logo + Dashboard */}
+      {/* Left: Logo */}
       <div className="flex items-center gap-6 w-64">
         <Link to="/" className="flex items-center">
           <img src={logo} alt="AgentDNA" className="h-14 w-auto object-contain" />
-        </Link>
-        <Link
-          to="/"
-          className={`font-headline tracking-tight uppercase text-sm transition-colors whitespace-nowrap ${
-            isDashboard
-              ? 'text-primary-fixed border-b-2 border-primary-fixed pb-0.5'
-              : 'text-on-surface-variant hover:text-primary-fixed'
-          }`}
-        >
-          Dashboard
         </Link>
       </div>
 
@@ -42,7 +32,7 @@ export default function Navbar() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by email…"
-            className="w-full pl-9 pr-4 py-2 rounded-lg text-sm bg-surface-container border border-outline-variant/40 text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary-fixed/60 transition-colors"
+            className="w-full pl-9 pr-4 py-2 rounded-lg text-sm bg-surface-container border border-primary-fixed/20 text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary-fixed transition-colors"
           />
         </form>
       </div>
@@ -61,9 +51,9 @@ export default function Navbar() {
           href="https://agentdna.io/beta"
           target="_blank"
           rel="noopener noreferrer"
-          className="font-headline tracking-tight uppercase text-sm text-on-surface-variant hover:text-primary-fixed transition-colors"
+          className="bg-primary text-[#00201b] font-label font-bold py-2 px-6 rounded-full text-sm hover:shadow-[0_0_20px_rgba(68,252,221,0.4)] transition-all active:scale-95"
         >
-          Try Beta
+          Access Beta
         </a>
       </div>
     </nav>

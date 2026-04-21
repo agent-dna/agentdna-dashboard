@@ -150,7 +150,7 @@ const ToolInfoDashboard = ({ selectedAgentDID, onOpenAgent }: Props) => {
       </div>
 
       {/* Table card */}
-      <div className="dashboard-card rounded-xl border border-outline-variant/30 overflow-hidden">
+      <div className="rounded-xl border border-outline-variant/30 overflow-hidden">
 
       {/* Interactions table */}
       {activeTab === "interactions" && (
@@ -180,7 +180,7 @@ const ToolInfoDashboard = ({ selectedAgentDID, onOpenAgent }: Props) => {
                         background: hasIntrusion ? "rgba(180, 30, 50, 0.18)" : "rgba(10, 90, 70, 0.15)",
                         borderLeft: hasIntrusion ? "3px solid #e05a6f" : "3px solid rgba(68,252,221,0.35)",
                       }}
-                      className="transition-all hover:brightness-110 cursor-default"
+                      className="transition-all cursor-default"
                     >
                       <td className="px-6 py-4 text-sm font-headline text-on-surface-variant">
                         {(interactionsPage - 1) * PAGE_SIZE + idx + 1}
@@ -245,7 +245,7 @@ const ToolInfoDashboard = ({ selectedAgentDID, onOpenAgent }: Props) => {
                       key={idx}
                       onClick={() => onOpenAgent(agent.agent_did)}
                       style={{ background: "#131313" }}
-                      className="transition-all hover:brightness-110 cursor-pointer"
+                      className="transition-all cursor-pointer"
                     >
                       <td className="px-6 py-4 text-sm font-headline text-on-surface-variant">
                         {(agentsPage - 1) * PAGE_SIZE + idx + 1}
@@ -308,7 +308,7 @@ const ToolInfoDashboard = ({ selectedAgentDID, onOpenAgent }: Props) => {
                   <tr
                     key={idx}
                     style={{ background: "rgba(180, 30, 50, 0.18)", borderLeft: "3px solid #e05a6f" }}
-                    className="transition-all hover:brightness-110 cursor-default"
+                    className="transition-all cursor-default"
                   >
                     <td className="px-6 py-4 text-sm font-headline text-on-surface-variant">
                       {(intrusionsPage - 1) * PAGE_SIZE + idx + 1}

@@ -175,9 +175,7 @@ const MainDashboard = ({ onOpenAgent, onOpenTool }: MainDashboardProps) => {
   const agentsSlice = agentsData.slice((agentsPage - 1) * PAGE_SIZE, agentsPage * PAGE_SIZE);
   const toolsSlice = toolsData.slice((toolsPage - 1) * PAGE_SIZE, toolsPage * PAGE_SIZE);
 
-  const syncPct = metricsData.globalTotalInteractions > 0
-    ? (((metricsData.globalTotalInteractions - metricsData.globalIntrusions) / metricsData.globalTotalInteractions) * 100).toFixed(1)
-    : "—";
+  // syncPct removed (not currently displayed) to avoid unused variable
 
   return (
     <div className="pb-20 space-y-12">
