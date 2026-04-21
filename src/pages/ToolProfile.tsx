@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { ArrowLeft, Wrench, Shield, Zap, Activity, Users } from "lucide-react";
 import ToolInfoDashboard from "../components/ToolInfoDashboard";
 import { BACKEND_URL } from "../App";
 
@@ -7,11 +8,8 @@ const ToolProfilePage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const [query, setQuery] = useState("");
-  const [selectedAgentName, setSelectedAgentName] = useState<string | null>(
-    null,
-  );
-  const [selectedAgentDID, setSelectedAgentDID] = useState<string | null>(null);
+  const [selectedToolName, setSelectedToolName] = useState<string | null>(null);
+  const [selectedToolDID, setSelectedToolDID] = useState<string | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [metricsData, setMetricsData] = useState({
     agentsInteracted: 0,
@@ -21,67 +19,42 @@ const ToolProfilePage = () => {
   });
 
   useEffect(() => {
-    const fetchAgentDetails = async () => {
+    const fetchToolDetails = async () => {
       if (!id) return;
-
       setIsLoadingData(true);
       try {
-        const res = await fetch(
-          `${BACKEND_URL}/interactions/tool/${id}`,
-        );
-
+        const res = await fetch(`${BACKEND_URL}/interactions/tool/${id}`);
         const json = await res.json();
-
-        if (!json.status) {
-          return;
-        }
-
-        const interactionsData = json.data;
-
+        if (!json.status) return;
+        const data = json.data;
         let totalInteractions = 0;
         let totalIntrusions = 0;
-
-        const interactedAgentsSet = new Set<string>();
-
-        interactionsData.forEach((interaction : any ) => {
+        const interactedSet = new Set<string>();
+        data.forEach((interaction: any) => {
           totalInteractions += 1;
-
-          if (interaction.intrusion_cause) {
-            totalIntrusions += 1;
-          }
-
-          interactedAgentsSet.add(interaction.host_did);
-
-          // track all unique agents involved in these interactions
+          if (interaction.intrusion_cause) totalIntrusions += 1;
+          interactedSet.add(interaction.host_did);
         });
-
-        let factor = (( totalInteractions - totalIntrusions) / totalInteractions ) * 100 ;
-
+        const factor = ((totalInteractions - totalIntrusions) / totalInteractions) * 100;
         setMetricsData({
-          agentsInteracted: interactedAgentsSet.size,
+          agentsInteracted: interactedSet.size,
           totalInteractions,
           intrusions: totalIntrusions,
           reliabilityFactor: factor,
         });
-
-        setSelectedAgentName(interactionsData[0].remote_name || "Unknown Tool");
-        setSelectedAgentDID(interactionsData[0].remote_did || null);
+        setSelectedToolName(data[0]?.remote_name || "Unknown Tool");
+        setSelectedToolDID(data[0]?.remote_did || null);
       } catch {
-        setSelectedAgentName("Unknown Agent");
+        setSelectedToolName("Unknown Tool");
       } finally {
         setIsLoadingData(false);
       }
     };
-
-    fetchAgentDetails();
+    fetchToolDetails();
   }, [id]);
 
   const handleBackToDashboard = () => {
-    // Check if we came from email search page
-    const state = location.state as {
-      fromEmailSearch?: boolean;
-      email?: string;
-    } | null;
+    const state = location.state as { fromEmailSearch?: boolean; email?: string } | null;
     if (state?.fromEmailSearch && state?.email) {
       navigate(`/search/${encodeURIComponent(state.email)}`);
     } else {
@@ -89,70 +62,91 @@ const ToolProfilePage = () => {
     }
   };
 
-  const handleOpenAgent = (id: string) => {
-    navigate(`/agent/${encodeURIComponent(id)}`);
-  };
+  const handleOpenAgent = (agentId: string) => navigate(`/agent/${encodeURIComponent(agentId)}`);
+  const handleSearchAgent = (agentId: string) => navigate(`/agent/${encodeURIComponent(agentId)}`);
 
-  const handleSearchAgent = (agentId: string) => {
-    navigate(`/agent/${encodeURIComponent(agentId)}`);
-  };
+  if (!id) return null;
 
-  if (!id) {
-    return null;
-  }
+  const metrics = [
+    {
+      icon: <Activity size={20} className="text-primary-fixed" />,
+      label: "Reliability Factor",
+      value: Number.isFinite(metricsData.reliabilityFactor)
+        ? `${metricsData.reliabilityFactor.toFixed(1)}%`
+        : "—",
+      accent: "text-primary-fixed",
+    },
+    {
+      icon: <Shield size={20} className="text-error" />,
+      label: "Intrusions Detected",
+      value: metricsData.intrusions,
+      accent: "text-error",
+    },
+    {
+      icon: <Zap size={20} className="text-on-surface-variant" />,
+      label: "Total Interactions",
+      value: metricsData.totalInteractions,
+      accent: "text-on-surface",
+    },
+    {
+      icon: <Users size={20} className="text-primary-fixed/70" />,
+      label: "Agents Interacted",
+      value: metricsData.agentsInteracted,
+      accent: "text-on-surface",
+    },
+  ];
 
   return (
-    <>
-      <section className="hero">
-        <h1 className="hero-title">Tool Profile </h1>
-        <h2 className="hero-title-h2">{selectedAgentName}</h2>
+    <div className="page">
+      {/* Back button */}
+      <button
+        onClick={handleBackToDashboard}
+        className="flex items-center gap-2 text-on-surface-variant hover:text-primary-fixed transition-colors mb-8 font-headline text-sm uppercase tracking-wider"
+      >
+        <ArrowLeft size={16} />
+        Back to Dashboard
+      </button>
 
-        <section className="hub">
-          <div className="hub-grid">
-            <a className="card center card-link">
-              <div className="card-body">
-                <h3>Reliability Factor </h3>
-                <p>How reliable is the agent</p>
-                <h2>{metricsData.reliabilityFactor.toFixed(2)}</h2>
-              </div>
-            </a>
+      {/* Hero */}
+      <div className="flex items-center gap-5 mb-10">
+        <div className="w-14 h-14 rounded-xl bg-primary-fixed/10 border border-primary-fixed/20 flex items-center justify-center shrink-0">
+          <Wrench size={28} className="text-primary-fixed" />
+        </div>
+        <div>
+          <h1 className="font-headline text-3xl font-bold text-on-surface leading-tight">
+            {isLoadingData ? "Loading…" : selectedToolName}
+          </h1>
+        </div>
+      </div>
 
-            <a className="card center card-link">
-              <div className="card-body">
-                <h3>Intrusions Detected</h3>
-                <p>Total number of intrusion attempts detected</p>
-                <h2>{metricsData.intrusions}</h2>
-              </div>
-            </a>
-
-            <a className="card center card-link">
-              <div className="card-body">
-                <h3>Total Interactions</h3>
-                <p>Total number of interactions between agents</p>
-                <h2>{metricsData.totalInteractions}</h2>
-              </div>
-            </a>
-            <a className="card center card-link">
-              <div className="card-body">
-                <h3>Total Tools Interacted </h3>
-                <p>Total number of agents interacted with</p>
-                <h2>{metricsData.agentsInteracted}</h2>
-              </div>
-            </a>
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        {metrics.map((m, i) => (
+          <div
+            key={i}
+            className="dashboard-card rounded-xl p-5 border border-outline-variant/30 flex flex-col gap-3"
+          >
+            <div className="flex items-center gap-2 text-on-surface-variant text-xs font-headline uppercase tracking-widest">
+              {m.icon}
+              {m.label}
+            </div>
+            <div className={`font-headline text-3xl font-bold ${m.accent}`}>{m.value}</div>
           </div>
-        </section>
-      </section>
+        ))}
+      </div>
+
+      {/* Tabbed detail section */}
       <ToolInfoDashboard
-        selectedAgentName={selectedAgentName}
-        selectedAgentDID={selectedAgentDID}
+        selectedAgentName={selectedToolName}
+        selectedAgentDID={selectedToolDID}
         onOpenAgent={handleOpenAgent}
         onBackToDashboard={handleBackToDashboard}
         onSearchAgent={handleSearchAgent}
-        searchValue={query}
-        onSearchChange={setQuery}
+        searchValue=""
+        onSearchChange={() => {}}
         isLoading={isLoadingData}
       />
-    </>
+    </div>
   );
 };
 
