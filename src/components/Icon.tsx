@@ -29,7 +29,11 @@ export type IconName =
   | "helix"
   | "box"
   | "copy"
-  | "check";
+  | "check"
+  | "flow"
+  | "chevronLeft"
+  | "play"
+  | "pause";
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
   name: IconName;
@@ -166,6 +170,22 @@ const PATHS: Record<IconName, ReactElement> = {
     </>
   ),
   check: <path d="M5 12l5 5 9-11" />,
+  flow: (
+    <>
+      <circle cx="6" cy="6" r="2.2" />
+      <circle cx="18" cy="6" r="2.2" />
+      <circle cx="12" cy="18" r="2.2" />
+      <path d="M8 7l3 9M16 7l-3 9M8 6h8" />
+    </>
+  ),
+  chevronLeft: <path d="M15 6l-6 6 6 6" />,
+  play: <path d="M7 4l13 8-13 8z" />,
+  pause: (
+    <>
+      <rect x="6" y="4" width="4" height="16" rx="1" />
+      <rect x="14" y="4" width="4" height="16" rx="1" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 18, ...rest }: IconProps) {

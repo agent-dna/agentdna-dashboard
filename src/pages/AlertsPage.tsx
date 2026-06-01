@@ -4,11 +4,12 @@ import { FilterPill } from "../components/FilterPill";
 import { DataTable } from "../components/DataTable";
 import { useAlerts } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
-import { interactionColumns } from "./InteractionsPage";
+import { useInteractionColumns } from "./InteractionsPage";
 
 export function AlertsPage() {
   const { data: threats } = useAlerts();
   const { openDrawer } = useDrawer();
+  const cols = useInteractionColumns((k, e) => openDrawer(k, e));
 
   return (
     <div className="page">
@@ -45,7 +46,7 @@ export function AlertsPage() {
         </div>
         <DataTable
           rows={threats}
-          columns={interactionColumns((k, e) => openDrawer(k, e))}
+          columns={cols}
           onRowClick={(r) => openDrawer("interaction", r)}
           emptyText="No alerts"
         />

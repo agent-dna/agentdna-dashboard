@@ -48,10 +48,25 @@ export function AgentsToolsPage() {
       key: "name",
       label: "Agent",
       sortFn: (a, b) => a.name.localeCompare(b.name),
-      render: (r) => <EntityCell name={r.name} sub={r.owner} paletteIx={r.name.charCodeAt(0)} />,
+      render: (r) => <EntityCell name={r.name} paletteIx={r.name.charCodeAt(0)} />,
     },
-    { key: "id", label: "ID", sortFn: (a, b) => a.id.localeCompare(b.id), render: (r) => <IdCell id={r.id} /> },
-    { key: "score", label: "Reliability", sortFn: (a, b) => a.score - b.score, render: (r) => <ScoreBar value={r.score} /> },
+    {
+      key: "id",
+      label: "ID",
+      sortFn: (a, b) => a.id.localeCompare(b.id),
+      render: (r) => <IdCell id={r.id} truncate truncateLength={10} />,
+    },
+    {
+      key: "score",
+      label: "Reliability",
+      sortFn: (a, b) => a.score - b.score,
+      render: (r) =>
+        r.interactions > 0 ? (
+          <ScoreBar value={r.score} />
+        ) : (
+          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>
+        ),
+    },
     {
       key: "created",
       label: "Created",
@@ -122,7 +137,17 @@ export function AgentsToolsPage() {
       ),
     },
     { key: "id", label: "ID", sortFn: (a, b) => a.id.localeCompare(b.id), render: (r) => <IdCell id={r.id} /> },
-    { key: "score", label: "Reliability", sortFn: (a, b) => a.score - b.score, render: (r) => <ScoreBar value={r.score} /> },
+    {
+      key: "score",
+      label: "Reliability",
+      sortFn: (a, b) => a.score - b.score,
+      render: (r) =>
+        r.interactions > 0 ? (
+          <ScoreBar value={r.score} />
+        ) : (
+          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>
+        ),
+    },
     {
       key: "created",
       label: "Created",
@@ -300,7 +325,7 @@ export function AgentsToolsPage() {
           rows={[...agents]
             .sort((a, b) => b.interactions - a.interactions)
             .slice(0, 5)
-            .map((a) => ({ id: a.id, name: a.name, interactions: a.interactions, threats: a.threats, sub: a.owner || undefined }))}
+            .map((a) => ({ id: a.id, name: a.name, interactions: a.interactions, threats: a.threats }))}
           accent="var(--accent)"
           accent2="var(--accent-2)"
           onRowClick={(r) => navigate(`/agents/${r.id}`)}

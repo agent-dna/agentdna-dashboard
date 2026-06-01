@@ -13,6 +13,7 @@ import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { useAgent, useAgentInteractions, useAgentIntents, useLogs } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
+import { useResolveName } from "../context/DirectoryContext";
 import { fmtRuntime, initials, timeAgo } from "../lib/format";
 import type { Intent, Interaction } from "../types";
 
@@ -24,6 +25,7 @@ export function AgentDetailPage() {
   const { openDrawer } = useDrawer();
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
+  const resolve = useResolveName();
   const [tab, setTab] = useState<Tab>("interactions");
   const [policyOpen, setPolicyOpen] = useState(false);
   const [viewPolicyOpen, setViewPolicyOpen] = useState(false);
@@ -83,7 +85,8 @@ export function AgentDetailPage() {
       label: "Counterparty",
       render: (r) => {
         const other = r.initiator.id === agent.id ? r.target : r.initiator;
-        return <EntityCell name={other.name} sub={other.id} paletteIx={other.name.charCodeAt(0)} />;
+        const resolved = resolve(other.id);
+        return <EntityCell name={resolved.name} sub={other.id} paletteIx={resolved.name.charCodeAt(0)} />;
       },
     },
     { key: "intent", label: "Intent", render: (r) => <IdCell id={r.intent.id} /> },

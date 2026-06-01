@@ -2,51 +2,44 @@ import { useState } from "react";
 import { Icon } from "../components/Icon";
 import { FilterPill } from "../components/FilterPill";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { EntityCell, IdCell } from "../components/EntityCell";
+import { IdCell } from "../components/EntityCell";
 import { useInteractions } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
-import { fmtRuntime, timeAgo } from "../lib/format";
+import { useResolveName } from "../context/DirectoryContext";
+import { timeAgo } from "../lib/format";
 import type { Interaction } from "../types";
 
-export function interactionColumns(openDrawer: (kind: "interaction", e: Interaction) => void): DataTableColumn<Interaction>[] {
+export function useInteractionColumns(
+  openDrawer: (kind: "interaction", e: Interaction) => void,
+): DataTableColumn<Interaction>[] {
+  const resolve = useResolveName();
   return [
     {
       key: "id",
       label: "Interaction ID",
       sortFn: (a, b) => a.id.localeCompare(b.id),
-      render: (r) => <IdCell id={r.id} />,
+      render: (r) => <IdCell id={r.id} truncate />,
     },
     {
       key: "initiator",
       label: "Initiator",
-      sortFn: (a, b) => a.initiator.name.localeCompare(b.initiator.name),
+      sortFn: (a, b) => resolve(a.initiator.id).name.localeCompare(resolve(b.initiator.id).name),
       render: (r) => (
-        <EntityCell name={r.initiator.name} sub={r.initiator.id} paletteIx={r.initiator.name.charCodeAt(0)} />
+        <span style={{ fontSize: 13.5, color: "var(--fg)", fontWeight: 600 }}>
+          {resolve(r.initiator.id).name}
+        </span>
       ),
     },
     {
       key: "target",
       label: "Interacted with",
       render: (r) => (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            className={`chip ${r.targetType === "agent" ? "info" : "purple"}`}
-            style={{ fontSize: 10.5, padding: "2px 7px" }}
-          >
-            {r.targetType}
-          </span>
-          <span style={{ fontSize: 13 }}>{r.target.name}</span>
-        </div>
+        <span style={{ fontSize: 13.5, color: "var(--fg)", fontWeight: 600 }}>
+          {resolve(r.target.id).name}
+        </span>
       ),
     },
-    { key: "intent", label: "Intent", render: (r) => <IdCell id={r.intent.id} /> },
-    {
-      key: "runtime",
-      label: "Runtime",
-      align: "right",
-      sortFn: (a, b) => a.runtime - b.runtime,
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{fmtRuntime(r.runtime)}</span>,
-    },
+    { key: "intent", label: "Intent", render: (r) => <IdCell id={r.intent.id} truncate /> },
     {
       key: "threat",
       label: "Threat",
@@ -64,7 +57,7 @@ export function interactionColumns(openDrawer: (kind: "interaction", e: Interact
     },
     {
       key: "created",
-      label: "Created at",
+      label: "Time",
       align: "right",
       sortFn: (a, b) => a.created - b.created,
       render: (r) => (
@@ -100,18 +93,25 @@ export function InteractionsPage() {
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
   const { data: interactions } = useInteractions();
   const { openDrawer } = useDrawer();
+  const cols = useInteractionColumns((k, e) => openDrawer(k, e));
+  const resolve = useResolveName();
 
   let rows = interactions;
   if (filter === "threats") rows = rows.filter((r) => r.threat);
   if (filter === "safe") rows = rows.filter((r) => !r.threat);
   if (search) {
     const q = search.toLowerCase();
-    rows = rows.filter(
-      (r) =>
+    rows = rows.filter((r) => {
+      const initName = resolve(r.initiator.id).name.toLowerCase();
+      const tgtName = resolve(r.target.id).name.toLowerCase();
+      return (
         r.id.toLowerCase().includes(q) ||
-        r.initiator.name.toLowerCase().includes(q) ||
-        r.target.name.toLowerCase().includes(q),
-    );
+        r.initiator.id.toLowerCase().includes(q) ||
+        r.target.id.toLowerCase().includes(q) ||
+        initName.includes(q) ||
+        tgtName.includes(q)
+      );
+    });
   }
 
   return (
@@ -164,7 +164,7 @@ export function InteractionsPage() {
         </div>
         <DataTable
           rows={rows.slice(0, 40)}
-          columns={interactionColumns((k, e) => openDrawer(k, e))}
+          columns={cols}
           onRowClick={(r) => openDrawer("interaction", r)}
           emptyText="No interactions yet"
         />

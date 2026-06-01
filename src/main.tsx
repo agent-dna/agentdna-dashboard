@@ -12,15 +12,18 @@ import { InteractionsPage } from "./pages/InteractionsPage";
 import { AlertsPage } from "./pages/AlertsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RequestsPage } from "./pages/RequestsPage";
+import { FlowPage } from "./pages/flow/FlowPage";
 import { DrawerProvider } from "./context/DrawerContext";
 import { TweaksProvider } from "./context/TweaksContext";
 import { AuthProvider } from "./context/AuthContext";
+import { DirectoryProvider } from "./context/DirectoryContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
+        <DirectoryProvider>
         <TweaksProvider>
           <DrawerProvider>
             <Routes>
@@ -38,6 +41,8 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="agents" element={<AgentsToolsPage />} />
                 <Route path="agents/:agentId" element={<AgentDetailPage />} />
                 <Route path="requests" element={<RequestsPage />} />
+                <Route path="graph" element={<FlowPage />} />
+                <Route path="graph/:intentId" element={<FlowPage />} />
                 <Route path="interactions" element={<InteractionsPage />} />
                 <Route path="alerts" element={<AlertsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -45,6 +50,7 @@ createRoot(document.getElementById("root")!).render(
             </Routes>
           </DrawerProvider>
         </TweaksProvider>
+        </DirectoryProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

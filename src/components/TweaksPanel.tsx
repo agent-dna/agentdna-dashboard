@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { useTweaks, type ChartStyle, type Density, type SidebarMode } from "../context/TweaksContext";
+import {
+  FONT_OPTIONS,
+  useTweaks,
+  type ChartStyle,
+  type Density,
+  type FontFamily,
+  type SidebarMode,
+} from "../context/TweaksContext";
 
 const PANEL_CSS = `
   .twk-fab {
@@ -34,6 +41,23 @@ const PANEL_CSS = `
   .twk-seg { display: flex; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; }
   .twk-seg button { flex: 1; background: transparent; border: 0; color: var(--fg-muted); font: 500 12px var(--font-body); padding: 5px 8px; border-radius: 6px; cursor: pointer; }
   .twk-seg button.on { background: var(--bg-1); color: var(--fg); box-shadow: 0 1px 2px rgba(15,32,70,0.06); }
+  .twk-font-list { display: flex; flex-direction: column; gap: 4px; }
+  .twk-font-btn {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    background: var(--bg-1);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--fg);
+    transition: border-color 120ms, background 120ms;
+  }
+  .twk-font-btn:hover { border-color: var(--line-strong); background: var(--bg-2); }
+  .twk-font-btn.on { border-color: var(--accent); background: rgba(37,99,235,0.06); color: var(--accent); }
+  .twk-font-btn .check { font-size: 12px; color: var(--accent); opacity: 0; }
+  .twk-font-btn.on .check { opacity: 1; }
 `;
 
 interface SegProps<T extends string> {
@@ -95,6 +119,25 @@ export function TweaksPanel() {
                 { value: "spacious", label: "Spacious" },
               ]}
             />
+          </div>
+
+          <div className="twk-sect">Typography</div>
+          <div className="twk-row">
+            <label>Body font</label>
+            <div className="twk-font-list">
+              {FONT_OPTIONS.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  className={`twk-font-btn ${tweaks.font === f.value ? "on" : ""}`}
+                  onClick={() => setTweak("font", f.value as FontFamily)}
+                  style={{ fontFamily: `"${f.value}", system-ui, sans-serif` }}
+                >
+                  <span>{f.label}</span>
+                  <span className="check">✓</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="twk-sect">Charts</div>

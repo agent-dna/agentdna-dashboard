@@ -4,13 +4,11 @@ import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { FilterPill } from "../components/FilterPill";
 import { Chart } from "../components/Chart";
-import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { EntityCell, IdCell } from "../components/EntityCell";
+import { DataTable } from "../components/DataTable";
 import { useHomeMetrics, useInteractions, useSeries } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
 import { useTweaks } from "../context/TweaksContext";
-import { fmtRuntime, timeAgo } from "../lib/format";
-import type { Interaction } from "../types";
+import { useInteractionColumns } from "./InteractionsPage";
 
 export function HomePage() {
   const [series, setSeries] = useState<"24h" | "7d">("24h");
@@ -32,78 +30,7 @@ export function HomePage() {
       : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const recent = interactions.slice(0, 6);
-
-  const cols: DataTableColumn<Interaction>[] = [
-    { key: "id", label: "Interaction", render: (r) => <IdCell id={r.id} /> },
-    {
-      key: "initiator",
-      label: "Initiator",
-      render: (r) => (
-        <EntityCell name={r.initiator.name} sub={r.initiator.id} paletteIx={r.initiator.name.charCodeAt(0)} />
-      ),
-    },
-    {
-      key: "target",
-      label: "Interacted with",
-      render: (r) => (
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Icon name="arrowRight" size={12} />
-          <span className="chip" style={{ color: r.targetType === "agent" ? "var(--accent-2)" : "var(--accent-3)" }}>
-            {r.targetType}
-          </span>
-          <span>{r.target.name}</span>
-        </div>
-      ),
-    },
-    { key: "intent", label: "Intent", render: (r) => <IdCell id={r.intent.id} /> },
-    {
-      key: "runtime",
-      label: "Runtime",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{fmtRuntime(r.runtime)}</span>,
-    },
-    {
-      key: "threat",
-      label: "Status",
-      render: (r) =>
-        r.threat ? (
-          <span className="chip threat">
-            <span className="dot-status threat" /> threat
-          </span>
-        ) : (
-          <span className="chip safe">
-            <span className="dot-status safe" /> safe
-          </span>
-        ),
-    },
-    {
-      key: "created",
-      label: "When",
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)" }}>
-          {timeAgo(r.created)}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      label: "",
-      align: "right",
-      width: 60,
-      render: (r) => (
-        <div className="row-actions">
-          <button
-            className="btn-mini"
-            onClick={(e) => {
-              e.stopPropagation();
-              openDrawer("interaction", r);
-            }}
-          >
-            View
-          </button>
-        </div>
-      ),
-    },
-  ];
+  const cols = useInteractionColumns((k, e) => openDrawer(k, e));
 
   return (
     <div className="page">

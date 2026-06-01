@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Icon, type IconName } from "./components/Icon";
 import logoMark from "./assets/agentdna-logo.png";
@@ -31,6 +32,7 @@ export function App() {
     { to: "/", label: "Home", icon: "home" },
     { to: "/intents", label: "Intents", icon: "intents" },
     { to: "/agents", label: "Agents & Tools", icon: "agents" },
+    { to: "/graph", label: "Flow", icon: "activity" },
     { to: "/requests", label: "Requests", icon: "box" },
     { to: "/interactions", label: "Interactions", icon: "interactions" },
     { to: "/alerts", label: "Threats", icon: "alerts", badge: alerts.length || undefined },
@@ -44,6 +46,14 @@ export function App() {
     const item = NAV_WORKSPACE.find((n) => n.to === location.pathname) ?? NAV_WORKSPACE[0];
     return item.label;
   })();
+
+  useEffect(() => {
+    const value = `"${tweaks.font}", system-ui, -apple-system, sans-serif`;
+    document.documentElement.style.setProperty("--font-body", value);
+    return () => {
+      document.documentElement.style.removeProperty("--font-body");
+    };
+  }, [tweaks.font]);
 
   return (
     <div className={`app ${collapsed ? "collapsed" : ""} ${densityClass}`.trim()}>

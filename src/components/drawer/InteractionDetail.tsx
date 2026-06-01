@@ -2,6 +2,7 @@ import { Icon } from "../Icon";
 import { EntityCell } from "../EntityCell";
 import { DrawerSection } from "./DrawerSection";
 import { useDrawer } from "../../context/DrawerContext";
+import { useResolveName } from "../../context/DirectoryContext";
 import { fmtRuntime, timeAgo } from "../../lib/format";
 import type { Interaction } from "../../types";
 
@@ -11,6 +12,10 @@ interface Props {
 
 export function InteractionDetail({ interaction: i }: Props) {
   const { closeDrawer } = useDrawer();
+  const resolve = useResolveName();
+  const initiator = resolve(i.initiator.id);
+  const target = resolve(i.target.id);
+  const targetKind = target.kind || i.targetType;
   return (
     <>
       <div className="drawer-head">
@@ -53,10 +58,9 @@ export function InteractionDetail({ interaction: i }: Props) {
         <DrawerSection title="Flow">
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr auto 1fr",
-              gap: 14,
-              alignItems: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
               background: "var(--bg-2)",
               border: "1px solid var(--line)",
               borderRadius: 10,
@@ -64,20 +68,50 @@ export function InteractionDetail({ interaction: i }: Props) {
             }}
           >
             <div>
-              <div style={{ fontSize: 11, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--fg-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  marginBottom: 6,
+                  fontWeight: 600,
+                }}
+              >
                 Initiator
               </div>
-              <EntityCell name={i.initiator.name} sub={i.initiator.id} paletteIx={i.initiator.name.charCodeAt(0)} />
+              <EntityCell name={initiator.name} sub={i.initiator.id} paletteIx={initiator.name.charCodeAt(0)} />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, color: "var(--accent)" }}>
-              <Icon name="arrowRight" size={20} />
-              <span style={{ fontSize: 10, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>{fmtRuntime(i.runtime)}</span>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                color: "var(--accent)",
+                paddingLeft: 12,
+              }}
+            >
+              <Icon name="arrowRight" size={16} style={{ transform: "rotate(90deg)" }} />
+              <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
+                {fmtRuntime(i.runtime)}
+              </span>
             </div>
+
             <div>
-              <div style={{ fontSize: 11, color: "var(--fg-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-                Target · {i.targetType}
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--fg-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  marginBottom: 6,
+                  fontWeight: 600,
+                }}
+              >
+                Target · {targetKind}
               </div>
-              <EntityCell name={i.target.name} sub={i.target.id} paletteIx={(i.target.name.charCodeAt(2) || 0)} />
+              <EntityCell name={target.name} sub={i.target.id} paletteIx={(target.name.charCodeAt(2) || 0)} />
             </div>
           </div>
         </DrawerSection>
@@ -86,7 +120,7 @@ export function InteractionDetail({ interaction: i }: Props) {
           <div className="kv">
             <div className="k">Interaction ID</div>
             <div className="v">{i.id}</div>
-            <div className="k">Created at</div>
+            <div className="k">Time</div>
             <div className="v">{timeAgo(i.created)}</div>
             <div className="k">Runtime</div>
             <div className="v">{fmtRuntime(i.runtime)}</div>

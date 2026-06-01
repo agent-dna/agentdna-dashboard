@@ -3,17 +3,28 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 export type Density = "compact" | "comfortable" | "spacious";
 export type SidebarMode = "expanded" | "collapsed";
 export type ChartStyle = "area" | "line" | "bar";
+export type FontFamily = "Inter" | "Geist" | "IBM Plex Sans" | "Manrope" | "DM Sans";
+
+export const FONT_OPTIONS: { value: FontFamily; label: string }[] = [
+  { value: "Inter", label: "Inter" },
+  { value: "Geist", label: "Geist" },
+  { value: "IBM Plex Sans", label: "IBM Plex Sans" },
+  { value: "Manrope", label: "Manrope" },
+  { value: "DM Sans", label: "DM Sans" },
+];
 
 export interface Tweaks {
   density: Density;
   sidebar: SidebarMode;
   chartStyle: ChartStyle;
+  font: FontFamily;
 }
 
 const DEFAULTS: Tweaks = {
   density: "spacious",
   sidebar: "expanded",
   chartStyle: "area",
+  font: "Inter",
 };
 
 const STORAGE_KEY = "agentdna.tweaks";

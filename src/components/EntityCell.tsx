@@ -24,13 +24,25 @@ export function EntityCell({ name, sub, paletteIx = 0, icon }: EntityCellProps) 
 
 interface IdCellProps {
   id: string;
+  /** If true, render hash as `abcd...wxyz` instead of full length. */
+  truncate?: boolean;
+  /** Total visible chars when truncated (split evenly head/tail). Default 8. */
+  truncateLength?: number;
 }
 
-export function IdCell({ id }: IdCellProps) {
+function truncateId(s: string, total = 8): string {
+  const head = Math.ceil(total / 2);
+  const tail = Math.floor(total / 2);
+  if (s.length <= head + tail + 3) return s;
+  return `${s.slice(0, head)}...${s.slice(-tail)}`;
+}
+
+export function IdCell({ id, truncate = false, truncateLength = 8 }: IdCellProps) {
   const [copied, setCopied] = useState(false);
   const parts = id.split("_");
   const prefix = parts[0];
-  const hash = parts.slice(1).join("_");
+  const hash = parts.slice(1).join("_") || prefix;
+  const displayHash = truncate ? truncateId(hash, truncateLength) : hash;
 
   const onCopy = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -49,9 +61,9 @@ export function IdCell({ id }: IdCellProps) {
   };
 
   return (
-    <span className="cell-id">
-      <span className="pre">{prefix}_</span>
-      {hash}
+    <span className="cell-id" title={truncate ? id : undefined}>
+      {!truncate && <span className="pre">{prefix}_</span>}
+      {displayHash}
       <button
         type="button"
         onClick={onCopy}

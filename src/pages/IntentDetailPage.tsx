@@ -10,6 +10,7 @@ import { InfoStat } from "../components/InfoStat";
 import { LogsTable } from "../components/LogsTable";
 import { useIntent, useIntentInteractions, useIntentParticipants, useLogs } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
+import { useResolveName } from "../context/DirectoryContext";
 import { fmtRuntime, timeAgo } from "../lib/format";
 import type { Interaction, IntentParticipant, Tool } from "../types";
 
@@ -19,6 +20,7 @@ export function IntentDetailPage() {
   const { intentId = "" } = useParams<{ intentId: string }>();
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
+  const resolve = useResolveName();
   const [tab, setTab] = useState<Tab>("interactions");
 
   const { data: intent, loading } = useIntent(intentId);
@@ -55,24 +57,29 @@ export function IntentDetailPage() {
     {
       key: "initiator",
       label: "Initiator",
-      render: (r) => (
-        <EntityCell name={r.initiator.name} sub={r.initiator.id} paletteIx={r.initiator.name.charCodeAt(0)} />
-      ),
+      render: (r) => {
+        const resolved = resolve(r.initiator.id);
+        return <EntityCell name={resolved.name} sub={r.initiator.id} paletteIx={resolved.name.charCodeAt(0)} />;
+      },
     },
     {
       key: "target",
       label: "Interacted with",
-      render: (r) => (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            className={`chip ${r.targetType === "agent" ? "info" : "purple"}`}
-            style={{ fontSize: 10.5, padding: "2px 7px" }}
-          >
-            {r.targetType}
-          </span>
-          <span style={{ fontSize: 13, color: "var(--fg)" }}>{r.target.name}</span>
-        </div>
-      ),
+      render: (r) => {
+        const resolved = resolve(r.target.id);
+        const kind = resolved.kind || r.targetType;
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              className={`chip ${kind === "agent" ? "info" : "purple"}`}
+              style={{ fontSize: 10.5, padding: "2px 7px" }}
+            >
+              {kind}
+            </span>
+            <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 500 }}>{resolved.name}</span>
+          </div>
+        );
+      },
     },
     {
       key: "runtime",

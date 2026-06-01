@@ -4,7 +4,7 @@ import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { FilterPill } from "../components/FilterPill";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { EntityCell, IdCell } from "../components/EntityCell";
+import { IdCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { useIntents } from "../data/hooks";
 import { fmtRuntime, timeAgo } from "../lib/format";
@@ -29,7 +29,12 @@ export function IntentsPage() {
   const totalThreats = intents.reduce((a, x) => a + x.threats, 0);
 
   const cols: DataTableColumn<Intent>[] = [
-    { key: "id", label: "Intent ID", sortFn: (a, b) => a.id.localeCompare(b.id), render: (r) => <IdCell id={r.id} /> },
+    {
+      key: "id",
+      label: "Intent ID",
+      sortFn: (a, b) => a.id.localeCompare(b.id),
+      render: (r) => <IdCell id={r.id} truncate />,
+    },
     {
       key: "name",
       label: "Status",
@@ -39,22 +44,17 @@ export function IntentsPage() {
         const chipClass =
           s === "completed" ? "safe" : s === "running" ? "info" : s === "failed" ? "threat" : s === "pending" ? "warn" : "";
         return (
-          <div>
-            <span className={`chip ${chipClass}`} style={{ textTransform: "capitalize" }}>
-              {r.name || "—"}
-            </span>
-            <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 4, fontFamily: "var(--font-mono)" }}>
-              started {timeAgo(r.started)}
-            </div>
-          </div>
+          <span className={`chip ${chipClass}`} style={{ textTransform: "capitalize" }}>
+            {r.name || "—"}
+          </span>
         );
       },
     },
     {
       key: "initiator",
       label: "Initiator",
-      sortFn: (a, b) => a.initiator.name.localeCompare(b.initiator.name),
-      render: (r) => <EntityCell name={r.initiator.name} paletteIx={r.initiator.name.charCodeAt(0)} />,
+      sortFn: (a, b) => a.initiator.id.localeCompare(b.initiator.id),
+      render: (r) => <IdCell id={r.initiator.id} truncate />,
     },
     {
       key: "runtime",
@@ -64,18 +64,15 @@ export function IntentsPage() {
       render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{fmtRuntime(r.runtime)}</span>,
     },
     {
-      key: "agentsInteracted",
-      label: "Agents",
+      key: "interactions",
+      label: "Interactions",
       align: "right",
-      sortFn: (a, b) => a.agentsInteracted - b.agentsInteracted,
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.agentsInteracted}</span>,
-    },
-    {
-      key: "toolsInteracted",
-      label: "Tools",
-      align: "right",
-      sortFn: (a, b) => a.toolsInteracted - b.toolsInteracted,
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.toolsInteracted}</span>,
+      sortFn: (a, b) => a.agentsInteracted + a.toolsInteracted - (b.agentsInteracted + b.toolsInteracted),
+      render: (r) => (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>
+          {r.agentsInteracted + r.toolsInteracted}
+        </span>
+      ),
     },
     {
       key: "threats",
@@ -96,6 +93,17 @@ export function IntentsPage() {
       label: "Reliability",
       sortFn: (a, b) => a.score - b.score,
       render: (r) => <ScoreBar value={r.score} />,
+    },
+    {
+      key: "time",
+      label: "Time",
+      align: "right",
+      sortFn: (a, b) => a.started - b.started,
+      render: (r) => (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>
+          {timeAgo(r.started)}
+        </span>
+      ),
     },
     {
       key: "actions",
