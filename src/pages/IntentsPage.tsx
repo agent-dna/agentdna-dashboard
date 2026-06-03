@@ -91,8 +91,16 @@ export function IntentsPage() {
     {
       key: "score",
       label: "Reliability",
+      align: "right",
       sortFn: (a, b) => a.score - b.score,
-      render: (r) => <ScoreBar value={r.score} />,
+      render: (r) => {
+        const ix = r.agentsInteracted + r.toolsInteracted;
+        if (ix <= 0) {
+          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
+        }
+        const pct = Math.max(0, Math.round((((ix - r.threats) / ix) * 100) * 100) / 100);
+        return <ScoreBar value={pct} />;
+      },
     },
     {
       key: "time",

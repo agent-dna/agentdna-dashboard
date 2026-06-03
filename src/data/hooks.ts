@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import * as api from "./api";
+import { listUsers, type OrgUser } from "../api/users";
+import { fetchAgentPolicyHistory, type PolicyHistory } from "../api/policy";
 import type {
   Agent,
   Tool,
@@ -44,9 +46,29 @@ function useAsync<T>(fn: () => Promise<T>, initial: T, deps: unknown[] = []): As
   return { ...state, refetch: () => setNonce((n) => n + 1) };
 }
 
+export const useUsers = (page = 1) =>
+  useAsync<OrgUser[]>(() => listUsers(page).then((r) => r.usersList || []), [], [page]);
 export const useAgents = (page = 1) => useAsync<Agent[]>(() => api.fetchAgents(page), [], [page]);
+export const useAgentsPaged = (page = 1) =>
+  useAsync<api.PagedAgentsResult>(
+    () => api.fetchAgentsPaged(page),
+    { items: [], total: 0, page: 1, pageSize: 10, totalPages: 1 },
+    [page],
+  );
 export const useTools = (page = 1) => useAsync<Tool[]>(() => api.fetchTools(page), [], [page]);
+export const useToolsPaged = (page = 1) =>
+  useAsync<api.PagedToolsResult>(
+    () => api.fetchToolsPaged(page),
+    { items: [], total: 0, page: 1, pageSize: 10, totalPages: 1 },
+    [page],
+  );
 export const useIntents = (page = 1) => useAsync<Intent[]>(() => api.fetchIntents(page), [], [page]);
+export const useIntentsPaged = (page = 1) =>
+  useAsync<api.PagedIntentsResult>(
+    () => api.fetchIntentsPaged(page),
+    { items: [], total: 0, page: 1, totalPages: 1 },
+    [page],
+  );
 export const useInteractions = (page = 1) => useAsync<Interaction[]>(() => api.fetchInteractions(page), [], [page]);
 export const useAlerts = (page = 1) => useAsync<Interaction[]>(() => api.fetchAlerts(page), [], [page]);
 export const useHomeMetrics = (page = 1) =>
@@ -73,3 +95,10 @@ export const useIntentParticipants = (id: string) =>
   useAsync<IntentParticipant[]>(() => api.fetchIntentParticipants(id), [], [id]);
 export const useLogs = (kind: "agent" | "intent", id: string) =>
   useAsync<LogEntry[]>(() => api.fetchLogs(kind, id), [], [kind, id]);
+
+export const useAgentPolicyHistory = (id: string) =>
+  useAsync<PolicyHistory | null>(
+    () => (id ? fetchAgentPolicyHistory(id).catch(() => null) : Promise.resolve(null)),
+    null,
+    [id],
+  );

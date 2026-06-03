@@ -257,7 +257,7 @@ export function FlowCanvas({ flow, step }: FlowCanvasProps) {
                   <div className="nv">{avInitials(n)}</div>
                   <div className="nt">
                     <span className="nm">{n.name}</span>
-                    <span className="lb">{n.label}</span>
+                    {n.label ? <span className="lb">{n.label}</span> : null}
                   </div>
                 </div>
               );

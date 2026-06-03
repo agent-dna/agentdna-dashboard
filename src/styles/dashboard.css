@@ -1127,3 +1127,78 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .step-card + .step-card.blk::before {
   background: rgba(220,38,38,0.5);
 }
+
+/* Flow rail — intents list */
+.flow-intents-list {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 1px 2px rgba(15,32,70,0.04);
+}
+.flow-intents-list .fi-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 4px 6px 6px 8px;
+}
+.flow-intents-list .fi-cap {
+  font: 700 10px var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.flow-intents-list .fi-pager { display: inline-flex; align-items: center; gap: 4px; }
+.flow-intents-list .fi-pg-btn {
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  background: var(--bg-1); color: var(--fg-muted);
+  border: 1px solid var(--line); border-radius: 5px; cursor: pointer;
+  padding: 0;
+}
+.flow-intents-list .fi-pg-btn:hover:not(:disabled) { color: var(--fg); background: var(--bg-2); border-color: var(--line-strong); }
+.flow-intents-list .fi-pg-btn:disabled { opacity: 0.35; cursor: default; }
+.flow-intents-list .fi-pg-counter {
+  font: 600 10px var(--font-mono);
+  color: var(--fg-muted);
+  min-width: 24px;
+  text-align: center;
+}
+.flow-intents-list .fi-rows { display: flex; flex-direction: column; gap: 2px; }
+.flow-intents-list .fi-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: transparent;
+  border: 0;
+  color: var(--fg-dim);
+  font: 500 12px var(--font-body);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  min-width: 0;
+}
+.flow-intents-list .fi-row:hover { background: var(--bg-2); color: var(--fg); }
+.flow-intents-list .fi-row.sel {
+  background: rgba(37,99,235,0.10);
+  color: var(--accent);
+  font-weight: 600;
+}
+.flow-intents-list .fi-hs {
+  flex: 1; min-width: 0;
+  font: 600 11.5px var(--font-mono);
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-intents-list .fi-row.sel .fi-hs { color: var(--accent); }
+.flow-intents-list .fi-hops {
+  font: 500 10.5px var(--font-mono);
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}

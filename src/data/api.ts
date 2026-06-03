@@ -32,16 +32,22 @@ interface ApiInteraction {
   interactionID: string;
   from: string;
   to: string;
+  /** Backend-resolved display name for the initiator (preferred over DID lookup). */
+  fromName?: string;
+  /** Backend-resolved display name for the target. */
+  toName?: string;
   threat: boolean;
   intentID: string;
   time: string;
 }
 
 function mapInteraction(i: ApiInteraction): Interaction {
+  const fromName = i.fromName && i.fromName.trim() ? i.fromName.trim() : shortDid(i.from);
+  const toName = i.toName && i.toName.trim() ? i.toName.trim() : shortDid(i.to);
   return {
     id: i.interactionID,
-    initiator: { id: i.from, name: shortDid(i.from) },
-    target: { id: i.to, name: shortDid(i.to) },
+    initiator: { id: i.from, name: fromName },
+    target: { id: i.to, name: toName },
     targetType: "agent",
     intent: { id: i.intentID, name: "" },
     runtime: 0,
@@ -114,7 +120,41 @@ function mapAgent(a: ApiAgent): Agent {
 
 export async function fetchAgents(page = 1): Promise<Agent[]> {
   const res = await apiRequest<PagedAgents>("/agents-list", { query: { page } });
+  console.log(`[GET /agents-list?page=${page}]`, res);
   return (res.agentsList || []).map(mapAgent);
+}
+
+export interface PagedAgentsResult {
+  items: Agent[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function fetchAgentsPaged(page = 1): Promise<PagedAgentsResult> {
+  const res = await apiRequest<PagedAgents>("/agents-list", { query: { page } });
+  console.log(`[GET /agents-list?page=${page}]`, res);
+  return {
+    items: (res.agentsList || []).map(mapAgent),
+    total: res.total || 0,
+    page: res.page || page,
+    pageSize: res.pageSize || 10,
+    totalPages: res.totalPages || 1,
+  };
+}
+
+/** Walk every page of /agents-list — used by the DID→name directory. */
+export async function fetchAllAgents(): Promise<Agent[]> {
+  const out: Agent[] = [];
+  for (let page = 1; page <= 200; page++) {
+    const res = await apiRequest<PagedAgents>("/agents-list", { query: { page } });
+    console.log(`[GET /agents-list?page=${page}]`, res);
+    const items = (res.agentsList || []).map(mapAgent);
+    out.push(...items);
+    if (items.length === 0 || (res.totalPages && page >= res.totalPages)) break;
+  }
+  return out;
 }
 
 interface ApiTool {
@@ -152,6 +192,39 @@ function mapTool(t: ApiTool): Tool {
 export async function fetchTools(page = 1): Promise<Tool[]> {
   const res = await apiRequest<PagedTools>("/tools-list", { query: { page } });
   return (res.toolsList || []).map(mapTool);
+}
+
+export interface PagedToolsResult {
+  items: Tool[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function fetchToolsPaged(page = 1): Promise<PagedToolsResult> {
+  const res = await apiRequest<PagedTools>("/tools-list", { query: { page } });
+  console.log(`[GET /tools-list?page=${page}]`, res);
+  return {
+    items: (res.toolsList || []).map(mapTool),
+    total: res.total || 0,
+    page: res.page || page,
+    pageSize: res.pageSize || 10,
+    totalPages: res.totalPages || 1,
+  };
+}
+
+/** Walk every page of /tools-list — used by the DID→name directory. */
+export async function fetchAllTools(): Promise<Tool[]> {
+  const out: Tool[] = [];
+  for (let page = 1; page <= 200; page++) {
+    const res = await apiRequest<PagedTools>("/tools-list", { query: { page } });
+    console.log(`[GET /tools-list?page=${page}]`, res);
+    const items = (res.toolsList || []).map(mapTool);
+    out.push(...items);
+    if (items.length === 0 || (res.totalPages && page >= res.totalPages)) break;
+  }
+  return out;
 }
 
 interface ApiIntent {
@@ -202,7 +275,26 @@ function mapIntent(i: ApiIntent): Intent {
 
 export async function fetchIntents(page = 1): Promise<Intent[]> {
   const res = await apiRequest<PagedIntents>("/intent-list", { query: { page } });
+  console.log(`[GET /intent-list?page=${page}]`, res);
   return (res.intentsList || []).map(mapIntent);
+}
+
+export interface PagedIntentsResult {
+  items: Intent[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+export async function fetchIntentsPaged(page = 1): Promise<PagedIntentsResult> {
+  const res = await apiRequest<PagedIntents>("/intent-list", { query: { page } });
+  console.log(`[GET /intent-list?page=${page}]`, res);
+  return {
+    items: (res.intentsList || []).map(mapIntent),
+    total: res.total || 0,
+    page: res.page || page,
+    totalPages: res.totalPages || 1,
+  };
 }
 
 export async function fetchSeries(_range: "24h" | "7d"): Promise<TimeSeries> {
@@ -230,6 +322,7 @@ interface ApiAgentInfo {
 export async function fetchAgent(id: string): Promise<Agent | null> {
   try {
     const r = await apiRequest<ApiAgentInfo>("/agent-info", { query: { agentDID: id } });
+    console.log(`[GET /agent-info?agentDID=${id}]`, r);
     return {
       id: r.agentDID,
       name: r.agentName,
@@ -260,8 +353,11 @@ interface ApiIntentInfo {
 
 async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null> {
   try {
-    return await apiRequest<ApiIntentInfo>("/intent-info", { query: { intentID: id } });
-  } catch {
+    const res = await apiRequest<ApiIntentInfo>("/intent-info", { query: { intentID: id } });
+    console.log(`[GET /intent-info?intentID=${id}]`, res);
+    return res;
+  } catch (e) {
+    console.warn(`[GET /intent-info?intentID=${id}] failed`, e);
     return null;
   }
 }

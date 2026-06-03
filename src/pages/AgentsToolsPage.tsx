@@ -9,7 +9,7 @@ import { EntityCell, IdCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { AccessRequestModal } from "../components/forms/AccessRequestModal";
-import { useAgents, useTools } from "../data/hooks";
+import { useAgentsPaged, useToolsPaged } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
@@ -22,10 +22,16 @@ export function AgentsToolsPage() {
   const isAdmin = !!user?.is_admin;
   const [tab, setTab] = useState<Tab>(isAdmin ? "agents" : "my-access");
   const [search, setSearch] = useState("");
-  const agentsState = useAgents();
-  const { data: agents } = agentsState;
-  const toolsState = useTools();
-  const { data: tools } = toolsState;
+  const [agentsPage, setAgentsPage] = useState(1);
+  const [toolsPage, setToolsPage] = useState(1);
+  const agentsState = useAgentsPaged(agentsPage);
+  const agents = agentsState.data.items;
+  const agentsTotalPages = agentsState.data.totalPages || 1;
+  const agentsTotal = agentsState.data.total || 0;
+  const toolsState = useToolsPaged(toolsPage);
+  const tools = toolsState.data.items;
+  const toolsTotalPages = toolsState.data.totalPages || 1;
+  const toolsTotal = toolsState.data.total || 0;
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
@@ -59,10 +65,11 @@ export function AgentsToolsPage() {
     {
       key: "score",
       label: "Reliability",
+      align: "right",
       sortFn: (a, b) => a.score - b.score,
       render: (r) =>
         r.interactions > 0 ? (
-          <ScoreBar value={r.score} />
+          <ScoreBar value={computeReliability(r.interactions, r.threats)} />
         ) : (
           <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>
         ),
@@ -140,10 +147,11 @@ export function AgentsToolsPage() {
     {
       key: "score",
       label: "Reliability",
+      align: "right",
       sortFn: (a, b) => a.score - b.score,
       render: (r) =>
         r.interactions > 0 ? (
-          <ScoreBar value={r.score} />
+          <ScoreBar value={computeReliability(r.interactions, r.threats)} />
         ) : (
           <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>
         ),
@@ -367,9 +375,18 @@ export function AgentsToolsPage() {
             <FilterPill label={isAgents ? "Env" : "Scope"} value="any" />
             <FilterPill label="Score" value="≥ 0" />
           </div>
-          <span className="count">
-            {rows.length} of {all.length}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <span className="count">
+              {rows.length} of {isMyAccess ? all.length : isAgents ? agentsTotal : toolsTotal}
+            </span>
+            {!isMyAccess && (
+              <Pager
+                page={isAgents ? agentsPage : toolsPage}
+                totalPages={isAgents ? agentsTotalPages : toolsTotalPages}
+                onChange={(p) => (isAgents ? setAgentsPage(p) : setToolsPage(p))}
+              />
+            )}
+          </div>
         </div>
 
         {isAgents || isMyAccess ? (
@@ -410,6 +427,48 @@ export function AgentsToolsPage() {
         onClose={() => setAccessOpen({ open: false })}
         onSuccess={() => setAccessOpen({ open: false })}
       />
+    </div>
+  );
+}
+
+/** Reliability = (interactions - threats) / interactions * 100, rounded to 2 dp. */
+function computeReliability(interactions: number, threats: number): number {
+  if (!interactions || interactions <= 0) return 0;
+  const pct = ((interactions - threats) / interactions) * 100;
+  return Math.max(0, Math.round(pct * 100) / 100);
+}
+
+function Pager({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <button
+        className="btn ghost"
+        style={{ padding: "4px 8px", fontSize: 12 }}
+        disabled={page <= 1}
+        onClick={() => onChange(Math.max(1, page - 1))}
+      >
+        <Icon name="chevronLeft" size={12} /> Prev
+      </button>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)" }}>
+        {page} / {totalPages}
+      </span>
+      <button
+        className="btn ghost"
+        style={{ padding: "4px 8px", fontSize: 12 }}
+        disabled={page >= totalPages}
+        onClick={() => onChange(Math.min(totalPages, page + 1))}
+      >
+        Next <Icon name="chevron" size={12} />
+      </button>
     </div>
   );
 }

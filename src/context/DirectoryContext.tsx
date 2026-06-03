@@ -1,9 +1,11 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { useAgents, useTools } from "../data/hooks";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { fetchAllAgents, fetchAllTools } from "../data/api";
+import { listAllUsers, type OrgUser } from "../api/users";
+import type { Agent, Tool } from "../types";
 
 export interface DirectoryEntry {
   name: string;
-  kind: "agent" | "tool";
+  kind: "agent" | "tool" | "user";
 }
 
 interface DirectoryContextValue {
@@ -23,20 +25,53 @@ const Ctx = createContext<DirectoryContextValue | null>(null);
  * either (a) returns enough rows or (b) starts joining names into interactions.
  */
 export function DirectoryProvider({ children }: { children: ReactNode }) {
-  const agents = useAgents();
-  const tools = useTools();
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [tools, setTools] = useState<Tool[]>([]);
+  const [users, setUsers] = useState<OrgUser[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      fetchAllAgents().catch((e) => {
+        console.warn("[Directory] fetchAllAgents failed", e);
+        return [] as Agent[];
+      }),
+      fetchAllTools().catch((e) => {
+        console.warn("[Directory] fetchAllTools failed", e);
+        return [] as Tool[];
+      }),
+      listAllUsers().catch((e) => {
+        console.warn("[Directory] listAllUsers failed", e);
+        return [] as OrgUser[];
+      }),
+    ]).then(([a, t, u]) => {
+      if (cancelled) return;
+      console.group("[Directory] loaded");
+      console.log(`agents (${a.length}):`, a);
+      console.log(`tools (${t.length}):`, t);
+      console.log(`users (${u.length}):`, u);
+      console.groupEnd();
+      setAgents(a);
+      setTools(t);
+      setUsers(u);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const map = useMemo(() => {
     const m = new Map<string, DirectoryEntry>();
-    agents.data.forEach((a) => m.set(a.id, { name: a.name, kind: "agent" }));
-    tools.data.forEach((t) => m.set(t.id, { name: t.name, kind: "tool" }));
+    agents.forEach((a) => m.set(a.id, { name: a.name, kind: "agent" }));
+    tools.forEach((t) => m.set(t.id, { name: t.name, kind: "tool" }));
+    users.forEach((u) => m.set(u.userID, { name: u.userName, kind: "user" }));
     return m;
-  }, [agents.data, tools.data]);
+  }, [agents, tools, users]);
 
-  const value = useMemo<DirectoryContextValue>(
-    () => ({ map, loading: agents.loading || tools.loading }),
-    [map, agents.loading, tools.loading],
-  );
+  const value = useMemo<DirectoryContextValue>(() => ({ map, loading }), [map, loading]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -53,7 +88,7 @@ export function shortDid(did: string): string {
 }
 
 /** Look up a DID, falling back to a shortened version if not in directory. */
-export function useResolveName(): (did: string) => { name: string; kind?: "agent" | "tool" } {
+export function useResolveName(): (did: string) => { name: string; kind?: "agent" | "tool" | "user" } {
   const map = useDirectory();
   return (did: string) => {
     const hit = map.get(did);

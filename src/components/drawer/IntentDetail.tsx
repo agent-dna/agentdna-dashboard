@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icon } from "../Icon";
 import { ScoreBar } from "../ScoreBar";
 import { DrawerSection } from "./DrawerSection";
@@ -13,7 +14,13 @@ interface Props {
 
 export function IntentDetail({ intent: i }: Props) {
   const { closeDrawer } = useDrawer();
+  const navigate = useNavigate();
   const [related, setRelated] = useState<Interaction[]>([]);
+
+  const onViewFlow = () => {
+    closeDrawer();
+    navigate(`/graph/${i.id}`);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +50,7 @@ export function IntentDetail({ intent: i }: Props) {
         >
           <Icon name="intents" size={20} />
         </div>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <h2>{i.name}</h2>
           <div className="meta">
             <span>{i.id}</span>
@@ -52,9 +59,20 @@ export function IntentDetail({ intent: i }: Props) {
             </span>
           </div>
         </div>
-        <button className="close" onClick={closeDrawer}>
-          <Icon name="close" size={16} />
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            className="btn primary"
+            onClick={onViewFlow}
+            style={{ padding: "6px 12px", fontSize: 12.5 }}
+            title="Open this intent on the Flow page"
+          >
+            <Icon name="flow" size={14} />
+            View Flow
+          </button>
+          <button className="close" onClick={closeDrawer}>
+            <Icon name="close" size={16} />
+          </button>
+        </div>
       </div>
       <div className="drawer-body">
         <DrawerSection title="Overview">

@@ -4,15 +4,15 @@ import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { EntityCell, IdCell } from "../components/EntityCell";
+import { EntityCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
 import { LogsTable } from "../components/LogsTable";
 import { useIntent, useIntentInteractions, useIntentParticipants, useLogs } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
-import { useResolveName } from "../context/DirectoryContext";
 import { fmtRuntime, timeAgo } from "../lib/format";
-import type { Interaction, IntentParticipant, Tool } from "../types";
+import { useInteractionColumns } from "./InteractionsPage";
+import type { IntentParticipant, Tool } from "../types";
 
 type Tab = "interactions" | "participants" | "logs";
 
@@ -20,13 +20,13 @@ export function IntentDetailPage() {
   const { intentId = "" } = useParams<{ intentId: string }>();
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
-  const resolve = useResolveName();
   const [tab, setTab] = useState<Tab>("interactions");
 
   const { data: intent, loading } = useIntent(intentId);
   const { data: interactions } = useIntentInteractions(intentId);
   const { data: participants } = useIntentParticipants(intentId);
   const { data: logs } = useLogs("intent", intentId);
+  const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
 
   if (loading) {
     return (
@@ -51,86 +51,6 @@ export function IntentDetailPage() {
       </div>
     );
   }
-
-  const interactionCols: DataTableColumn<Interaction>[] = [
-    { key: "id", label: "Interaction ID", render: (r) => <IdCell id={r.id} /> },
-    {
-      key: "initiator",
-      label: "Initiator",
-      render: (r) => {
-        const resolved = resolve(r.initiator.id);
-        return <EntityCell name={resolved.name} sub={r.initiator.id} paletteIx={resolved.name.charCodeAt(0)} />;
-      },
-    },
-    {
-      key: "target",
-      label: "Interacted with",
-      render: (r) => {
-        const resolved = resolve(r.target.id);
-        const kind = resolved.kind || r.targetType;
-        return (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              className={`chip ${kind === "agent" ? "info" : "purple"}`}
-              style={{ fontSize: 10.5, padding: "2px 7px" }}
-            >
-              {kind}
-            </span>
-            <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 500 }}>{resolved.name}</span>
-          </div>
-        );
-      },
-    },
-    {
-      key: "runtime",
-      label: "Runtime",
-      align: "right",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{fmtRuntime(r.runtime)}</span>,
-    },
-    {
-      key: "threat",
-      label: "Status",
-      render: (r) =>
-        r.threat ? (
-          <span className="chip threat">
-            <span className="dot-status threat" /> threat
-          </span>
-        ) : (
-          <span className="chip safe">
-            <span className="dot-status safe" /> safe
-          </span>
-        ),
-    },
-    {
-      key: "created",
-      label: "When",
-      align: "right",
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>
-          {timeAgo(r.created)}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      label: "",
-      align: "right",
-      width: 60,
-      render: (r) => (
-        <div className="row-actions">
-          <button
-            className="btn-mini"
-            onClick={(e) => {
-              e.stopPropagation();
-              openDrawer("interaction", r);
-            }}
-          >
-            View
-          </button>
-        </div>
-      ),
-    },
-  ];
 
   const participantRows = participants.map((p) => ({ ...p, id: `${p.type}:${p.entity.id}` }));
 
@@ -169,7 +89,18 @@ export function IntentDetailPage() {
           <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>
         ),
     },
-    { key: "score", label: "Reliability", render: (r) => <ScoreBar value={r.entity.score} /> },
+    {
+      key: "score",
+      label: "Reliability",
+      align: "right",
+      render: (r) => {
+        if (r.count <= 0) {
+          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
+        }
+        const pct = Math.max(0, Math.round((((r.count - r.threats) / r.count) * 100) * 100) / 100);
+        return <ScoreBar value={pct} />;
+      },
+    },
     {
       key: "actions",
       label: "",
@@ -210,47 +141,17 @@ export function IntentDetailPage() {
       {/* Hero info card */}
       <div className="card" style={{ padding: "24px 28px", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 20 }}>
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 14,
-              background: "linear-gradient(135deg, rgba(10,34,64,0.14), rgba(37,99,235,0.05))",
-              display: "grid",
-              placeItems: "center",
-              color: "var(--accent-2)",
-              border: "1px solid var(--line-strong)",
-              flexShrink: 0,
-            }}
-          >
-            <Icon name="intents" size={28} />
-          </div>
-
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontFamily: "var(--font-display)",
-                  fontSize: 24,
-                  fontWeight: 600,
-                  letterSpacing: "-0.02em",
-                  color: "var(--fg)",
-                }}
-              >
-                {intent.name}
-              </h1>
-              {intent.threats > 0 ? (
-                <span className="chip threat">
-                  <span className="dot-status threat" /> {intent.threats} threats
-                </span>
-              ) : (
-                <span className="chip safe">
-                  <span className="dot-status safe" /> clean
-                </span>
-              )}
-            </div>
-            <div style={{ color: "var(--fg-muted)", fontSize: 13, fontFamily: "var(--font-mono)", marginBottom: 16 }}>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 18,
+                fontWeight: 600,
+                color: "var(--fg)",
+                marginBottom: 16,
+                wordBreak: "break-all",
+              }}
+            >
               {intent.id}
             </div>
 
@@ -295,16 +196,28 @@ export function IntentDetailPage() {
               </div>
               <InfoStat label="Runtime" value={fmtRuntime(intent.runtime)} mono />
               <InfoStat label="Started" value={timeAgo(intent.started)} />
-              <InfoStat label="Reliability" value={`${intent.score} / 100`} mono />
+              <InfoStat
+                label="Threat detected"
+                value={
+                  <span style={{ color: intent.threats > 0 ? "var(--threat)" : "var(--fg)", fontWeight: 600 }}>
+                    {intent.threats}
+                  </span>
+                }
+                mono
+              />
             </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button className="btn primary" onClick={() => navigate(`/graph/${intent.id}`)}>
+              <Icon name="flow" size={14} />
+              View Flow
+            </button>
             <button className="btn">
               <Icon name="download" size={14} />
               Trace
             </button>
-            <button className="btn primary">
+            <button className="btn">
               <Icon name="refresh" size={14} />
               Re-run
             </button>

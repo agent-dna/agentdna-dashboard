@@ -23,6 +23,19 @@ export function listUsers(page = 1): Promise<PagedUsers> {
   return apiRequest<PagedUsers>("/users-list", { query: { page } });
 }
 
+/** Walk every page of /users-list — used by the DID→name directory. */
+export async function listAllUsers(): Promise<OrgUser[]> {
+  const out: OrgUser[] = [];
+  for (let page = 1; page <= 200; page++) {
+    const res = await listUsers(page);
+    console.log(`[GET /users-list?page=${page}]`, res);
+    const items = res.usersList || [];
+    out.push(...items);
+    if (items.length === 0 || (res.totalPages && page >= res.totalPages)) break;
+  }
+  return out;
+}
+
 // ============ Proposed (backend not implemented yet) ============
 
 /** PROPOSED — admin creates a user with email + password (bcrypt-hashed server-side) */

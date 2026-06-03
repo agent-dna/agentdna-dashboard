@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon";
-import { useIntent, useIntentInteractions, useIntents } from "../../data/hooks";
+import { useIntent, useIntentInteractions, useIntentsPaged } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
 import { FlowCanvas } from "./FlowCanvas";
 import { buildFlowFromIntent, type Flow } from "./flowData";
@@ -15,8 +15,11 @@ export function FlowPage() {
   const navigate = useNavigate();
   const resolve = useResolveName();
 
-  const intentsState = useIntents();
-  const intents = intentsState.data;
+  const [intentsPage, setIntentsPage] = useState(1);
+  const intentsState = useIntentsPaged(intentsPage);
+  const intents = intentsState.data.items;
+  const intentsTotalPages = intentsState.data.totalPages || 1;
+  const intentsTotal = intentsState.data.total || intents.length;
 
   const fallbackId = !paramId && intents.length > 0 ? intents[0].id : undefined;
   const activeId = paramId || readStored(STORAGE_KEY_INTENT) || fallbackId || "";
@@ -47,7 +50,6 @@ export function FlowPage() {
     return Number.isFinite(n) && n >= 0 ? n : 0;
   });
   const [playing, setPlaying] = useState(true);
-  const [copied, setCopied] = useState(false);
 
   // Clamp step when flow changes
   useEffect(() => {
@@ -86,15 +88,10 @@ export function FlowPage() {
     setStep(i);
   };
 
-  const copyHash = () => {
-    if (!flow) return;
-    try {
-      navigator.clipboard.writeText(flow.intentId);
-    } catch {
-      // ignore
-    }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1400);
+  const onPickIntent = (id: string) => {
+    if (id === activeId) return;
+    setStep(0);
+    navigate(`/graph/${id}`);
   };
 
   return (
@@ -102,48 +99,53 @@ export function FlowPage() {
       <div className="flow-body">
         {/* Rail */}
         <div className="flow-rail">
+          {intents.length > 0 && (
+            <div className="flow-intents-list">
+              <div className="fi-head">
+                <div className="fi-cap">Intents · {intentsTotal}</div>
+                {intentsTotalPages > 1 && (
+                  <div className="fi-pager">
+                    <button
+                      className="fi-pg-btn"
+                      disabled={intentsPage <= 1}
+                      onClick={() => setIntentsPage((p) => Math.max(1, p - 1))}
+                      title="Previous page"
+                    >
+                      <Icon name="chevronLeft" size={12} />
+                    </button>
+                    <span className="fi-pg-counter">
+                      {intentsPage}/{intentsTotalPages}
+                    </span>
+                    <button
+                      className="fi-pg-btn"
+                      disabled={intentsPage >= intentsTotalPages}
+                      onClick={() => setIntentsPage((p) => Math.min(intentsTotalPages, p + 1))}
+                      title="Next page"
+                    >
+                      <Icon name="chevron" size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="fi-rows">
+                {intents.map((i) => {
+                  const hops = i.id === activeId && flow ? flow.steps.length : i.agentsInteracted + i.toolsInteracted;
+                  return (
+                    <button
+                      key={i.id}
+                      className={`fi-row ${i.id === activeId ? "sel" : ""}`}
+                      onClick={() => onPickIntent(i.id)}
+                    >
+                      <span className="fi-hs">{shortHashTail(i.id)}</span>
+                      <span className="fi-hops">{hops} {hops === 1 ? "hop" : "hops"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {flow && (
             <>
-              <div className="flow-intent-card">
-                <div className="ic-cap">Intent</div>
-                <div className="ic-name">{flow.intent.name || "Intent"}</div>
-                <div className="ic-row">
-                  <span className="ic-hash" onClick={copyHash}>
-                    {copied ? (
-                      <span className="ck">
-                        <Icon name="check" size={12} />
-                      </span>
-                    ) : (
-                      <Icon name="copy" size={12} />
-                    )}
-                    {copied ? "copied" : shortHashTail(flow.intentId)}
-                  </span>
-                  {flow.status === "halted" ? (
-                    <span className="chip threat">
-                      <span className="dot-status threat" /> halted
-                    </span>
-                  ) : (
-                    <span className="chip safe">
-                      <span className="dot-status safe" /> completed
-                    </span>
-                  )}
-                </div>
-                <div className="ic-stats">
-                  <div className="ic-stat">
-                    <div className="v">{flow.nodes.filter((n) => n.kind === "agent").length}</div>
-                    <div className="k">Agents</div>
-                  </div>
-                  <div className="ic-stat">
-                    <div className="v">{flow.nodes.filter((n) => n.kind === "tool").length}</div>
-                    <div className="k">Tools</div>
-                  </div>
-                  <div className="ic-stat">
-                    <div className="v">{N}</div>
-                    <div className="k">Hops</div>
-                  </div>
-                </div>
-              </div>
-
               <div className="flow-steps" ref={stepsRef}>
                 <div className="sl-cap">Trace · {N} hops</div>
                 {flow.steps.map((s, i) => {
@@ -185,7 +187,6 @@ export function FlowPage() {
                               Allowed
                             </span>
                           )}
-                          <span className="sc-lat">{s.latency}ms</span>
                         </div>
                       </div>
                     </div>
@@ -224,10 +225,12 @@ function NodeChip({ kind, name }: { kind: "human" | "agent" | "tool"; name: stri
   );
 }
 
-function shortHashTail(id: string): string {
+function shortHashTail(id: string | undefined | null): string {
+  if (!id) return "—";
   const parts = id.split("_");
   const tail = parts.length > 1 ? parts.slice(1).join("_") : id;
-  return tail.slice(0, 10);
+  if (tail.length <= 9) return tail;
+  return `${tail.slice(0, 5)}...${tail.slice(-4)}`;
 }
 
 function readStored(key: string): string | null {

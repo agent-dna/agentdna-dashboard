@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Icon } from "../Icon";
 import { EntityCell } from "../EntityCell";
 import { DrawerSection } from "./DrawerSection";
@@ -12,9 +13,30 @@ interface Props {
 
 export function InteractionDetail({ interaction: i }: Props) {
   const { closeDrawer } = useDrawer();
+  const navigate = useNavigate();
   const resolve = useResolveName();
-  const initiator = resolve(i.initiator.id);
-  const target = resolve(i.target.id);
+
+  const openIntent = () => {
+    if (!i.intent?.id) return;
+    closeDrawer();
+    navigate(`/intents/${i.intent.id}`);
+  };
+
+  /**
+   * Pick the best display name we have:
+   *   1. Directory match (agent / tool / user with kind set)
+   *   2. Backend-supplied fromName / toName on the interaction
+   *   3. Shortened DID fallback baked into resolve()
+   */
+  const pickName = (did: string, apiName: string | undefined) => {
+    const hit = resolve(did);
+    if (hit.kind && hit.name) return { name: hit.name, kind: hit.kind };
+    if (apiName && apiName.trim() && !apiName.includes("…")) return { name: apiName.trim(), kind: hit.kind };
+    return { name: hit.name || did, kind: hit.kind };
+  };
+
+  const initiator = pickName(i.initiator.id, i.initiator.name);
+  const target = pickName(i.target.id, i.target.name);
   const targetKind = target.kind || i.targetType;
   return (
     <>
@@ -129,7 +151,31 @@ export function InteractionDetail({ interaction: i }: Props) {
               {i.threat ? "true" : "false"}
             </div>
             <div className="k">Intent ID</div>
-            <div className="v">{i.intent.id}</div>
+            <div className="v">
+              {i.intent?.id ? (
+                <button
+                  type="button"
+                  onClick={openIntent}
+                  title="Open intent"
+                  style={{
+                    background: "transparent",
+                    border: 0,
+                    padding: 0,
+                    color: "var(--accent)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "inherit",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    textUnderlineOffset: 2,
+                  }}
+                >
+                  {i.intent.id}
+                </button>
+              ) : (
+                "—"
+              )}
+            </div>
             <div className="k">Intent</div>
             <div className="v" style={{ fontFamily: "var(--font-body)" }}>{i.intent.name}</div>
           </div>

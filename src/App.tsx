@@ -11,7 +11,6 @@ import { useDrawer } from "./context/DrawerContext";
 import { useTweaks } from "./context/TweaksContext";
 import { useAuth } from "./context/AuthContext";
 import { useAlerts } from "./data/hooks";
-import { initials } from "./lib/format";
 import type { Agent, Tool, Intent, Interaction } from "./types";
 
 interface NavEntry {
@@ -83,7 +82,6 @@ export function App() {
           </div>
         </nav>
         <div className="sb-foot">
-          <div className="avatar">{user ? initials(user.email) : "—"}</div>
           <div className="who">
             {user?.email || "Guest"}
             <div className="sub">{user?.org_id || ""}</div>

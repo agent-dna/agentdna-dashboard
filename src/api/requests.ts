@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { apiRequest, apiUpload } from "./client";
 
 export type RequestType = "deploy_agent" | "agent_access";
 export type RequestStatus = "pending" | "approved" | "rejected";
@@ -31,15 +31,35 @@ export function listAgentCreationRequests(page = 1): Promise<PagedRequests> {
 
 export interface CreateAgentRequestBody {
   agentName: string;
-  policy: string;
+  agentID?: string;
   requestInfo?: string;
+  /** Policy file (.md / .txt). Sent as multipart "policy" field. */
+  policyFile?: File;
+  /** Fallback when no file is picked: server accepts plaintext in the "policy" field. */
+  policyText?: string;
 }
 
 export function createAgentRequest(body: CreateAgentRequestBody): Promise<{ requestID: string }> {
-  return apiRequest<{ requestID: string }>("/agents-creation-requests-create", {
-    method: "POST",
-    body,
+  const name = (body.agentName || "").trim();
+  if (!name) {
+    return Promise.reject(new Error("agentName is required"));
+  }
+  const fd = new FormData();
+  fd.append("agentName", name);
+  if (body.agentID && body.agentID.trim()) fd.append("agentID", body.agentID.trim());
+  if (body.requestInfo && body.requestInfo.trim()) fd.append("requestInfo", body.requestInfo.trim());
+  if (body.policyFile) {
+    fd.append("policy", body.policyFile);
+  } else if (body.policyText && body.policyText.trim()) {
+    fd.append("policy", body.policyText.trim());
+  }
+  // Log exactly what's going on the wire so you can compare with backend expectations.
+  const debug: Record<string, string> = {};
+  fd.forEach((v, k) => {
+    debug[k] = v instanceof File ? `<File ${v.name} (${v.size} bytes, ${v.type})>` : String(v);
   });
+  console.log("[POST /agents-creation-requests-create] multipart fields:", debug);
+  return apiUpload<{ requestID: string }>("/agents-creation-requests-create", fd);
 }
 
 export interface EditAgentRequestBody {
@@ -47,6 +67,7 @@ export interface EditAgentRequestBody {
   agentName: string;
   policy: string;
   requestInfo?: string;
+  agentID?: string;
 }
 
 export function editAgentRequest(body: EditAgentRequestBody): Promise<{ requestID: string }> {

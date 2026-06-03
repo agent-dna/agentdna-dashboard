@@ -74,7 +74,11 @@ function tierLayout(nodes: FlowNode[], orchId: string | null, steps: FlowStep[])
     cols[tier].push(n);
   }
 
-  const X = { human: 0.11, orch: 0.36, worker: 0.63, tool: 0.88 } as const;
+  // Only the tiers that actually have nodes get an X slot — and we space those
+  // evenly across the canvas (with margins) so the graph is always centred
+  // regardless of which tiers are missing.
+  const tierOrder = ["human", "orch", "worker", "tool"] as const;
+  const activeTiers = tierOrder.filter((t) => cols[t].length > 0);
 
   const place = (arr: FlowNode[], x: number) => {
     arr.sort((a, b) => (order[a.id] ?? 0) - (order[b.id] ?? 0));
@@ -86,10 +90,17 @@ function tierLayout(nodes: FlowNode[], orchId: string | null, steps: FlowStep[])
     });
   };
 
-  place(cols.human, X.human);
-  place(cols.orch, X.orch);
-  place(cols.worker, X.worker);
-  place(cols.tool, X.tool);
+  if (activeTiers.length === 0) return nodes;
+  if (activeTiers.length === 1) {
+    place(cols[activeTiers[0]], 0.5);
+  } else {
+    const xStart = 0.14;
+    const xEnd = 0.86;
+    const step = (xEnd - xStart) / (activeTiers.length - 1);
+    activeTiers.forEach((tier, i) => {
+      place(cols[tier], xStart + step * i);
+    });
+  }
 
   return nodes;
 }
@@ -114,14 +125,14 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
   const sorted = [...interactions].sort((a, b) => b.created - a.created);
 
   const initiatorId = intent.initiator.id;
-  const initiatorName = resolve(initiatorId).name || shortDid(initiatorId);
 
-  // Operator node — the intent's initiator (a user/admin in /new_intents).
+  // Operator node — the intent's initiator. We deliberately label them as
+  // simply "User" rather than exposing their DID/email in the graph.
   const operator: FlowNode = {
     id: `usr_${sanitize(initiatorId)}`,
     kind: "human",
-    name: initiatorName,
-    label: "Operator",
+    name: "User",
+    label: "",
     x: 0,
     y: 0,
   };
@@ -146,17 +157,37 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
 
   const idForDid = (did: string): string => `nd_${sanitize(did)}`;
 
-  const ensureNode = (did: string): FlowNode => {
+  /**
+   * Resolve a node's display name.
+   *   1. Directory (full /agents-list / /tools-list / /users-list match)
+   *   2. Backend-supplied fromName/toName on the interaction (passed in here)
+   *   3. Shortened DID as last resort
+   */
+  const ensureNode = (did: string, apiName?: string): FlowNode => {
     const id = idForDid(did);
-    if (nodesById.has(id)) return nodesById.get(id)!;
+    if (nodesById.has(id)) {
+      const existing = nodesById.get(id)!;
+      // Upgrade name if we now have a better one (directory wins, then apiName)
+      if ((!existing.name || existing.name.includes("…")) && apiName && !apiName.includes("…")) {
+        existing.name = apiName;
+      }
+      return existing;
+    }
     const resolved = resolve(did);
-    const kind: FlowNodeKind = resolved.kind === "tool" ? "tool" : "agent";
+    const kind: FlowNodeKind =
+      resolved.kind === "tool" ? "tool" : resolved.kind === "user" ? "human" : "agent";
     const isOrch = did === orchAgentDid;
+    // Directory hit (kind set) → use directory name; else prefer backend apiName; else shortDid.
+    const name = resolved.kind
+      ? resolved.name
+      : apiName && apiName.trim() && !apiName.includes("…")
+      ? apiName.trim()
+      : resolved.name || shortDid(did);
     const node: FlowNode = {
       id,
       kind,
-      name: resolved.name || shortDid(did),
-      label: kind === "tool" ? "Tool" : isOrch ? "Orchestrator" : "Worker",
+      name,
+      label: kind === "tool" ? "Tool" : isOrch ? "Orchestrator" : "",
       x: 0,
       y: 0,
     };
@@ -168,23 +199,33 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
   const steps: FlowStep[] = [];
 
   if (orchAgentDid) {
-    const orchNode = ensureNode(orchAgentDid);
+    // Look for any interaction that touches the orchestrator, to capture its
+    // backend-supplied name (fromName/toName).
+    const orchIxn = sorted.find(
+      (x) => x.initiator.id === orchAgentDid || x.target.id === orchAgentDid,
+    );
+    const orchApiName =
+      orchIxn && orchIxn.initiator.id === orchAgentDid
+        ? orchIxn.initiator.name
+        : orchIxn?.target.name;
+    const orchNode = ensureNode(orchAgentDid, orchApiName);
     steps.push({
       from: operator.id,
       to: orchNode.id,
       dir: "request",
       title: "Submit intent",
-      summary: `${initiatorName} submitted intent “${intent.name || "intent"}”. Orchestration was handed to ${orchNode.name} under approved policy.`,
+      summary: `${"User"} submitted intent “${intent.name || "intent"}”. Orchestration was handed to ${orchNode.name} under approved policy.`,
       verdict: "allowed",
       checks: { identity: true, trust: true, scope: true },
       latency: 80,
     });
   }
 
-  // Each interaction → one hop.
+  // Each interaction → one hop. Pass through the backend's fromName/toName so
+  // nodes that aren't in the directory still get a readable name.
   for (const ixn of sorted) {
-    const fromNode = ensureNode(ixn.initiator.id);
-    const toNode = ensureNode(ixn.target.id);
+    const fromNode = ensureNode(ixn.initiator.id, ixn.initiator.name);
+    const toNode = ensureNode(ixn.target.id, ixn.target.name);
     const fromName = fromNode.name;
     const toName = toNode.name;
     const isBlocked = ixn.threat;
@@ -219,8 +260,8 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       dir: "response",
       title: halted ? "Halt intent" : "Return result",
       summary: halted
-        ? `${orchNode.name} halted the intent and returned a policy violation to ${initiatorName}.`
-        : `${orchNode.name} returned the final result to ${initiatorName}. Intent completed cleanly.`,
+        ? `${orchNode.name} halted the intent and returned a policy violation to ${"User"}.`
+        : `${orchNode.name} returned the final result to ${"User"}. Intent completed cleanly.`,
       verdict: halted ? "blocked" : "allowed",
       checks: { identity: true, trust: true, scope: !halted },
       latency: 120,

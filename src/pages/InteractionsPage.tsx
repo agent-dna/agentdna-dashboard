@@ -9,6 +9,18 @@ import { useResolveName } from "../context/DirectoryContext";
 import { timeAgo } from "../lib/format";
 import type { Interaction } from "../types";
 
+/** Best display name: directory match → backend-supplied fromName/toName → shortened DID. */
+function displayName(
+  resolve: ReturnType<typeof useResolveName>,
+  did: string,
+  apiName: string | undefined,
+): string {
+  const hit = resolve(did);
+  if (hit.kind && hit.name) return hit.name;
+  if (apiName && apiName.trim()) return apiName.trim();
+  return hit.name || did || "—";
+}
+
 export function useInteractionColumns(
   openDrawer: (kind: "interaction", e: Interaction) => void,
 ): DataTableColumn<Interaction>[] {
@@ -23,10 +35,13 @@ export function useInteractionColumns(
     {
       key: "initiator",
       label: "Initiator",
-      sortFn: (a, b) => resolve(a.initiator.id).name.localeCompare(resolve(b.initiator.id).name),
+      sortFn: (a, b) =>
+        displayName(resolve, a.initiator.id, a.initiator.name).localeCompare(
+          displayName(resolve, b.initiator.id, b.initiator.name),
+        ),
       render: (r) => (
         <span style={{ fontSize: 13.5, color: "var(--fg)", fontWeight: 600 }}>
-          {resolve(r.initiator.id).name}
+          {displayName(resolve, r.initiator.id, r.initiator.name)}
         </span>
       ),
     },
@@ -35,7 +50,7 @@ export function useInteractionColumns(
       label: "Interacted with",
       render: (r) => (
         <span style={{ fontSize: 13.5, color: "var(--fg)", fontWeight: 600 }}>
-          {resolve(r.target.id).name}
+          {displayName(resolve, r.target.id, r.target.name)}
         </span>
       ),
     },

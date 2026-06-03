@@ -1,12 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "../Modal";
 import { Icon } from "../Icon";
-import { SkillsFilePicker } from "./SkillsFilePicker";
+import { PolicyFilePicker } from "./PolicyFilePicker";
 import { errorStyle, formStyle, inputStyle, labelStyle } from "./styles";
 import {
   createAgentRequest,
   editAgentRequest,
-  submitAgentCreationResult,
   type AgentRequest,
 } from "../../api/requests";
 import { ApiError } from "../../api/client";
@@ -24,8 +23,10 @@ interface Props {
 export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSuccess }: Props) {
   const editing = !!editTarget;
   const [agentName, setAgentName] = useState("");
-  const [skills, setSkills] = useState("");
-  const [skillsFilename, setSkillsFilename] = useState<string | null>(null);
+  const [agentId, setAgentId] = useState("");
+  const [requestInfo, setRequestInfo] = useState("");
+  const [policyFile, setPolicyFile] = useState<File | null>(null);
+  const [policyText, setPolicyText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [submittedAgentName, setSubmittedAgentName] = useState<string | null>(null);
@@ -33,8 +34,10 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
   useEffect(() => {
     if (open) {
       setAgentName(editTarget?.agentName || "");
-      setSkills(editTarget?.requestInfo || "");
-      setSkillsFilename(null);
+      setAgentId(editTarget?.agentDID || "");
+      setRequestInfo(editTarget?.requestInfo || "");
+      setPolicyFile(null);
+      setPolicyText("");
       setErr(null);
       setSubmittedAgentName(null);
     }
@@ -43,26 +46,37 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErr(null);
+
+    const trimmedName = agentName.trim();
+    const trimmedId = agentId.trim();
+    const trimmedInfo = requestInfo.trim();
+    const trimmedPolicyText = policyText.trim();
+
+    if (!editing && !policyFile && !trimmedPolicyText) {
+      setErr("Please attach a policy file or paste policy text.");
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const trimmedName = agentName.trim();
-      const payload = {
-        agentName: trimmedName,
-        // Backend requires `policy` — pass a default until the form needs to expose it.
-        policy: "default",
-        requestInfo: skills.trim(),
-      };
       if (editing && editTarget) {
-        await editAgentRequest({ requestID: editTarget.requestID, ...payload });
-        // Edits don't have the same provisioning delay — close immediately.
+        // Edit endpoint stays JSON for now — multipart only required on create.
+        await editAgentRequest({
+          requestID: editTarget.requestID,
+          agentName: trimmedName,
+          policy: "default",
+          requestInfo: trimmedInfo,
+          ...(trimmedId ? { agentID: trimmedId } : {}),
+        });
         onSuccess();
       } else {
-        const created = await createAgentRequest(payload);
-        // Admin flow: auto-approve the request so the agent actually gets deployed.
-        // Non-admin flow: stop here — request stays pending until an admin approves.
-        if (isAdmin) {
-          await submitAgentCreationResult(created.requestID, "approved");
-        }
+        await createAgentRequest({
+          agentName: trimmedName,
+          agentID: trimmedId || undefined,
+          requestInfo: trimmedInfo || undefined,
+          policyFile: policyFile || undefined,
+          policyText: !policyFile ? trimmedPolicyText : undefined,
+        });
         setSubmittedAgentName(trimmedName);
       }
     } catch (e2) {
@@ -104,7 +118,16 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
           </button>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "12px 8px 4px", gap: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+            padding: "12px 8px 4px",
+            gap: 16,
+          }}
+        >
           <div
             style={{
               width: 56,
@@ -120,15 +143,21 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
             <Icon name="check" size={28} />
           </div>
           <div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--fg)", marginBottom: 6 }}>
-              {isAdmin
-                ? `“${submittedAgentName}” is being provisioned`
-                : `Request for “${submittedAgentName}” submitted`}
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 18,
+                fontWeight: 600,
+                color: "var(--fg)",
+                marginBottom: 6,
+              }}
+            >
+              Request for “{submittedAgentName}” submitted
             </div>
             <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.55, maxWidth: 360 }}>
               {isAdmin
-                ? "The agent will appear on the dashboard in a couple of minutes once it's deployed on-chain. You can keep working — the list will refresh automatically when you close this dialog."
-                : "An admin needs to review and approve your request. You'll see status updates in the Requests page."}
+                ? "The request is now pending. Approve it from the Requests page to deploy the agent."
+                : "An admin needs to review and approve your request. You'll see status updates on the Requests page."}
             </div>
           </div>
         </div>
@@ -162,32 +191,56 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
             style={inputStyle}
           />
         </label>
+
         <label style={labelStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Skills (markdown / text)</span>
-            {skillsFilename && (
-              <span style={{ fontSize: 11.5, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
-                {skillsFilename}
-              </span>
-            )}
-          </div>
-          <SkillsFilePicker
-            onLoaded={(text, name) => {
-              setSkills(text);
-              setSkillsFilename(name);
-            }}
+          Agent ID
+          <input
+            type="text"
+            value={agentId}
+            onChange={(e) => setAgentId(e.target.value)}
+            placeholder="did:rubix:agent…"
+            style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: 12.5 }}
           />
-          <textarea
-            value={skills}
-            onChange={(e) => {
-              setSkills(e.target.value);
-              if (skillsFilename) setSkillsFilename(null);
-            }}
-            rows={10}
-            placeholder="Paste skills markdown here, or load a .md/.txt file above"
-            style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: 12.5, resize: "vertical" }}
-          />
+          <span style={{ fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400 }}>
+            Optional — leave blank to let the backend assign one on approval.
+          </span>
         </label>
+
+        {!editing && (
+          <>
+            <PolicyFilePicker
+              file={policyFile}
+              onChange={(f) => {
+                setPolicyFile(f);
+                if (f) setPolicyText("");
+              }}
+              label="Policy file (.md / .txt)"
+            />
+            <label style={labelStyle}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>or paste policy as text</span>
+                {policyFile && (
+                  <span style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>disabled — using uploaded file</span>
+                )}
+              </div>
+              <textarea
+                value={policyText}
+                onChange={(e) => setPolicyText(e.target.value)}
+                rows={8}
+                placeholder="Paste policy markdown / text here"
+                disabled={!!policyFile}
+                style={{
+                  ...inputStyle,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12.5,
+                  resize: "vertical",
+                  opacity: policyFile ? 0.5 : 1,
+                }}
+              />
+            </label>
+          </>
+        )}
+
         {err && <div style={errorStyle}>{err}</div>}
       </form>
     </Modal>

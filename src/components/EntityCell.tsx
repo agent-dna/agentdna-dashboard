@@ -39,7 +39,11 @@ function truncateId(s: string, total = 8): string {
 
 export function IdCell({ id, truncate = false, truncateLength = 8 }: IdCellProps) {
   const [copied, setCopied] = useState(false);
-  const parts = id.split("_");
+  const safe = id || "";
+  if (!safe) {
+    return <span className="cell-id" style={{ color: "var(--fg-faint)" }}>—</span>;
+  }
+  const parts = safe.split("_");
   const prefix = parts[0];
   const hash = parts.slice(1).join("_") || prefix;
   const displayHash = truncate ? truncateId(hash, truncateLength) : hash;
@@ -48,7 +52,7 @@ export function IdCell({ id, truncate = false, truncateLength = 8 }: IdCellProps
     e.stopPropagation();
     e.preventDefault();
     if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(id).then(
+      navigator.clipboard.writeText(safe).then(
         () => {
           setCopied(true);
           window.setTimeout(() => setCopied(false), 1200);
@@ -61,7 +65,7 @@ export function IdCell({ id, truncate = false, truncateLength = 8 }: IdCellProps
   };
 
   return (
-    <span className="cell-id" title={truncate ? id : undefined}>
+    <span className="cell-id" title={truncate ? safe : undefined}>
       {!truncate && <span className="pre">{prefix}_</span>}
       {displayHash}
       <button
