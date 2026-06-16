@@ -5,6 +5,7 @@ import { AddUserModal } from "../../components/forms/AddUserModal";
 import { UserAccessDrawer } from "../../components/forms/UserAccessDrawer";
 import { listUsers, type OrgUser } from "../../api/users";
 import { ApiError } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 
 function fmtDate(s: string) {
   try {
@@ -17,6 +18,8 @@ function fmtDate(s: string) {
 }
 
 export function UsersTab() {
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<OrgUser[]>([]);
   const [total, setTotal] = useState(0);
@@ -105,9 +108,11 @@ export function UsersTab() {
           <button className="btn" onClick={load}>
             <Icon name="refresh" size={14} /> Refresh
           </button>
-          <button className="btn primary" onClick={() => setAddOpen(true)}>
-            <Icon name="plus" size={14} /> Add user
-          </button>
+          {isAdmin && (
+            <button className="btn primary" onClick={() => setAddOpen(true)}>
+              <Icon name="plus" size={14} /> Add user
+            </button>
+          )}
         </div>
       </div>
 

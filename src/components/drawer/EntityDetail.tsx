@@ -30,6 +30,7 @@ export function EntityDetail({ entity, kind }: EntityDetailProps) {
 
   const agent = entity as Agent;
   const tool = entity as Tool;
+  const kindLabel = kind === "tool" ? "app" : "agent";
 
   return (
     <>
@@ -55,7 +56,7 @@ export function EntityDetail({ entity, kind }: EntityDetailProps) {
           <h2>{entity.name}</h2>
           <div className="meta">
             <span className={`chip ${isAgent ? "info" : "purple"}`} style={{ fontSize: 10.5, padding: "2px 7px" }}>
-              {kind}
+              {kindLabel}
             </span>
             <span>{entity.id}</span>
           </div>
@@ -70,7 +71,7 @@ export function EntityDetail({ entity, kind }: EntityDetailProps) {
             <div className="k">ID</div>
             <div className="v">{entity.id}</div>
             <div className="k">Type</div>
-            <div className="v">{kind}</div>
+            <div className="v">{kindLabel}</div>
             {isAgent && (
               <>
                 <div className="k">Owner</div>
@@ -133,7 +134,7 @@ export function EntityDetail({ entity, kind }: EntityDetailProps) {
             </div>
             <div className="card" style={{ padding: "14px 16px" }}>
               <div style={{ fontSize: 11, color: "var(--fg-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                {isAgent ? "Tools" : "Agents"}
+                {isAgent ? "Apps" : "Agents"}
               </div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 500 }}>{entity.connected}</div>
             </div>

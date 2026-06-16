@@ -1,3 +1,5 @@
+import { dummyRespond, isDummyMode } from "../data/dummyRouter";
+
 const BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:9000").replace(/\/$/, "");
 const DEV_TOKEN: string | undefined = import.meta.env.VITE_DEV_TOKEN;
 
@@ -51,6 +53,14 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, query, auth = true } = opts;
 
+  if (isDummyMode()) {
+    const out = dummyRespond(path, query, method);
+    if (out !== undefined) {
+      console.log(`[DUMMY ${method} ${path}]`, query || {}, "→", out);
+      return out as T;
+    }
+  }
+
   const url = new URL(BASE + path);
   if (query) {
     for (const [k, v] of Object.entries(query)) {
@@ -86,9 +96,11 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   }
 
   if (!res.ok || payload?.status === false) {
+    console.warn(`[${method} ${url.pathname}${url.search}] ${res.status}`, payload);
     throw new ApiError(payload?.message || `HTTP ${res.status}`, res.status);
   }
 
+  console.log(`[${method} ${url.pathname}${url.search}]`, payload?.data);
   return payload.data;
 }
 
@@ -98,6 +110,14 @@ export async function apiUpload<T>(
   opts: { method?: string; auth?: boolean } = {},
 ): Promise<T> {
   const { method = "POST", auth = true } = opts;
+
+  if (isDummyMode()) {
+    const out = dummyRespond(path, undefined, method);
+    if (out !== undefined) {
+      console.log(`[DUMMY ${method} ${path}] (multipart)`, "→", out);
+      return out as T;
+    }
+  }
 
   const headers: Record<string, string> = { Accept: "application/json" };
   // Do NOT set Content-Type; the browser sets multipart/form-data with the boundary.
@@ -122,8 +142,10 @@ export async function apiUpload<T>(
   }
 
   if (!res.ok || payload?.status === false) {
+    console.warn(`[${method} ${path}] ${res.status}`, payload);
     throw new ApiError(payload?.message || `HTTP ${res.status}`, res.status);
   }
 
+  console.log(`[${method} ${path}]`, payload?.data);
   return payload.data;
 }

@@ -39,6 +39,36 @@ export interface FlowStep {
   verdict: FlowVerdict;
   checks: { identity: boolean; trust: boolean; scope: boolean };
   latency: number;
+  /** ID of the TraceSpan this step corresponds to (for TraceInspector) */
+  spanId: string;
+}
+
+export interface TraceSpan {
+  id: string;
+  name: string;
+  kind: "chain" | "agent" | "tool";
+  label: string;
+  status: "ok" | "blocked";
+  tokensIn: number;
+  tokensOut: number;
+  cost: number;
+  input: string;
+  output: string;
+  model: string | null;
+  metadata: Record<string, unknown>;
+  children: TraceSpan[];
+}
+
+export interface FlowTrace {
+  trace: TraceSpan;
+  spanById: Record<string, TraceSpan>;
+  traceId: string;
+  sessionId: string;
+  userId: string;
+  env: string;
+  totalTokensIn: number;
+  totalTokensOut: number;
+  totalCost: number;
 }
 
 export interface Flow {
@@ -50,6 +80,7 @@ export interface Flow {
   edges: [string, string][];
   steps: FlowStep[];
   status: "halted" | "completed";
+  trace: FlowTrace;
 }
 
 /* ------- tier layout ------- */
@@ -124,21 +155,9 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
   // Chronological order (oldest first).
   const sorted = [...interactions].sort((a, b) => b.created - a.created);
 
-  const initiatorId = intent.initiator.id;
-
-  // Operator node — the intent's initiator. We deliberately label them as
-  // simply "User" rather than exposing their DID/email in the graph.
-  const operator: FlowNode = {
-    id: `usr_${sanitize(initiatorId)}`,
-    kind: "human",
-    name: "User",
-    label: "",
-    x: 0,
-    y: 0,
-  };
-
   // Orchestrator: the agent that initiates the most interactions for this intent.
-  // Fallback: the first interaction's initiator. Workers = all other agents.
+  // Used only to assign an "Orchestrator" sub-label to that node — no synthetic
+  // operator hops are added.
   const callCounts = new Map<string, number>();
   for (const i of sorted) {
     callCounts.set(i.initiator.id, (callCounts.get(i.initiator.id) || 0) + 1);
@@ -153,8 +172,6 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
   }
 
   const nodesById = new Map<string, FlowNode>();
-  nodesById.set(operator.id, operator);
-
   const idForDid = (did: string): string => `nd_${sanitize(did)}`;
 
   /**
@@ -187,7 +204,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       id,
       kind,
       name,
-      label: kind === "tool" ? "Tool" : isOrch ? "Orchestrator" : "",
+      label: kind === "tool" ? "App" : isOrch ? "Orchestrator" : "",
       x: 0,
       y: 0,
     };
@@ -195,34 +212,10 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     return node;
   };
 
-  // Build steps. First step: operator → orchestrator (if any orchestrator exists).
-  const steps: FlowStep[] = [];
+  // One step per real interaction — no synthetic operator hops.
+  // spanId is populated after the trace tree is built below.
+  const rawSteps: Omit<FlowStep, "spanId">[] = [];
 
-  if (orchAgentDid) {
-    // Look for any interaction that touches the orchestrator, to capture its
-    // backend-supplied name (fromName/toName).
-    const orchIxn = sorted.find(
-      (x) => x.initiator.id === orchAgentDid || x.target.id === orchAgentDid,
-    );
-    const orchApiName =
-      orchIxn && orchIxn.initiator.id === orchAgentDid
-        ? orchIxn.initiator.name
-        : orchIxn?.target.name;
-    const orchNode = ensureNode(orchAgentDid, orchApiName);
-    steps.push({
-      from: operator.id,
-      to: orchNode.id,
-      dir: "request",
-      title: "Submit intent",
-      summary: `${"User"} submitted intent “${intent.name || "intent"}”. Orchestration was handed to ${orchNode.name} under approved policy.`,
-      verdict: "allowed",
-      checks: { identity: true, trust: true, scope: true },
-      latency: 80,
-    });
-  }
-
-  // Each interaction → one hop. Pass through the backend's fromName/toName so
-  // nodes that aren't in the directory still get a readable name.
   for (const ixn of sorted) {
     const fromNode = ensureNode(ixn.initiator.id, ixn.initiator.name);
     const toNode = ensureNode(ixn.target.id, ixn.target.name);
@@ -230,7 +223,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     const toName = toNode.name;
     const isBlocked = ixn.threat;
     const isToTool = toNode.kind === "tool";
-    steps.push({
+    rawSteps.push({
       from: fromNode.id,
       to: toNode.id,
       dir: "request",
@@ -250,41 +243,9 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     }
   }
 
-  // Final step: orchestrator → operator (return / halt).
-  if (orchAgentDid) {
-    const orchNode = nodesById.get(idForDid(orchAgentDid))!;
-    const halted = intent.threats > 0 || steps.some((s) => s.verdict === "blocked");
-    steps.push({
-      from: orchNode.id,
-      to: operator.id,
-      dir: "response",
-      title: halted ? "Halt intent" : "Return result",
-      summary: halted
-        ? `${orchNode.name} halted the intent and returned a policy violation to ${"User"}.`
-        : `${orchNode.name} returned the final result to ${"User"}. Intent completed cleanly.`,
-      verdict: halted ? "blocked" : "allowed",
-      checks: { identity: true, trust: true, scope: !halted },
-      latency: 120,
-    });
-  }
-
-  // Empty fallback — keep one placeholder so the rail isn't blank.
-  if (steps.length === 0) {
-    steps.push({
-      from: operator.id,
-      to: operator.id,
-      dir: "request",
-      title: "Waiting for activity",
-      summary: "No interactions have been recorded yet for this intent.",
-      verdict: "allowed",
-      checks: { identity: true, trust: true, scope: true },
-      latency: 0,
-    });
-  }
-
   // Final node set (only nodes that appear in any step) and unique directed edges.
   const used = new Set<string>();
-  for (const s of steps) {
+  for (const s of rawSteps) {
     used.add(s.from);
     used.add(s.to);
   }
@@ -292,7 +253,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
 
   const seenEdges = new Set<string>();
   const edges: [string, string][] = [];
-  for (const s of steps) {
+  for (const s of rawSteps) {
     const key = `${s.from}>${s.to}`;
     if (!seenEdges.has(key)) {
       seenEdges.add(key);
@@ -301,9 +262,165 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
   }
 
   const orchNodeId = orchAgentDid ? idForDid(orchAgentDid) : null;
-  tierLayout(nodes, orchNodeId, steps);
+  tierLayout(nodes, orchNodeId, rawSteps as FlowStep[]);
 
-  const halted = steps.some((s) => s.verdict === "blocked");
+  const halted = rawSteps.some((s) => s.verdict === "blocked");
+
+  // ---- Build the nested trace/span tree ----
+  const allSpans: TraceSpan[] = [];
+  const mkSpan = (s: Omit<TraceSpan, "children">): TraceSpan => {
+    const span: TraceSpan = { ...s, children: [] };
+    allSpans.push(span);
+    return span;
+  };
+
+  const traceStatus: TraceSpan["status"] = halted ? "blocked" : "ok";
+
+  const rootSpan = mkSpan({
+    id: `sp_${sanitize(intent.id)}_root`,
+    name: intent.name,
+    kind: "chain",
+    label: "TRACE",
+    status: traceStatus,
+    tokensIn: 0, tokensOut: 0, cost: 0,
+    input: `Execute intent: "${intent.name}"`,
+    output: halted
+      ? "Intent halted: policy violation detected. No side-effects committed."
+      : "Intent completed. All identity, trust, and scope checks passed.",
+    model: null,
+    metadata: { intentId: intent.id, status: halted ? "halted" : "completed" },
+  });
+
+  // step key → span id (for populating FlowStep.spanId)
+  const stepSpan = new Map<string, string>();
+  const markStep = (fromId: string, toId: string, spanId: string) => {
+    stepSpan.set(`${fromId}>${toId}`, spanId);
+    stepSpan.set(`${toId}>${fromId}`, spanId);
+  };
+
+  // Group sorted interactions by initiator DID
+  const byInitiator = new Map<string, Interaction[]>();
+  for (const ix of sorted) {
+    const arr = byInitiator.get(ix.initiator.id) || [];
+    arr.push(ix);
+    byInitiator.set(ix.initiator.id, arr);
+  }
+
+  const humanNode = nodes.find((n) => n.kind === "human");
+
+  // Worker spans — delegations from the orchestrator
+  if (orchAgentDid) {
+    const orchInteractions = byInitiator.get(orchAgentDid) || [];
+    for (const ix of orchInteractions) {
+      if (ix.targetType !== "agent") continue;
+      const workerDid = ix.target.id;
+      const workerNodeId = idForDid(workerDid);
+      const workerNode = nodesById.get(workerNodeId);
+
+      const workerSpanId = `sp_${sanitize(intent.id)}_w_${sanitize(workerDid)}`;
+      const workerSpan = mkSpan({
+        id: workerSpanId,
+        name: workerNode?.name || ix.target.name || shortDid(workerDid),
+        kind: "agent",
+        label: workerNode?.label || "Worker",
+        status: ix.threat ? "blocked" : "ok",
+        tokensIn: 0, tokensOut: 0, cost: 0,
+        input: `Delegated task for intent "${intent.name}".\nVerify identity, check scope, execute subtask.`,
+        output: ix.threat
+          ? "Attempted tool call outside granted scope. Blocked by policy."
+          : "Subtask completed. Result returned to orchestrator.",
+        model: "agent/reason-v2",
+        metadata: { agentId: workerDid, intentId: intent.id },
+      });
+      rootSpan.children.push(workerSpan);
+      markStep(orchNodeId!, workerNodeId, workerSpanId);
+
+      // Tool calls from this worker
+      const workerInteractions = byInitiator.get(workerDid) || [];
+      for (const tix of workerInteractions) {
+        const toolDid = tix.target.id;
+        const toolNodeId = idForDid(toolDid);
+        const toolNode = nodesById.get(toolNodeId);
+
+        const toolSpanId = `sp_${sanitize(intent.id)}_t_${sanitize(toolDid)}_${sanitize(workerDid)}`;
+        const toolSpan = mkSpan({
+          id: toolSpanId,
+          name: toolNode?.name || tix.target.name || shortDid(toolDid),
+          kind: "tool",
+          label: toolNode?.label || "Tool",
+          status: tix.threat ? "blocked" : "ok",
+          tokensIn: 0, tokensOut: 0, cost: 0,
+          input: `{\n  "tool": "${toolNode?.name || tix.target.name}",\n  "scope": "${toolNode?.label || "unknown"}",\n  "caller": "${workerNode?.name || ix.target.name}",\n  "timeout_ms": 3000\n}`,
+          output: tix.threat
+            ? `{\n  "ok": false,\n  "error": "scope_denied",\n  "message": "capability not granted to caller"\n}`
+            : `{\n  "ok": true,\n  "elapsed_ms": ${Math.max(20, tix.runtime || 120)}\n}`,
+          model: null,
+          metadata: {
+            provider: "service",
+            scope: toolNode?.label || "unknown",
+            caller: workerNode?.name || ix.target.name,
+            intentId: intent.id,
+          },
+        });
+        workerSpan.children.push(toolSpan);
+        markStep(workerNodeId, toolNodeId, toolSpanId);
+      }
+    }
+  }
+
+  // Also capture any direct agent→tool steps not under the orch
+  for (const ix of sorted) {
+    if (ix.initiator.id === orchAgentDid) continue;
+    if (ix.targetType !== "tool") continue;
+    const fromNodeId = idForDid(ix.initiator.id);
+    const toNodeId = idForDid(ix.target.id);
+    const key = `${fromNodeId}>${toNodeId}`;
+    if (!stepSpan.has(key)) {
+      // fall back to root span id
+      markStep(fromNodeId, toNodeId, rootSpan.id);
+    }
+  }
+
+  const genSpanId = `sp_${sanitize(intent.id)}_gen`;
+  const genSpan = mkSpan({
+    id: genSpanId,
+    name: "generation",
+    kind: "agent",
+    label: "LLM",
+    status: traceStatus,
+    tokensIn: 0, tokensOut: 0, cost: 0,
+    input: `Compose the final response for the operator.\nSummarize the completed work or policy violation.`,
+    output: halted
+      ? `Intent halted before completion.\n\nA policy violation was detected and the orchestration was stopped. No side effects were committed.`
+      : `Completed "${intent.name}".\n\nAll agent interactions and tool calls completed successfully. Identity, trust, and scope checks passed.`,
+    model: "gpt-4o-mini",
+    metadata: { temperature: 0.2, max_tokens: 1024, env: "prod" },
+  });
+  rootSpan.children.push(genSpan);
+
+  const spanById: Record<string, TraceSpan> = {};
+  for (const s of allSpans) spanById[s.id] = s;
+
+  const traceId = `tr_${sanitize(intent.id).slice(-8)}`;
+  const sessionId = `sess_${sanitize(intent.id).slice(-6)}`;
+
+  const flowTrace: FlowTrace = {
+    trace: rootSpan,
+    spanById,
+    traceId,
+    sessionId,
+    userId: humanNode?.name || intent.initiator?.name || "operator",
+    env: "prod",
+    totalTokensIn: 0,
+    totalTokensOut: 0,
+    totalCost: 0,
+  };
+
+  // Attach spanId to each step
+  const steps: FlowStep[] = rawSteps.map((s) => ({
+    ...s,
+    spanId: stepSpan.get(`${s.from}>${s.to}`) || rootSpan.id,
+  }));
 
   return {
     intentId: intent.id,
@@ -313,6 +430,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     edges,
     steps,
     status: halted ? "halted" : "completed",
+    trace: flowTrace,
   };
 }
 

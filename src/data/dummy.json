@@ -1,0 +1,390 @@
+{
+  "_comment": "Demo dataset used when VITE_DUMMY=true. IDs are friendly slugs so the UI looks clean if any leak through; the intent IDs match the I-N labels surfaced by useIntentLabel.",
+
+  "currentUser": {
+    "did": "user_hari",
+    "email": "Harry ",
+    "org_id": "AgentDNA-dev-env",
+    "api_key": "demo-key-001",
+    "nft_id": "nft_demo_001",
+    "is_admin": true
+  },
+
+  "agents": [
+    {
+      "agentDID": "agent_atlas",
+      "agentName": "Atlas Orchestrator",
+      "createdAt": "2026-05-12T09:15:00Z",
+      "deployer": "user_hari",
+      "policy": "# Atlas Orchestrator Policy\n\nRouting agent. Authorised to delegate to invoice, marketer, devops, compliance, research, anomaly. Tool calls forbidden.",
+      "totalInteractions": 38,
+      "totalThreats": 0,
+      "score": 96
+    },
+    {
+      "agentDID": "agent_invoice",
+      "agentName": "Invoice Processor",
+      "createdAt": "2026-05-13T11:24:00Z",
+      "deployer": "user_hari",
+      "policy": "# Invoice Processor Policy\n\nAllowed: postgres.query (read+write on invoices), stripe.payment (charge ≤ $5,000), sendgrid.mail (templated receipts).",
+      "totalInteractions": 22,
+      "totalThreats": 1,
+      "score": 88
+    },
+    {
+      "agentDID": "agent_marketer",
+      "agentName": "Marketing Agent",
+      "createdAt": "2026-05-14T08:01:00Z",
+      "deployer": "user_aman",
+      "policy": "# Marketing Agent Policy\n\nAllowed: slack.notify (#marketing only), sendgrid.mail (campaign templates).",
+      "totalInteractions": 14,
+      "totalThreats": 0,
+      "score": 94
+    },
+    {
+      "agentDID": "agent_devops",
+      "agentName": "DevOps Sentinel",
+      "createdAt": "2026-04-30T18:42:00Z",
+      "deployer": "user_hari",
+      "policy": "# DevOps Sentinel Policy\n\nAllowed: pagerduty.alert, postgres.query (read-only on metrics), slack.notify.",
+      "totalInteractions": 18,
+      "totalThreats": 0,
+      "score": 92
+    },
+    {
+      "agentDID": "agent_compliance",
+      "agentName": "Compliance Reviewer",
+      "createdAt": "2026-05-04T13:10:00Z",
+      "deployer": "Devis",
+      "policy": "# Compliance Reviewer Policy\n\nAllowed: postgres.query (read-only). Outbound mail and notifications are NOT permitted.",
+      "totalInteractions": 12,
+      "totalThreats": 2,
+      "score": 71
+    },
+    {
+      "agentDID": "agent_research",
+      "agentName": "Research Assistant",
+      "createdAt": "2026-05-20T10:05:00Z",
+      "deployer": "user_aman",
+      "policy": "# Research Assistant Policy\n\nAllowed: postgres.query (read-only on analytics views), slack.notify (#research).",
+      "totalInteractions": 11,
+      "totalThreats": 0,
+      "score": 95
+    },
+    {
+      "agentDID": "agent_anomaly",
+      "agentName": "Anomaly Hunter",
+      "createdAt": "2026-05-22T16:33:00Z",
+      "deployer": "user_hari",
+      "policy": "# Anomaly Hunter Policy\n\nAllowed: postgres.query (read-only), pagerduty.alert. Stripe write operations are NOT permitted.",
+      "totalInteractions": 9,
+      "totalThreats": 1,
+      "score": 78
+    },
+    {
+      "agentDID": "agent_proton",
+      "agentName": "Proton Router",
+      "createdAt": "2026-05-25T07:48:00Z",
+      "deployer": "Devis",
+      "policy": "# Proton Router Policy\n\nFan-out coordinator. May delegate to research, anomaly, devops.",
+      "totalInteractions": 6,
+      "totalThreats": 0,
+      "score": 90
+    },
+    {
+      "agentDID": "agent_support",
+      "agentName": "Support Triage",
+      "createdAt": "2026-05-18T09:25:00Z",
+      "deployer": "Aman",
+      "policy": "# Support Triage Policy\n\nAllowed: postgres.query (read-only on tickets), slack.notify (#support), sendgrid.mail (templated replies).",
+      "totalInteractions": 27,
+      "totalThreats": 0,
+      "score": 93
+    },
+    {
+      "agentDID": "agent_billing",
+      "agentName": "Billing Reconciler",
+      "createdAt": "2026-05-09T15:40:00Z",
+      "deployer": "Harry ",
+      "policy": "# Billing Reconciler Policy\n\nAllowed: postgres.query (read+write on ledgers), stripe.payment (reconciliation only, no refunds).",
+      "totalInteractions": 19,
+      "totalThreats": 1,
+      "score": 84
+    },
+    {
+      "agentDID": "agent_security",
+      "agentName": "Security Watchdog",
+      "createdAt": "2026-05-02T11:11:00Z",
+      "deployer": "Devis",
+      "policy": "# Security Watchdog Policy\n\nAllowed: okta.identity (read), pagerduty.alert, slack.notify (#sec-alerts).",
+      "totalInteractions": 16,
+      "totalThreats": 0,
+      "score": 97
+    }
+  ],
+
+  "tools": [
+    { "toolDID": "tool_stripe", "toolName": "stripe.payment", "totalInteractions": 14, "totalThreats": 2, "score": 82 },
+    { "toolDID": "tool_sendgrid", "toolName": "sendgrid.mail", "totalInteractions": 18, "totalThreats": 1, "score": 87 },
+    { "toolDID": "tool_pagerduty", "toolName": "pagerduty.alert", "totalInteractions": 9, "totalThreats": 0, "score": 95 },
+    { "toolDID": "tool_slack", "toolName": "slack.notify", "totalInteractions": 22, "totalThreats": 1, "score": 90 },
+    { "toolDID": "tool_okta", "toolName": "okta.identity", "totalInteractions": 5, "totalThreats": 0, "score": 96 },
+    { "toolDID": "tool_postgres", "toolName": "postgres.query", "totalInteractions": 31, "totalThreats": 0, "score": 94 }
+  ],
+
+  "users": [
+    {
+      "userID": "user_hari",
+      "userName": "Harry ",
+      "createdAt": "2026-04-01T10:00:00Z",
+      "totalIntents": 4,
+      "totalThreats": 2,
+      "accessAgentCount": 8
+    },
+    {
+      "userID": "user_aman",
+      "userName": "Aman",
+      "createdAt": "2026-04-02T10:00:00Z",
+      "totalIntents": 3,
+      "totalThreats": 1,
+      "accessAgentCount": 5
+    },
+    {
+      "userID": "Devis",
+      "userName": "Alex",
+      "createdAt": "2026-04-04T10:00:00Z",
+      "totalIntents": 2,
+      "totalThreats": 2,
+      "accessAgentCount": 6
+    }
+  ],
+
+  "intents": [
+    {
+      "intentID": "I-1",
+      "initiatorDID": "user_hari",
+      "initiatorName": "Harry ",
+      "startedAt": "2026-06-04T08:14:00Z",
+      "endedAt": "2026-06-04T08:14:08Z",
+      "status": "completed",
+      "threatDetected": false,
+      "flowType": "linear",
+      "executor": "agent_atlas",
+      "chainDepth": 4,
+      "agentsCount": 2,
+      "toolsCount": 3,
+      "interactionsCount": 5,
+      "interactions": [
+        { "interactionID": "ix_1_1", "from": "user_hari", "to": "agent_atlas", "fromName": "Harry ", "toName": "Atlas Orchestrator", "threat": false, "intentID": "I-1", "time": "2026-06-04T08:14:00Z", "blockType": "REQUEST" },
+        { "interactionID": "ix_1_2", "from": "agent_atlas", "to": "agent_invoice", "fromName": "Atlas Orchestrator", "toName": "Invoice Processor", "threat": false, "intentID": "I-1", "time": "2026-06-04T08:14:01Z", "blockType": "DELEGATE" },
+        { "interactionID": "ix_1_3", "from": "agent_invoice", "to": "tool_postgres", "fromName": "Invoice Processor", "toName": "postgres.query", "threat": false, "intentID": "I-1", "time": "2026-06-04T08:14:03Z", "blockType": "TOOL_CALL" },
+        { "interactionID": "ix_1_4", "from": "agent_invoice", "to": "tool_stripe", "fromName": "Invoice Processor", "toName": "stripe.payment", "threat": false, "intentID": "I-1", "time": "2026-06-04T08:14:05Z", "blockType": "TOOL_CALL" },
+        { "interactionID": "ix_1_5", "from": "agent_invoice", "to": "tool_sendgrid", "fromName": "Invoice Processor", "toName": "sendgrid.mail", "threat": false, "intentID": "I-1", "time": "2026-06-04T08:14:07Z", "blockType": "TOOL_CALL" }
+      ]
+    },
+    {
+      "intentID": "I-2",
+      "initiatorDID": "user_aman",
+      "initiatorName": "Aman",
+      "startedAt": "2026-06-04T07:42:00Z",
+      "endedAt": "2026-06-04T07:42:04Z",
+      "status": "completed",
+      "threatDetected": false,
+      "flowType": "linear",
+      "executor": "agent_atlas",
+      "chainDepth": 3,
+      "agentsCount": 2,
+      "toolsCount": 1,
+      "interactionsCount": 4,
+      "interactions": [
+        { "interactionID": "ix_2_1", "from": "user_aman", "to": "agent_atlas", "fromName": "Aman", "toName": "Atlas Orchestrator", "threat": false, "intentID": "I-2", "time": "2026-06-04T07:42:00Z", "blockType": "REQUEST" },
+        { "interactionID": "ix_2_2", "from": "agent_atlas", "to": "agent_marketer", "fromName": "Atlas Orchestrator", "toName": "Marketing Agent", "threat": false, "intentID": "I-2", "time": "2026-06-04T07:42:01Z", "blockType": "DELEGATE" },
+        { "interactionID": "ix_2_3", "from": "agent_marketer", "to": "tool_sendgrid", "fromName": "Marketing Agent", "toName": "sendgrid.mail", "threat": false, "intentID": "I-2", "time": "2026-06-04T07:42:02Z", "blockType": "TOOL_CALL" },
+        { "interactionID": "ix_2_4", "from": "agent_marketer", "to": "tool_slack", "fromName": "Marketing Agent", "toName": "slack.notify", "threat": false, "intentID": "I-2", "time": "2026-06-04T07:42:03Z", "blockType": "TOOL_CALL" }
+      ]
+    },
+    {
+      "intentID": "I-3",
+      "initiatorDID": "user_hari",
+      "initiatorName": "Harry ",
+      "startedAt": "2026-06-04T07:05:00Z",
+      "status": "running",
+      "threatDetected": false,
+      "flowType": "linear",
+      "executor": "agent_devops",
+      "chainDepth": 3,
+      "agentsCount": 2,
+      "toolsCount": 2,
+      "interactionsCount": 4,
+      "interactions": [
+        { "interactionID": "ix_3_1", "from": "user_hari", "to": "agent_atlas", "fromName": "Harry ", "toName": "Atlas Orchestrator", "threat": false, "intentID": "I-3", "time": "2026-06-04T07:05:00Z", "blockType": "REQUEST" },
+        { "interactionID": "ix_3_2", "from": "agent_atlas", "to": "agent_devops", "fromName": "Atlas Orchestrator", "toName": "DevOps Sentinel", "threat": false, "intentID": "I-3", "time": "2026-06-04T07:05:01Z", "blockType": "DELEGATE" },
+        { "interactionID": "ix_3_3", "from": "agent_devops", "to": "tool_postgres", "fromName": "DevOps Sentinel", "toName": "postgres.query", "threat": false, "intentID": "I-3", "time": "2026-06-04T07:05:03Z", "blockType": "TOOL_CALL" },
+        { "interactionID": "ix_3_4", "from": "agent_devops", "to": "tool_pagerduty", "fromName": "DevOps Sentinel", "toName": "pagerduty.alert", "threat": false, "intentID": "I-3", "time": "2026-06-04T07:05:04Z", "blockType": "TOOL_CALL" }
+      ]
+    },
+    {
+      "intentID": "I-4",
+      "initiatorDID": "Devis",
+      "initiatorName": "Alex",
+      "startedAt": "2026-06-04T05:31:00Z",
+      "endedAt": "2026-06-04T05:31:12Z",
+      "status": "completed",
+      "threatDetected": true,
+      "flowType": "linear",
+      "executor": "agent_compliance",
+      "chainDepth": 4,
+      "agentsCount": 2,
+      "toolsCount": 3,
+      "interactionsCount": 5,
+      "interactions": [
+        { "interactionID": "ix_4_1", "from": "Devis", "to": "agent_atlas", "fromName": "Alex", "toName": "Atlas Orchestrator", "threat": false, "intentID": "I-4", "time": "2026-06-04T05:31:00Z", "blockType": "REQUEST" },
+        { "interactionID": "ix_4_2", "from": "agent_atlas", "to": "agent_compliance", "fromName": "Atlas Orchestrator", "toName": "Compliance Reviewer", "threat": false, "intentID": "I-4", "time": "2026-06-04T05:31:01Z", "blockType": "DELEGATE" },
+        { "interactionID": "ix_4_3", "from": "agent_compliance", "to": "tool_postgres", "fromName": "Compliance Reviewer", "toName": "postgres.query", "threat": false, "intentID": "I-4", "time": "2026-06-04T05:31:04Z", "blockType": "TOOL_CALL" },
+        { "interactionID": "ix_4_4", "from": "agent_compliance", "to": "tool_sendgrid", "fromName": "Compliance Reviewer", "toName": "sendgrid.mail", "threat": true, "intentID": "I-4", "time": "2026-06-04T05:31:09Z", "blockType": "POLICY_BLOCK" },
+        { "interactionID": "ix_4_5", "from": "agent_compliance", "to": "tool_slack", "fromName": "Compliance Reviewer", "toName": "slack.notify", "threat": true, "intentID": "I-4", "time": "2026-06-04T05:31:11Z", "blockType": "POLICY_BLOCK" }
+      ]
+    },
+    {
+      "intentID": "I-5",
+      "initiatorDID": "user_aman",
+      "initiatorName": "Aman",
+      "startedAt": "2026-06-03T22:18:00Z",
+      "endedAt": "2026-06-03T22:18:06Z",
+      "status": "completed",
+      "threatDetected": false,
+      "flowType": "linear",
+      "executor": "agent_research",
+      "chainDepth": 2,
+      "agentsCount": 1,
+      "toolsCount": 2,
+      "interactionsCount": 3,
+      "interactions": [
+        { "interactionID": "ix_5_1", "from": "user_aman", "to": "agent_research", "fromName": "Aman", "toName": "Research Assistant", "threat": false, "intentID": "I-5", "time": "2026-06-03T22:18:00Z", "blockType": "REQUEST" },
+        { "interactionID": "ix_5_2", "from": "agent_research", "to": "tool_postgres", "fromName": "Research Assistant", "toName": "postgres.query", "threat": false, "intentID": "I-5", "time": "2026-06-03T22:18:02Z", "blockType": "TOOL_CALL" },
+        { "interactionID": "ix_5_3", "from": "agent_research", "to": "tool_slack", "fromName": "Research Assistant", "toName": "slack.notify", "threat": false, "intentID": "I-5", "time": "2026-06-03T22:18:05Z", "blockType": "TOOL_CALL" }
+      ]
+    },
+    {
+      "intentID": "I-6",
+      "initiatorDID": "user_hari",
+      "initiatorName": "Harry ",
+      "startedAt": "2026-06-03T14:09:00Z",
+      "endedAt": "2026-06-03T14:09:10Z",
+      "status": "completed",
+      "threatDetected": true,
+      "flowType": "linear",
+      "executor": "agent_anomaly",
+      "chainDepth": 2,
+      "agentsCount": 1,
+      "toolsCount": 3,
+      "interactionsCount": 4,
+      "interactions": [
+        { "interactionID": "ix_6_1", "from": "user_hari", "to": "agent_anomaly", "fromName": "Harry ", "toName": "Anomaly Hunter", "threat": false, "intentID": "I-6", "time": "2026-06-03T14:09:00Z", "blockType": "REQUEST" },
+        { "interactionID": "ix_6_2", "from": "agent_anomaly", "to": "tool_postgres", "fromName": "Anomaly Hunter", "toName": "postgres.query", "threat": false, "intentID": "I-6", "time": "2026-06-03T14:09:02Z", "blockType": "TOOL_CALL" },
+        { "interactionID": "ix_6_3", "from": "agent_anomaly", "to": "tool_stripe", "fromName": "Anomaly Hunter", "toName": "stripe.payment", "threat": true, "intentID": "I-6", "time": "2026-06-03T14:09:07Z", "blockType": "POLICY_BLOCK" },
+        { "interactionID": "ix_6_4", "from": "agent_anomaly", "to": "tool_pagerduty", "fromName": "Anomaly Hunter", "toName": "pagerduty.alert", "threat": false, "intentID": "I-6", "time": "2026-06-03T14:09:09Z", "blockType": "TOOL_CALL" }
+      ]
+    },
+    {
+      "intentID": "I-7",
+      "initiatorDID": "Devis",
+      "initiatorName": "Alex",
+      "startedAt": "2026-06-03T11:20:00Z",
+      "endedAt": "2026-06-03T11:20:05Z",
+      "status": "completed",
+      "threatDetected": false,
+      "flowType": "linear",
+      "executor": "agent_atlas",
+      "chainDepth": 3,
+      "agentsCount": 1,
+      "toolsCount": 3,
+      "interactionsCount": 4,
+      "interactions": [
+        { "interactionID": "ix_7_1", "from": "Devis", "to": "agent_atlas", "fromName": "Alex", "toName": "Atlas Orchestrator", "threat": false, "intentID": "I-7", "time": "2026-06-03T11:20:00Z", "blockType": "REQUEST" },
+        { "interactionID": "ix_7_2", "from": "agent_atlas", "to": "tool_okta", "fromName": "Atlas Orchestrator", "toName": "okta.identity", "threat": false, "intentID": "I-7", "time": "2026-06-03T11:20:01Z", "blockType": "TOOL_CALL" },
+        { "interactionID": "ix_7_3", "from": "agent_atlas", "to": "tool_sendgrid", "fromName": "Atlas Orchestrator", "toName": "sendgrid.mail", "threat": false, "intentID": "I-7", "time": "2026-06-03T11:20:03Z", "blockType": "TOOL_CALL" },
+        { "interactionID": "ix_7_4", "from": "agent_atlas", "to": "tool_slack", "fromName": "Atlas Orchestrator", "toName": "slack.notify", "threat": false, "intentID": "I-7", "time": "2026-06-03T11:20:04Z", "blockType": "TOOL_CALL" }
+      ]
+    },
+    {
+      "intentID": "I-8",
+      "initiatorDID": "user_aman",
+      "initiatorName": "Aman",
+      "startedAt": "2026-06-03T09:02:00Z",
+      "endedAt": "2026-06-03T09:02:03Z",
+      "status": "failed",
+      "threatDetected": true,
+      "flowType": "linear",
+      "executor": "agent_invoice",
+      "chainDepth": 2,
+      "agentsCount": 1,
+      "toolsCount": 1,
+      "interactionsCount": 2,
+      "interactions": [
+        { "interactionID": "ix_8_1", "from": "user_aman", "to": "agent_invoice", "fromName": "Aman", "toName": "Invoice Processor", "threat": false, "intentID": "I-8", "time": "2026-06-03T09:02:00Z", "blockType": "REQUEST" },
+        { "interactionID": "ix_8_2", "from": "agent_invoice", "to": "tool_stripe", "fromName": "Invoice Processor", "toName": "stripe.payment", "threat": true, "intentID": "I-8", "time": "2026-06-03T09:02:02Z", "blockType": "POLICY_BLOCK" }
+      ]
+    }
+  ],
+
+  "agentCreationRequests": [
+    {
+      "requestID": "req_001",
+      "requestType": "deploy_agent",
+      "policy": "# Sales Bot Policy\n\nAllowed: sendgrid.mail, slack.notify, postgres.query (read-only on leads).",
+      "creatorDID": "user_aman",
+      "agentDID": "",
+      "agentName": "Sales Bot",
+      "requestInfo": "Outbound prospect follow-up bot for the SDR team.",
+      "status": "pending",
+      "createdAt": "2026-06-04T06:11:00Z"
+    },
+    {
+      "requestID": "req_002",
+      "requestType": "deploy_agent",
+      "policy": "# Insights Reporter Policy\n\nAllowed: postgres.query (read-only on analytics views), slack.notify (#insights).",
+      "creatorDID": "Devis",
+      "agentDID": "agent_insights",
+      "agentName": "Insights Reporter",
+      "requestInfo": "Weekly KPI digest in #insights.",
+      "status": "approved",
+      "createdAt": "2026-06-02T14:00:00Z"
+    },
+    {
+      "requestID": "req_003",
+      "requestType": "deploy_agent",
+      "policy": "# Refund Bot Policy\n\nRequested: stripe.payment refund up to $1,000 without manual approval.",
+      "creatorDID": "user_aman",
+      "agentDID": "",
+      "agentName": "Refund Bot",
+      "requestInfo": "Blocked — conflicts with finance approval policy.",
+      "status": "rejected",
+      "createdAt": "2026-06-01T08:30:00Z"
+    }
+  ],
+
+  "agentPolicyHistory": {
+    "agent_atlas": [
+      { "updateID": "upd_atlas_1", "time": 1747042500 },
+      { "updateID": "upd_atlas_2", "time": 1748120100 }
+    ],
+    "agent_invoice": [
+      { "updateID": "upd_invoice_1", "time": 1747128900 },
+      { "updateID": "upd_invoice_2", "time": 1748470500 },
+      { "updateID": "upd_invoice_3", "time": 1748956800 }
+    ],
+    "agent_compliance": [
+      { "updateID": "upd_compliance_1", "time": 1746355200 }
+    ]
+  },
+
+  "agentPolicyUpdates": {
+    "upd_atlas_1": "# Atlas Orchestrator Policy v1\n\nInitial routing rules.",
+    "upd_atlas_2": "# Atlas Orchestrator Policy v2\n\nAdded anomaly + research delegations.",
+    "upd_invoice_1": "# Invoice Processor v1\n\nInitial — postgres read-only.",
+    "upd_invoice_2": "# Invoice Processor v2\n\nAdded stripe.payment with $1k cap.",
+    "upd_invoice_3": "# Invoice Processor v3\n\nRaised stripe cap to $5k. Added sendgrid template restriction.",
+    "upd_compliance_1": "# Compliance Reviewer v1\n\nRead-only postgres. Outbound channels explicitly denied."
+  }
+}

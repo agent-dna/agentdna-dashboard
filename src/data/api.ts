@@ -2,6 +2,8 @@
 // Shapes defined in src/types.ts; API contracts in the middleware README.
 
 import { apiRequest } from "../api/client";
+import { isDummyMode } from "./dummyRouter";
+import dummy from "./dummy.json";
 import type {
   Agent,
   Tool,
@@ -39,6 +41,8 @@ interface ApiInteraction {
   threat: boolean;
   intentID: string;
   time: string;
+  /** Backend-supplied block type (chain block category / classification). */
+  blockType?: string;
 }
 
 function mapInteraction(i: ApiInteraction): Interaction {
@@ -53,6 +57,7 @@ function mapInteraction(i: ApiInteraction): Interaction {
     runtime: 0,
     threat: !!i.threat,
     created: isoToMinutesAgo(i.time),
+    blockType: i.blockType,
   };
 }
 
@@ -120,7 +125,6 @@ function mapAgent(a: ApiAgent): Agent {
 
 export async function fetchAgents(page = 1): Promise<Agent[]> {
   const res = await apiRequest<PagedAgents>("/agents-list", { query: { page } });
-  console.log(`[GET /agents-list?page=${page}]`, res);
   return (res.agentsList || []).map(mapAgent);
 }
 
@@ -134,7 +138,6 @@ export interface PagedAgentsResult {
 
 export async function fetchAgentsPaged(page = 1): Promise<PagedAgentsResult> {
   const res = await apiRequest<PagedAgents>("/agents-list", { query: { page } });
-  console.log(`[GET /agents-list?page=${page}]`, res);
   return {
     items: (res.agentsList || []).map(mapAgent),
     total: res.total || 0,
@@ -149,7 +152,6 @@ export async function fetchAllAgents(): Promise<Agent[]> {
   const out: Agent[] = [];
   for (let page = 1; page <= 200; page++) {
     const res = await apiRequest<PagedAgents>("/agents-list", { query: { page } });
-    console.log(`[GET /agents-list?page=${page}]`, res);
     const items = (res.agentsList || []).map(mapAgent);
     out.push(...items);
     if (items.length === 0 || (res.totalPages && page >= res.totalPages)) break;
@@ -204,7 +206,6 @@ export interface PagedToolsResult {
 
 export async function fetchToolsPaged(page = 1): Promise<PagedToolsResult> {
   const res = await apiRequest<PagedTools>("/tools-list", { query: { page } });
-  console.log(`[GET /tools-list?page=${page}]`, res);
   return {
     items: (res.toolsList || []).map(mapTool),
     total: res.total || 0,
@@ -219,7 +220,6 @@ export async function fetchAllTools(): Promise<Tool[]> {
   const out: Tool[] = [];
   for (let page = 1; page <= 200; page++) {
     const res = await apiRequest<PagedTools>("/tools-list", { query: { page } });
-    console.log(`[GET /tools-list?page=${page}]`, res);
     const items = (res.toolsList || []).map(mapTool);
     out.push(...items);
     if (items.length === 0 || (res.totalPages && page >= res.totalPages)) break;
@@ -230,9 +230,22 @@ export async function fetchAllTools(): Promise<Tool[]> {
 interface ApiIntent {
   intentID: string;
   initiatorDID: string;
+  /** Backend-resolved display name for the initiator (e.g. "user_1" / email). */
+  initiatorName?: string;
   startedAt: string;
+  /** Present only if the intent has ended. */
+  endedAt?: string;
   status: string;
   threatDetected: boolean;
+  flowType?: string;
+  executor?: string;
+  chainDepth?: number;
+  /** Total interactions recorded under this intent. */
+  interactionsCount?: number;
+  /** Distinct agents touched by this intent. */
+  agentsCount?: number;
+  /** Distinct tools touched by this intent. */
+  toolsCount?: number;
 }
 
 interface PagedIntents {
@@ -243,10 +256,10 @@ interface PagedIntents {
   totalPages: number;
 }
 
-function stubAgent(did: string): Agent {
+function stubAgent(did: string, name?: string): Agent {
   return {
     id: did,
-    name: shortDid(did),
+    name: name && name.trim() ? name.trim() : shortDid(did),
     score: 0,
     created: 0,
     interactions: 0,
@@ -259,14 +272,24 @@ function stubAgent(did: string): Agent {
 }
 
 function mapIntent(i: ApiIntent): Intent {
+  // Runtime is the gap between startedAt and endedAt (if ended), in ms.
+  let runtime = 0;
+  if (i.endedAt && i.startedAt) {
+    const start = new Date(i.startedAt).getTime();
+    const end = new Date(i.endedAt).getTime();
+    if (!Number.isNaN(start) && !Number.isNaN(end) && end >= start) {
+      runtime = end - start;
+    }
+  }
   return {
     id: i.intentID,
     name: i.status || "",
-    initiator: stubAgent(i.initiatorDID),
-    runtime: 0,
+    initiator: stubAgent(i.initiatorDID, i.initiatorName),
+    runtime,
     started: isoToMinutesAgo(i.startedAt),
-    agentsInteracted: 0,
-    toolsInteracted: 0,
+    agentsInteracted: i.agentsCount ?? 0,
+    toolsInteracted: i.toolsCount ?? 0,
+    interactionsCount: i.interactionsCount ?? 0,
     threats: i.threatDetected ? 1 : 0,
     score: 0,
     status: i.threatDetected ? "threat" : "safe",
@@ -275,7 +298,6 @@ function mapIntent(i: ApiIntent): Intent {
 
 export async function fetchIntents(page = 1): Promise<Intent[]> {
   const res = await apiRequest<PagedIntents>("/intent-list", { query: { page } });
-  console.log(`[GET /intent-list?page=${page}]`, res);
   return (res.intentsList || []).map(mapIntent);
 }
 
@@ -288,7 +310,6 @@ export interface PagedIntentsResult {
 
 export async function fetchIntentsPaged(page = 1): Promise<PagedIntentsResult> {
   const res = await apiRequest<PagedIntents>("/intent-list", { query: { page } });
-  console.log(`[GET /intent-list?page=${page}]`, res);
   return {
     items: (res.intentsList || []).map(mapIntent),
     total: res.total || 0,
@@ -297,8 +318,77 @@ export async function fetchIntentsPaged(page = 1): Promise<PagedIntentsResult> {
   };
 }
 
-export async function fetchSeries(_range: "24h" | "7d"): Promise<TimeSeries> {
+export async function fetchAllIntents(): Promise<Intent[]> {
+  const out: Intent[] = [];
+  for (let page = 1; page <= 200; page++) {
+    const res = await apiRequest<PagedIntents>("/intent-list", { query: { page } });
+    const items = (res.intentsList || []).map(mapIntent);
+    out.push(...items);
+    if (items.length === 0 || (res.totalPages && page >= res.totalPages)) break;
+  }
+  return out;
+}
+
+export async function fetchSeries(range: "24h" | "7d"): Promise<TimeSeries> {
+  if (isDummyMode()) {
+    return dummySeries(range);
+  }
   return { total: [], safe: [], threats: [] };
+}
+
+interface DummyInteractionForSeries {
+  time: string;
+  threat: boolean;
+}
+
+/**
+ * Bucket dummy interactions into hourly (24h) or daily (7d) slots ending "now".
+ * Built so the demo chart isn't flat — values come from the dummy.json times,
+ * augmented with a small synthetic baseline so we don't show a row of zeros.
+ */
+function dummySeries(range: "24h" | "7d"): TimeSeries {
+  const ix: DummyInteractionForSeries[] = (dummy.intents as Array<{ interactions: DummyInteractionForSeries[] }>)
+    .flatMap((i) => i.interactions);
+
+  const buckets = range === "24h" ? 24 : 7;
+  const stepMs = range === "24h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  // Anchor on the latest interaction so the chart fills the whole window even
+  // if "now" has drifted past the seeded times.
+  const latest = ix.reduce(
+    (m, x) => Math.max(m, new Date(x.time).getTime()),
+    new Date(dummy.intents[0]?.startedAt || "").getTime() || 0,
+  ) || Date.now();
+  const endMs = latest;
+  const startMs = endMs - (buckets - 1) * stepMs;
+
+  const safe = Array<number>(buckets).fill(0);
+  const threats = Array<number>(buckets).fill(0);
+
+  for (const x of ix) {
+    const t = new Date(x.time).getTime();
+    if (Number.isNaN(t)) continue;
+    const b = Math.floor((t - startMs) / stepMs);
+    if (b < 0 || b >= buckets) continue;
+    if (x.threat) threats[b]++;
+    else safe[b]++;
+  }
+
+  // Layer a deterministic baseline so the chart looks alive even when the
+  // bucketed dataset is sparse.
+  const baseline = range === "24h"
+    ? [4, 3, 2, 2, 3, 4, 6, 9, 12, 15, 17, 19, 22, 24, 23, 21, 19, 17, 15, 13, 11, 9, 7, 5]
+    : [42, 51, 48, 63, 70, 58, 66];
+  const threatBaseline = range === "24h"
+    ? [0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 4, 4, 3, 2, 2, 1, 1, 0, 0, 0, 0]
+    : [3, 5, 4, 6, 7, 5, 4];
+
+  for (let i = 0; i < buckets; i++) {
+    safe[i] += baseline[i] ?? 0;
+    threats[i] += threatBaseline[i] ?? 0;
+  }
+
+  const total = safe.map((v, i) => v + threats[i]);
+  return { total, safe, threats };
 }
 
 export async function fetchHeatmap(): Promise<HeatmapRow[]> {
@@ -322,7 +412,6 @@ interface ApiAgentInfo {
 export async function fetchAgent(id: string): Promise<Agent | null> {
   try {
     const r = await apiRequest<ApiAgentInfo>("/agent-info", { query: { agentDID: id } });
-    console.log(`[GET /agent-info?agentDID=${id}]`, r);
     return {
       id: r.agentDID,
       name: r.agentName,
@@ -354,7 +443,6 @@ interface ApiIntentInfo {
 async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null> {
   try {
     const res = await apiRequest<ApiIntentInfo>("/intent-info", { query: { intentID: id } });
-    console.log(`[GET /intent-info?intentID=${id}]`, res);
     return res;
   } catch (e) {
     console.warn(`[GET /intent-info?intentID=${id}] failed`, e);

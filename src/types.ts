@@ -36,6 +36,8 @@ export interface Intent {
   started: number;
   agentsInteracted: number;
   toolsInteracted: number;
+  /** Total interactions in this intent (from /intent-list). 0 when unknown. */
+  interactionsCount: number;
   threats: number;
   score: number;
   status: Status;
@@ -52,6 +54,8 @@ export interface Interaction {
   runtime: number;
   threat: boolean;
   created: number;
+  /** Backend-supplied block type (e.g. on-chain block category). Optional. */
+  blockType?: string;
 }
 
 export interface TimeSeries {

@@ -28,7 +28,6 @@ export async function listAllUsers(): Promise<OrgUser[]> {
   const out: OrgUser[] = [];
   for (let page = 1; page <= 200; page++) {
     const res = await listUsers(page);
-    console.log(`[GET /users-list?page=${page}]`, res);
     const items = res.usersList || [];
     out.push(...items);
     if (items.length === 0 || (res.totalPages && page >= res.totalPages)) break;
@@ -36,12 +35,30 @@ export async function listAllUsers(): Promise<OrgUser[]> {
   return out;
 }
 
-// ============ Proposed (backend not implemented yet) ============
+// ============ Admin: create user ============
 
-/** PROPOSED — admin creates a user with email + password (bcrypt-hashed server-side) */
-export function addUser(body: { email: string; password: string }): Promise<{ userID: string }> {
-  return apiRequest<{ userID: string }>("/admin-add-user", { method: "POST", body });
+export interface CreateUserBody {
+  did: string;
+  /** Optional — backend auto-assigns user_1, user_2, … when blank. */
+  name?: string;
+  email: string;
+  password: string;
+  orgID: string;
 }
+
+export interface CreateUserResponse {
+  did: string;
+  name: string;
+  email: string;
+  orgID: string;
+}
+
+/** Admin only — `nft_id` and `api_key` are auto-generated server-side. */
+export function addUser(body: CreateUserBody): Promise<CreateUserResponse> {
+  return apiRequest<CreateUserResponse>("/create-user", { method: "POST", body });
+}
+
+// ============ Proposed (backend not implemented yet) ============
 
 /** PROPOSED — returns the full agent_access_list for a user (admin only) */
 export function getUserAccessList(userDID: string): Promise<{ agentAccessList: string[] }> {

@@ -151,7 +151,7 @@ export function FlowCanvas({ flow, step }: FlowCanvasProps) {
             </span>
             <span className="lg">
               <span className="sw" style={{ background: NODE_DOT.tool }} />
-              Tool
+              App
             </span>
           </div>
         </div>

@@ -15,6 +15,22 @@ interface ChartProps {
   formatY?: (v: number) => string | number;
 }
 
+function computeNiceMax(max: number, ticks: number): number {
+  if (max <= 0) return ticks;
+  // Round the per-tick step to a "nice" 1/2/5×10^n number so the axis breathes
+  // with the data instead of jumping in 100s.
+  const roughStep = max / ticks;
+  const pow10 = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  const norm = roughStep / pow10;
+  let niceStep: number;
+  if (norm <= 1) niceStep = 1;
+  else if (norm <= 2) niceStep = 2;
+  else if (norm <= 5) niceStep = 5;
+  else niceStep = 10;
+  niceStep *= pow10;
+  return Math.ceil(max / niceStep) * niceStep;
+}
+
 export function Chart({ series, labels, style = "area", height = 280, formatY = (v) => v }: ChartProps) {
   const [hover, setHover] = useState<number | null>(null);
 
@@ -38,7 +54,9 @@ export function Chart({ series, labels, style = "area", height = 280, formatY = 
   const all = series.flatMap((s) => s.data);
   const max = Math.max(...all, 1);
   const ticks = 4;
-  const niceMax = Math.ceil(max / 100) * 100 || 1;
+  // Pick a Y-axis step that matches the data magnitude so bars use the full
+  // chart height instead of getting flattened to ~20% by a hard-coded /100.
+  const niceMax = computeNiceMax(max, ticks);
   const yTicks = Array.from({ length: ticks + 1 }, (_, i) => Math.round((niceMax / ticks) * i));
 
   const xFor = (i: number) => padL + (labels.length === 1 ? iw / 2 : (i / (labels.length - 1)) * iw);
@@ -85,7 +103,8 @@ export function Chart({ series, labels, style = "area", height = 280, formatY = 
 
         {series.map((s, sx) => {
           if (style === "bar") {
-            const bw = Math.max(2, ((iw / labels.length) * 0.6) / series.length);
+            // Use 85% of the slot for the bar group so bars are visibly wide.
+            const bw = Math.max(3, ((iw / labels.length) * 0.85) / series.length);
             return (
               <g key={s.key}>
                 {s.data.map((v, i) => (

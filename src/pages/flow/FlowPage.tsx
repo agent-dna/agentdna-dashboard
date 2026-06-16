@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon";
+import { TraceInspector } from "../../components/TraceInspector";
 import { useIntent, useIntentInteractions, useIntentsPaged } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
+import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { FlowCanvas } from "./FlowCanvas";
 import { buildFlowFromIntent, type Flow } from "./flowData";
 
@@ -14,6 +16,7 @@ export function FlowPage() {
   const { intentId: paramId } = useParams<{ intentId: string }>();
   const navigate = useNavigate();
   const resolve = useResolveName();
+  const intentLabel = useIntentLabel();
 
   const [intentsPage, setIntentsPage] = useState(1);
   const intentsState = useIntentsPaged(intentsPage);
@@ -21,11 +24,19 @@ export function FlowPage() {
   const intentsTotalPages = intentsState.data.totalPages || 1;
   const intentsTotal = intentsState.data.total || intents.length;
 
-  const fallbackId = !paramId && intents.length > 0 ? intents[0].id : undefined;
-  const activeId = paramId || readStored(STORAGE_KEY_INTENT) || fallbackId || "";
+  const knownIds = useMemo(() => new Set(intents.map((i) => i.id)), [intents]);
+  const stored = readStored(STORAGE_KEY_INTENT) || "";
+  // If the URL or storage points at an intent the current list doesn't know
+  // about (stale from a previous backend session, or a deleted intent), drop
+  // it and fall back to the newest intent on the current page.
+  const candidate = paramId || stored;
+  const candidateValid = candidate && (knownIds.size === 0 || knownIds.has(candidate));
+  const activeId = candidateValid ? candidate : intents.length > 0 ? intents[0].id : "";
 
   useEffect(() => {
-    if (!paramId && activeId) {
+    if (!activeId) return;
+    // Keep URL in sync with whichever intent is actually being rendered.
+    if (paramId !== activeId) {
       navigate(`/graph/${activeId}`, { replace: true });
     }
   }, [paramId, activeId, navigate]);
@@ -50,6 +61,7 @@ export function FlowPage() {
     return Number.isFinite(n) && n >= 0 ? n : 0;
   });
   const [playing, setPlaying] = useState(true);
+  const [inspectSpanId, setInspectSpanId] = useState<string | null>(null);
 
   // Clamp step when flow changes
   useEffect(() => {
@@ -129,14 +141,14 @@ export function FlowPage() {
               </div>
               <div className="fi-rows">
                 {intents.map((i) => {
-                  const hops = i.id === activeId && flow ? flow.steps.length : i.agentsInteracted + i.toolsInteracted;
+                  const hops = i.id === activeId && flow ? flow.steps.length : i.interactionsCount;
                   return (
                     <button
                       key={i.id}
                       className={`fi-row ${i.id === activeId ? "sel" : ""}`}
                       onClick={() => onPickIntent(i.id)}
                     >
-                      <span className="fi-hs">{shortHashTail(i.id)}</span>
+                      <span className="fi-hs">{intentLabel(i.id)}</span>
                       <span className="fi-hops">{hops} {hops === 1 ? "hop" : "hops"}</span>
                     </button>
                   );
@@ -147,7 +159,17 @@ export function FlowPage() {
           {flow && (
             <>
               <div className="flow-steps" ref={stepsRef}>
-                <div className="sl-cap">Trace · {N} hops</div>
+                <div className="sl-cap">
+                  Trace · {N} hops
+                  <button
+                    className="sl-data-btn"
+                    title="Inspect trace data"
+                    onClick={() => setInspectSpanId(flow.steps[step]?.spanId || flow.trace.trace.id)}
+                  >
+                    <Icon name="flow" size={12} />
+                    Data
+                  </button>
+                </div>
                 {flow.steps.map((s, i) => {
                   const from = flow.nodeById[s.from];
                   const to = flow.nodeById[s.to];
@@ -211,6 +233,14 @@ export function FlowPage() {
           </div>
         )}
       </div>
+
+      {inspectSpanId !== null && flow && (
+        <TraceInspector
+          trace={flow.trace}
+          openSpanId={inspectSpanId}
+          onClose={() => setInspectSpanId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -223,14 +253,6 @@ function NodeChip({ kind, name }: { kind: "human" | "agent" | "tool"; name: stri
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
     </span>
   );
-}
-
-function shortHashTail(id: string | undefined | null): string {
-  if (!id) return "—";
-  const parts = id.split("_");
-  const tail = parts.length > 1 ? parts.slice(1).join("_") : id;
-  if (tail.length <= 9) return tail;
-  return `${tail.slice(0, 5)}...${tail.slice(-4)}`;
 }
 
 function readStored(key: string): string | null {

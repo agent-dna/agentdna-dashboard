@@ -1,6 +1,7 @@
 import { useState, type MouseEvent } from "react";
 import { initials } from "../lib/format";
 import { Icon } from "./Icon";
+import { isDummyMode } from "../data/dummyRouter";
 
 interface EntityCellProps {
   name: string;
@@ -11,12 +12,14 @@ interface EntityCellProps {
 
 export function EntityCell({ name, sub, paletteIx = 0, icon }: EntityCellProps) {
   const av = `a${(paletteIx % 5) + 1}`;
+  // In dummy/demo mode the sub-line is the raw DID which we explicitly hide.
+  const showSub = !!sub && !isDummyMode();
   return (
     <div className="cell-name">
       <div className={`av ${av}`}>{icon || initials(name)}</div>
       <div className="nm">
         <div>{name}</div>
-        {sub && <div className="sub">{sub}</div>}
+        {showSub && <div className="sub">{sub}</div>}
       </div>
     </div>
   );

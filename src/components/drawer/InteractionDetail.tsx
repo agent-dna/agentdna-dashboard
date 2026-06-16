@@ -4,6 +4,7 @@ import { EntityCell } from "../EntityCell";
 import { DrawerSection } from "./DrawerSection";
 import { useDrawer } from "../../context/DrawerContext";
 import { useResolveName } from "../../context/DirectoryContext";
+import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { fmtRuntime, timeAgo } from "../../lib/format";
 import type { Interaction } from "../../types";
 
@@ -15,6 +16,7 @@ export function InteractionDetail({ interaction: i }: Props) {
   const { closeDrawer } = useDrawer();
   const navigate = useNavigate();
   const resolve = useResolveName();
+  const intentLabel = useIntentLabel();
 
   const openIntent = () => {
     if (!i.intent?.id) return;
@@ -131,7 +133,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                   fontWeight: 600,
                 }}
               >
-                Target · {targetKind}
+                Target · {targetKind === "tool" ? "app" : targetKind}
               </div>
               <EntityCell name={target.name} sub={i.target.id} paletteIx={(target.name.charCodeAt(2) || 0)} />
             </div>
@@ -146,6 +148,12 @@ export function InteractionDetail({ interaction: i }: Props) {
             <div className="v">{timeAgo(i.created)}</div>
             <div className="k">Runtime</div>
             <div className="v">{fmtRuntime(i.runtime)}</div>
+            {i.blockType && (
+              <>
+                <div className="k">Block type</div>
+                <div className="v" style={{ fontFamily: "var(--font-mono)" }}>{i.blockType}</div>
+              </>
+            )}
             <div className="k">Threat detected</div>
             <div className="v" style={{ color: i.threat ? "var(--threat)" : "var(--safe)" }}>
               {i.threat ? "true" : "false"}
@@ -170,7 +178,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                     textUnderlineOffset: 2,
                   }}
                 >
-                  {i.intent.id}
+                  {intentLabel(i.intent.id)}
                 </button>
               ) : (
                 "—"

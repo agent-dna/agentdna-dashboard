@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "../Modal";
 import { Icon } from "../Icon";
 import { PolicyFilePicker } from "./PolicyFilePicker";
+import { ViewPolicyModal } from "./ViewPolicyModal";
 import { errorStyle, formStyle, inputStyle, labelStyle } from "./styles";
 import {
   createAgentRequest,
@@ -27,6 +28,8 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
   const [requestInfo, setRequestInfo] = useState("");
   const [policyFile, setPolicyFile] = useState<File | null>(null);
   const [policyText, setPolicyText] = useState("");
+  const [policyEditOpen, setPolicyEditOpen] = useState(false);
+  const [viewPolicyOpen, setViewPolicyOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [submittedAgentName, setSubmittedAgentName] = useState<string | null>(null);
@@ -37,7 +40,11 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
       setAgentId(editTarget?.agentDID || "");
       setRequestInfo(editTarget?.requestInfo || "");
       setPolicyFile(null);
-      setPolicyText("");
+      // In edit mode, prefill the textarea with the existing policy so the user
+      // can tweak rather than rewrite from scratch.
+      setPolicyText(editTarget?.policy || "");
+      setPolicyEditOpen(false);
+      setViewPolicyOpen(false);
       setErr(null);
       setSubmittedAgentName(null);
     }
@@ -61,10 +68,13 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
     try {
       if (editing && editTarget) {
         // Edit endpoint stays JSON for now — multipart only required on create.
+        // If the user touched the policy editor, send the new text; otherwise
+        // pass through whatever was on the request so we don't wipe it.
+        const nextPolicy = policyEditOpen ? trimmedPolicyText : editTarget.policy || "";
         await editAgentRequest({
           requestID: editTarget.requestID,
           agentName: trimmedName,
-          policy: "default",
+          policy: nextPolicy,
           requestInfo: trimmedInfo,
           ...(trimmedId ? { agentID: trimmedId } : {}),
         });
@@ -206,7 +216,35 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
           </span>
         </label>
 
-        {!editing && (
+        {editing && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--fg-dim)" }}>Policy</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                className="btn"
+                style={{ padding: "6px 12px", fontSize: 12.5 }}
+                onClick={() => setViewPolicyOpen(true)}
+                disabled={!editTarget?.policy}
+                title={editTarget?.policy ? "View current policy" : "No policy attached"}
+              >
+                <Icon name="eye" size={13} />
+                View policy
+              </button>
+              <button
+                type="button"
+                className={`btn ${policyEditOpen ? "primary" : ""}`}
+                style={{ padding: "6px 12px", fontSize: 12.5 }}
+                onClick={() => setPolicyEditOpen((o) => !o)}
+              >
+                <Icon name="settings" size={13} />
+                {policyEditOpen ? "Cancel policy edit" : "Edit policy"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(!editing || policyEditOpen) && (
           <>
             <PolicyFilePicker
               file={policyFile}
@@ -214,7 +252,7 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
                 setPolicyFile(f);
                 if (f) setPolicyText("");
               }}
-              label="Policy file (.md / .txt)"
+              label={editing ? "Replace with new policy file (.md / .txt)" : "Policy file (.md / .txt)"}
             />
             <label style={labelStyle}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -243,6 +281,14 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
 
         {err && <div style={errorStyle}>{err}</div>}
       </form>
+
+      <ViewPolicyModal
+        open={viewPolicyOpen}
+        name={editTarget?.agentName || "Request policy"}
+        content={editTarget?.policy}
+        emptyMessage="No policy text on this request."
+        onClose={() => setViewPolicyOpen(false)}
+      />
     </Modal>
   );
 }

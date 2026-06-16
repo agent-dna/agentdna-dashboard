@@ -12,6 +12,8 @@ import { useIntent, useIntentInteractions, useIntentParticipants, useLogs } from
 import { useDrawer } from "../context/DrawerContext";
 import { fmtRuntime, timeAgo } from "../lib/format";
 import { useInteractionColumns } from "./InteractionsPage";
+import { exportIntentPdf } from "../lib/exportIntentPdf";
+import { useIntentLabel } from "../context/IntentNumbersContext";
 import type { IntentParticipant, Tool } from "../types";
 
 type Tab = "interactions" | "participants" | "logs";
@@ -27,6 +29,7 @@ export function IntentDetailPage() {
   const { data: participants } = useIntentParticipants(intentId);
   const { data: logs } = useLogs("intent", intentId);
   const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
+  const intentLabel = useIntentLabel();
 
   if (loading) {
     return (
@@ -43,7 +46,7 @@ export function IntentDetailPage() {
       <div className="page">
         <div className="stub">
           <h2>Intent not found</h2>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, marginTop: 6 }}>{intentId}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, marginTop: 6 }}>{intentLabel(intentId)}</div>
           <button className="btn" style={{ marginTop: 16 }} onClick={() => navigate("/intents")}>
             <Icon name="arrowRight" size={14} style={{ transform: "rotate(180deg)" }} /> Back to intents
           </button>
@@ -68,7 +71,7 @@ export function IntentDetailPage() {
           className={`chip ${r.type === "agent" ? "info" : "purple"}`}
           style={{ fontSize: 10.5, padding: "2px 7px" }}
         >
-          {r.type}
+          {r.type === "tool" ? "app" : r.type}
         </span>
       ),
     },
@@ -135,7 +138,7 @@ export function IntentDetailPage() {
           <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> Intents
         </button>
         <span style={{ color: "var(--fg-faint)" }}>/</span>
-        <span style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600 }}>{intent.id}</span>
+        <span style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600 }}>{intentLabel(intent.id)}</span>
       </div>
 
       {/* Hero info card */}
@@ -144,24 +147,9 @@ export function IntentDetailPage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 18,
-                fontWeight: 600,
-                color: "var(--fg)",
-                marginBottom: 16,
-                wordBreak: "break-all",
-              }}
-            >
-              {intent.id}
-            </div>
-
-            <div
-              style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(4, 1fr)",
                 gap: 24,
-                borderTop: "1px solid var(--line)",
-                paddingTop: 16,
               }}
             >
               <div>
@@ -177,22 +165,18 @@ export function IntentDetailPage() {
                 >
                   Initiator
                 </div>
-                <button
-                  onClick={() => navigate(`/agents/${intent.initiator.id}`)}
+                <div
                   style={{
-                    background: "transparent",
-                    border: "none",
-                    padding: 0,
-                    color: "var(--accent)",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    textAlign: "left",
+                    fontFamily: "var(--font-display)",
+                    fontSize: 20,
+                    fontWeight: 600,
+                    color: "var(--fg)",
+                    letterSpacing: "-0.01em",
+                    wordBreak: "break-word",
                   }}
                 >
-                  {intent.initiator.name}
-                </button>
+                  {intent.initiator.name || "—"}
+                </div>
               </div>
               <InfoStat label="Runtime" value={fmtRuntime(intent.runtime)} mono />
               <InfoStat label="Started" value={timeAgo(intent.started)} />
@@ -213,13 +197,12 @@ export function IntentDetailPage() {
               <Icon name="flow" size={14} />
               View Flow
             </button>
-            <button className="btn">
+            <button
+              className="btn"
+              onClick={() => exportIntentPdf({ intent, interactions, participants })}
+            >
               <Icon name="download" size={14} />
-              Trace
-            </button>
-            <button className="btn">
-              <Icon name="refresh" size={14} />
-              Re-run
+              Export
             </button>
           </div>
         </div>
@@ -229,7 +212,7 @@ export function IntentDetailPage() {
       <div className="metrics">
         <MetricTile label="Interactions" value={interactions.length} icon="activity" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Agents touched" value={intent.agentsInteracted} icon="agents" sparkColor="#0EA5E9" spark={[]} />
-        <MetricTile label="Tools touched" value={intent.toolsInteracted} icon="box" sparkColor="#0A2240" spark={[]} />
+        <MetricTile label="Apps touched" value={intent.toolsInteracted} icon="box" sparkColor="#0A2240" spark={[]} />
         <MetricTile label="Threats" value={intent.threats} icon="shield" sparkColor="#DC2626" spark={[]} />
       </div>
 
@@ -240,7 +223,7 @@ export function IntentDetailPage() {
           onChange={(k) => setTab(k as Tab)}
           tabs={[
             { key: "interactions", label: "Interactions", count: interactions.length },
-            { key: "participants", label: "Agents & Tools", count: participants.length },
+            { key: "participants", label: "Agents & Apps", count: participants.length },
             { key: "logs", label: "Logs", count: logs.length },
           ]}
         />

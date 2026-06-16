@@ -87,7 +87,7 @@ export function IntentDetail({ intent: i }: Props) {
             <div className="v">{fmtRuntime(i.runtime)}</div>
             <div className="k">Agents touched</div>
             <div className="v">{i.agentsInteracted}</div>
-            <div className="k">Tools touched</div>
+            <div className="k">Apps touched</div>
             <div className="v">{i.toolsInteracted}</div>
             <div className="k">Threats</div>
             <div className="v" style={{ color: i.threats > 0 ? "var(--threat)" : "var(--safe)" }}>{i.threats}</div>

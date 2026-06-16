@@ -5,6 +5,7 @@ import { PolicyFilePicker } from "./PolicyFilePicker";
 import { addUser } from "../../api/users";
 import { uploadUserPolicy } from "../../api/policy";
 import { ApiError } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 
 interface Props {
   open: boolean;
@@ -13,30 +14,56 @@ interface Props {
 }
 
 export function AddUserModal({ open, onClose, onSuccess }: Props) {
+  const { user } = useAuth();
+  const defaultOrg = user?.org_id || "";
+
+  const [did, setDid] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [orgID, setOrgID] = useState(defaultOrg);
   const [policyFile, setPolicyFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
+      setDid("");
+      setName("");
       setEmail("");
       setPassword("");
+      setOrgID(defaultOrg);
       setPolicyFile(null);
       setErr(null);
     }
-  }, [open]);
+  }, [open, defaultOrg]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErr(null);
+    const trimmedDid = did.trim();
+    const trimmedEmail = email.trim();
+    const trimmedOrg = orgID.trim();
+    if (!trimmedDid) {
+      setErr("DID is required.");
+      return;
+    }
+    if (!trimmedOrg) {
+      setErr("Org ID is required.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const res = await addUser({ email: email.trim(), password });
+      const res = await addUser({
+        did: trimmedDid,
+        name: name.trim() || undefined,
+        email: trimmedEmail,
+        password,
+        orgID: trimmedOrg,
+      });
       if (policyFile) {
         try {
-          await uploadUserPolicy(res.userID, policyFile);
+          await uploadUserPolicy(res.did, policyFile);
         } catch (uploadErr) {
           // User was created but policy upload failed — surface it but don't block.
           setErr(
@@ -71,6 +98,31 @@ export function AddUserModal({ open, onClose, onSuccess }: Props) {
     >
       <form id="add-user-form" onSubmit={onSubmit} style={formStyle}>
         <label style={labelStyle}>
+          DID
+          <input
+            type="text"
+            required
+            value={did}
+            onChange={(e) => setDid(e.target.value)}
+            placeholder="bafybmi…"
+            style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: 12.5 }}
+            autoComplete="off"
+          />
+        </label>
+
+        <label style={labelStyle}>
+          Name
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Optional — leave blank for auto user_1, user_2, …"
+            style={inputStyle}
+            autoComplete="off"
+          />
+        </label>
+
+        <label style={labelStyle}>
           Email
           <input
             type="email"
@@ -81,6 +133,7 @@ export function AddUserModal({ open, onClose, onSuccess }: Props) {
             style={inputStyle}
           />
         </label>
+
         <label style={labelStyle}>
           Initial password
           <input
@@ -96,6 +149,23 @@ export function AddUserModal({ open, onClose, onSuccess }: Props) {
             Share this with the user securely. They can change it after first sign-in.
           </span>
         </label>
+
+        <label style={labelStyle}>
+          Org ID
+          <input
+            type="text"
+            required
+            value={orgID}
+            onChange={(e) => setOrgID(e.target.value)}
+            placeholder="Test_Org"
+            style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: 12.5 }}
+            autoComplete="off"
+          />
+          <span style={{ fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400 }}>
+            Defaults to your org. Change only if assigning the user to a different org.
+          </span>
+        </label>
+
         <PolicyFilePicker file={policyFile} onChange={setPolicyFile} label="User policy (optional, .md / .txt)" />
         {err && <div style={errorStyle}>{err}</div>}
       </form>

@@ -108,7 +108,7 @@ export function AgentsToolsPage() {
     },
     {
       key: "connected",
-      label: "Tools used",
+      label: "Apps used",
       align: "right",
       sortFn: (a, b) => a.connected - b.connected,
       render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.connected}</span>,
@@ -137,7 +137,7 @@ export function AgentsToolsPage() {
   const toolCols: DataTableColumn<Tool>[] = [
     {
       key: "name",
-      label: "Tool",
+      label: "App",
       sortFn: (a, b) => a.name.localeCompare(b.name),
       render: (r) => (
         <EntityCell name={r.name} sub={r.provider} paletteIx={r.name.charCodeAt(0)} icon={r.provider.slice(0, 2).toUpperCase()} />
@@ -220,7 +220,7 @@ export function AgentsToolsPage() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Agents &amp; Tools</h1>
+          <h1>Agents &amp; Apps</h1>
           <div className="sub">Identity-verified actors and the capabilities they can invoke</div>
         </div>
         <div className="right">
@@ -290,7 +290,7 @@ export function AgentsToolsPage() {
               spark={[]}
             />
             <MetricTile
-              label="Tools Reached"
+              label="Apps Reached"
               value={agents.reduce((a, x) => a + x.connected, 0)}
               icon="box"
               sparkColor="#0A2240"
@@ -299,7 +299,7 @@ export function AgentsToolsPage() {
           </>
         ) : (
           <>
-            <MetricTile label="Total Tools" value={tools.length} icon="box" sparkColor="#2563EB" spark={[]} />
+            <MetricTile label="Total Apps" value={tools.length} icon="box" sparkColor="#2563EB" spark={[]} />
             <MetricTile
               label="Avg. Reliability"
               value={tools.length ? Math.round(tools.reduce((a, x) => a + x.score, 0) / tools.length) : 0}
@@ -341,7 +341,7 @@ export function AgentsToolsPage() {
           showStats={true}
         />
         <TopList
-          title="Top tools by volume"
+          title="Top apps by volume"
           subtitle="Ranked by interactions"
           rows={[...tools].sort((a, b) => b.interactions - a.interactions).slice(0, 5)}
           accent="var(--accent-3)"
@@ -357,7 +357,7 @@ export function AgentsToolsPage() {
           tabs={[
             ...(!isAdmin ? [{ key: "my-access", label: "My Access", count: myAccessAgents.length }] : []),
             { key: "agents", label: "Agents", count: agents.length },
-            { key: "tools", label: "Tools", count: tools.length },
+            { key: "tools", label: "Apps", count: tools.length },
           ]}
         />
 

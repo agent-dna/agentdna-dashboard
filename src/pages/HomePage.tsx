@@ -70,7 +70,7 @@ export function HomePage() {
           spark={data.total}
         />
         <MetricTile label="Threats Detected" value={metrics.threatCount} icon="shield" sparkColor="#DC2626" spark={data.threats} />
-        <MetricTile label="Active Intents" value={metrics.intentCount} icon="intents" sparkColor="#0A2240" spark={[]} />
+        <MetricTile label="Total Intents" value={metrics.intentCount} icon="intents" sparkColor="#0A2240" spark={[]} />
       </div>
 
       <div className="grid-2">
@@ -103,7 +103,7 @@ export function HomePage() {
             <Chart
               labels={labels}
               style={tweaks.chartStyle}
-              height={260}
+              height={272}
               formatY={(v) => (typeof v === "number" && v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)}
               series={[
                 { key: "safe", label: "Safe", color: "#2563EB", data: data.safe },
@@ -113,7 +113,7 @@ export function HomePage() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card" style={{ display: "flex", flexDirection: "column" }}>
           <div className="card-head">
             <h3>Top agents by volume</h3>
             <div className="actions">
@@ -122,7 +122,16 @@ export function HomePage() {
               </button>
             </div>
           </div>
-          <div style={{ padding: "0 8px 8px" }}>
+          <div
+            style={{
+              padding: "4px 8px 12px",
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: 4,
+            }}
+          >
             {metrics.agentList.length === 0 && (
               <div style={{ padding: 24, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>
                 {homeState.loading ? "Loading…" : "No agents yet."}
@@ -140,17 +149,18 @@ export function HomePage() {
                       gridTemplateColumns: "auto 1fr auto",
                       gap: 12,
                       alignItems: "center",
-                      padding: "10px 14px",
+                      padding: "14px 14px",
                       borderRadius: 8,
                       cursor: "pointer",
+                      flex: 1,
                     }}
                     onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)")}
                     onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
                   >
                     <div
                       style={{
-                        width: 22,
-                        height: 22,
+                        width: 24,
+                        height: 24,
                         borderRadius: 6,
                         background: "var(--bg-3)",
                         display: "grid",
@@ -163,7 +173,7 @@ export function HomePage() {
                       {String(i + 1).padStart(2, "0")}
                     </div>
                     <div>
-                      <div style={{ fontSize: 13, marginBottom: 4 }}>{a.agentName}</div>
+                      <div style={{ fontSize: 13, marginBottom: 6 }}>{a.agentName}</div>
                       <div style={{ height: 4, borderRadius: 2, background: "var(--bg-3)", overflow: "hidden" }}>
                         <div
                           style={{

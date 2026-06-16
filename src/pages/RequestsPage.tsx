@@ -3,13 +3,16 @@ import { Icon } from "../components/Icon";
 import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
+import { DeployAgentModal, type DeployPhase } from "../components/forms/DeployAgentModal";
 import { UsersTab } from "./requests/UsersTab";
 import { useAuth } from "../context/AuthContext";
+import { useResolveName } from "../context/DirectoryContext";
 import { ApiError } from "../api/client";
 import {
   listAccessRequestsForOrg,
   listAccessRequestsForUser,
   listAgentCreationRequests,
+  listAgentCreationRequestsForUser,
   submitAccessRequestResult,
   submitAgentCreationResult,
   type AgentRequest,
@@ -62,6 +65,7 @@ function Pagination({
 export function RequestsPage() {
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
+  const resolve = useResolveName();
 
   const [tab, setTab] = useState<TabKey>("creation");
   const [page, setPage] = useState(1);
@@ -73,6 +77,12 @@ export function RequestsPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AgentRequest | null>(null);
+  const [deploy, setDeploy] = useState<{
+    open: boolean;
+    phase: DeployPhase;
+    agentName?: string;
+    errorMessage?: string;
+  }>({ open: false, phase: "loading" });
 
   const load = useCallback(async () => {
     if (tab === "users") return; // Users tab handles its own fetch
@@ -81,7 +91,9 @@ export function RequestsPage() {
     try {
       const fetcher =
         tab === "creation"
-          ? listAgentCreationRequests
+          ? isAdmin
+            ? listAgentCreationRequests
+            : listAgentCreationRequestsForUser
           : tab === "access-org"
           ? listAccessRequestsForOrg
           : listAccessRequestsForUser;
@@ -97,21 +109,54 @@ export function RequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [tab, page]);
+  }, [tab, page, isAdmin]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setPage(1); }, [tab]);
 
   const handleApprove = async (r: AgentRequest, status: "approved" | "rejected") => {
+    // Approving a deploy_agent request → open the deploy modal so the admin sees
+    // a "Deploying your agent securely" → "Deployed" affordance instead of a
+    // silent button. Rejections + access requests stay snappy/silent.
+    const showDeployModal = r.requestType === "deploy_agent" && status === "approved";
+    if (showDeployModal) {
+      setDeploy({ open: true, phase: "loading", agentName: r.agentName });
+    }
+    // Keep the spinner on screen long enough to read, even if the API is fast
+    // (the dummy router resolves instantly).
+    const MIN_VISIBLE_MS = 1400;
+    const startedAt = performance.now();
     try {
       if (r.requestType === "deploy_agent") {
         await submitAgentCreationResult(r.requestID, status);
       } else {
         await submitAccessRequestResult(r.requestID, status);
       }
-      load();
+      if (showDeployModal) {
+        const elapsed = performance.now() - startedAt;
+        if (elapsed < MIN_VISIBLE_MS) {
+          await new Promise((res) => window.setTimeout(res, MIN_VISIBLE_MS - elapsed));
+        }
+        setDeploy((d) => ({ ...d, phase: "done" }));
+        // Auto-close the "Deployed" card after a beat and refresh the list.
+        window.setTimeout(() => {
+          setDeploy({ open: false, phase: "loading" });
+          load();
+        }, 1500);
+      } else {
+        load();
+      }
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Action failed");
+      const message = err instanceof ApiError ? err.message : "Action failed";
+      if (showDeployModal) {
+        const elapsed = performance.now() - startedAt;
+        if (elapsed < MIN_VISIBLE_MS) {
+          await new Promise((res) => window.setTimeout(res, MIN_VISIBLE_MS - elapsed));
+        }
+        setDeploy((d) => ({ ...d, phase: "error", errorMessage: message }));
+      } else {
+        alert(message);
+      }
     }
   };
 
@@ -129,25 +174,41 @@ export function RequestsPage() {
     {
       key: "agentName",
       label: "Agent",
-      render: (r) => (
-        <div>
-          <div style={{ fontSize: 13.5, color: "var(--fg)" }}>{r.agentName || "—"}</div>
-          {r.agentDID && (
-            <div style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--fg-muted)", marginTop: 2 }}>
-              {r.agentDID.slice(0, 24)}…
-            </div>
-          )}
-        </div>
-      ),
+      render: (r) => {
+        // Prefer the agentName from the request; if missing, try resolving the
+        // agentDID via the directory; finally fall back to a short DID.
+        let label = r.agentName?.trim();
+        if (!label && r.agentDID) {
+          const hit = resolve(r.agentDID);
+          if (hit.kind && hit.name) label = hit.name;
+        }
+        if (!label && r.agentDID) label = `${r.agentDID.slice(0, 18)}…`;
+        return (
+          <div style={{ fontSize: 13.5, color: "var(--fg)", fontWeight: 600 }}>{label || "—"}</div>
+        );
+      },
     },
     {
       key: "creatorDID",
       label: "Creator",
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-dim)" }}>
-          {r.creatorDID ? `${r.creatorDID.slice(0, 18)}…` : "—"}
-        </span>
-      ),
+      render: (r) => {
+        if (!r.creatorDID) return "—";
+        const hit = resolve(r.creatorDID);
+        const label = hit.kind && hit.name ? hit.name : `${r.creatorDID.slice(0, 18)}…`;
+        const isMono = !hit.kind;
+        return (
+          <span
+            style={{
+              fontFamily: isMono ? "var(--font-mono)" : "var(--font-body)",
+              fontSize: 12.5,
+              fontWeight: hit.kind ? 600 : 500,
+              color: hit.kind ? "var(--fg)" : "var(--fg-dim)",
+            }}
+          >
+            {label}
+          </span>
+        );
+      },
     },
     { key: "status", label: "Status", render: (r) => <StatusChip status={r.status} /> },
     {
@@ -167,7 +228,11 @@ export function RequestsPage() {
       width: 220,
       render: (r) => {
         const isCreator = r.creatorDID === user?.did;
-        const canEdit = tab === "creation" && isCreator && r.status === "pending";
+        // Admin can edit any pending creation request; non-admins only their own.
+        // Backend will still enforce creator-only on /agents-creation-requests-edit,
+        // so as an admin the call may 403 unless the backend allows admin override.
+        const canEdit =
+          tab === "creation" && r.status === "pending" && (isCreator || isAdmin);
         const canApprove =
           isAdmin && r.status === "pending" && (tab === "creation" || tab === "access-org");
         return (
@@ -306,6 +371,16 @@ export function RequestsPage() {
         onSuccess={() => {
           setEditTarget(null);
           load();
+        }}
+      />
+      <DeployAgentModal
+        open={deploy.open}
+        phase={deploy.phase}
+        agentName={deploy.agentName}
+        errorMessage={deploy.errorMessage}
+        onClose={() => {
+          setDeploy({ open: false, phase: "loading" });
+          if (deploy.phase === "done") load();
         }}
       />
     </div>

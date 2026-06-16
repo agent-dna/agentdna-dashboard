@@ -6,6 +6,7 @@ import { IdCell } from "../components/EntityCell";
 import { useInteractions } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
 import { useResolveName } from "../context/DirectoryContext";
+import { useIntentLabel } from "../context/IntentNumbersContext";
 import { timeAgo } from "../lib/format";
 import type { Interaction } from "../types";
 
@@ -25,6 +26,7 @@ export function useInteractionColumns(
   openDrawer: (kind: "interaction", e: Interaction) => void,
 ): DataTableColumn<Interaction>[] {
   const resolve = useResolveName();
+  const intentLabel = useIntentLabel();
   return [
     {
       key: "id",
@@ -54,7 +56,15 @@ export function useInteractionColumns(
         </span>
       ),
     },
-    { key: "intent", label: "Intent", render: (r) => <IdCell id={r.intent.id} truncate /> },
+    {
+      key: "intent",
+      label: "Intent",
+      render: (r) => (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--accent)", fontWeight: 600 }}>
+          {intentLabel(r.intent.id)}
+        </span>
+      ),
+    },
     {
       key: "threat",
       label: "Threat",

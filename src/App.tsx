@@ -30,7 +30,7 @@ export function App() {
   const NAV_WORKSPACE: NavEntry[] = [
     { to: "/", label: "Home", icon: "home" },
     { to: "/intents", label: "Intents", icon: "intents" },
-    { to: "/agents", label: "Agents & Tools", icon: "agents" },
+    { to: "/agents", label: "Agents & Apps", icon: "agents" },
     { to: "/graph", label: "Flow", icon: "activity" },
     { to: "/requests", label: "Requests", icon: "box" },
     { to: "/interactions", label: "Interactions", icon: "interactions" },

@@ -12,6 +12,8 @@ import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { useAgent, useAgentInteractions, useAgentIntents, useAgentPolicyHistory } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
+import { useIntentLabel } from "../context/IntentNumbersContext";
+import { isDummyMode } from "../data/dummyRouter";
 import { fmtRuntime, initials, timeAgo } from "../lib/format";
 import { useInteractionColumns } from "./InteractionsPage";
 import type { Intent } from "../types";
@@ -41,6 +43,7 @@ export function AgentDetailPage() {
   const { data: intents } = useAgentIntents(agentId);
   const { data: history } = useAgentPolicyHistory(agentId);
   const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
+  const intentLabel = useIntentLabel();
 
   const openHistoryRevision = (entry: PolicyHistoryEntry) => {
     setHistoryOpen(entry);
@@ -89,7 +92,15 @@ export function AgentDetailPage() {
   }
 
   const intentCols: DataTableColumn<Intent>[] = [
-    { key: "id", label: "Intent ID", render: (r) => <IdCell id={r.id} truncate /> },
+    {
+      key: "id",
+      label: "Intent",
+      render: (r) => (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
+          {intentLabel(r.id)}
+        </span>
+      ),
+    },
     {
       key: "runtime",
       label: "Runtime",
@@ -104,7 +115,7 @@ export function AgentDetailPage() {
     },
     {
       key: "tools",
-      label: "Tools",
+      label: "Apps",
       align: "right",
       render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.toolsInteracted}</span>,
     },
@@ -175,7 +186,9 @@ export function AgentDetailPage() {
           <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> Agents
         </button>
         <span style={{ color: "var(--fg-faint)" }}>/</span>
-        <span style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600 }}>{agent.id}</span>
+        <span style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600 }}>
+          {isDummyMode() ? agent.name : agent.id}
+        </span>
       </div>
 
       {/* Hero info card */}
@@ -222,9 +235,11 @@ export function AgentDetailPage() {
                 agent
               </span>
             </div>
-            <div style={{ color: "var(--fg-muted)", fontSize: 13, fontFamily: "var(--font-mono)", marginBottom: 16 }}>
-              {agent.id}
-            </div>
+            {!isDummyMode() && (
+              <div style={{ color: "var(--fg-muted)", fontSize: 13, fontFamily: "var(--font-mono)", marginBottom: 16 }}>
+                {agent.id}
+              </div>
+            )}
 
             <div
               style={{
@@ -238,7 +253,7 @@ export function AgentDetailPage() {
               <InfoStat label="Owner" value={agent.owner} />
               <InfoStat label="Environment" value={agent.env} />
               <InfoStat label="Created" value={timeAgo(agent.created)} />
-              <InfoStat label="Connected tools" value={agent.connected} mono />
+              <InfoStat label="Connected apps" value={agent.connected} mono />
             </div>
           </div>
 

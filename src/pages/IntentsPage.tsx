@@ -4,9 +4,9 @@ import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { FilterPill } from "../components/FilterPill";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { IdCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { useIntents } from "../data/hooks";
+import { useIntentLabel } from "../context/IntentNumbersContext";
 import { fmtRuntime, timeAgo } from "../lib/format";
 import type { Intent } from "../types";
 
@@ -15,6 +15,7 @@ export function IntentsPage() {
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
   const { data: intents } = useIntents();
   const navigate = useNavigate();
+  const intentLabel = useIntentLabel();
 
   let rows = intents;
   if (filter === "threats") rows = rows.filter((r) => r.threats > 0);
@@ -31,9 +32,13 @@ export function IntentsPage() {
   const cols: DataTableColumn<Intent>[] = [
     {
       key: "id",
-      label: "Intent ID",
+      label: "Intent",
       sortFn: (a, b) => a.id.localeCompare(b.id),
-      render: (r) => <IdCell id={r.id} truncate />,
+      render: (r) => (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
+          {intentLabel(r.id)}
+        </span>
+      ),
     },
     {
       key: "name",
@@ -53,8 +58,12 @@ export function IntentsPage() {
     {
       key: "initiator",
       label: "Initiator",
-      sortFn: (a, b) => a.initiator.id.localeCompare(b.initiator.id),
-      render: (r) => <IdCell id={r.initiator.id} truncate />,
+      sortFn: (a, b) => a.initiator.name.localeCompare(b.initiator.name),
+      render: (r) => (
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>
+          {r.initiator.name || "—"}
+        </span>
+      ),
     },
     {
       key: "runtime",
@@ -67,11 +76,9 @@ export function IntentsPage() {
       key: "interactions",
       label: "Interactions",
       align: "right",
-      sortFn: (a, b) => a.agentsInteracted + a.toolsInteracted - (b.agentsInteracted + b.toolsInteracted),
+      sortFn: (a, b) => a.interactionsCount - b.interactionsCount,
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>
-          {r.agentsInteracted + r.toolsInteracted}
-        </span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactionsCount}</span>
       ),
     },
     {
@@ -94,7 +101,7 @@ export function IntentsPage() {
       align: "right",
       sortFn: (a, b) => a.score - b.score,
       render: (r) => {
-        const ix = r.agentsInteracted + r.toolsInteracted;
+        const ix = r.interactionsCount;
         if (ix <= 0) {
           return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
         }
@@ -150,9 +157,9 @@ export function IntentsPage() {
       </div>
 
       <div className="metrics">
-        <MetricTile label="Active Intents" value={intents.length} icon="intents" sparkColor="#2563EB" spark={[]} />
+        <MetricTile label="Total Intent" value={intents.length} icon="intents" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Agents Engaged" value={totalAgents} icon="agents" sparkColor="#0EA5E9" spark={[]} />
-        <MetricTile label="Tools Engaged" value={totalTools} icon="box" sparkColor="#0A2240" spark={[]} />
+        <MetricTile label="Apps Engaged" value={totalTools} icon="box" sparkColor="#0A2240" spark={[]} />
         <MetricTile label="Threats Flagged" value={totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
       </div>
 

@@ -25,8 +25,14 @@ export interface PagedRequests {
 
 // ============ Agent Creation Requests ============
 
+/** Admin-only: every creation request in the org. */
 export function listAgentCreationRequests(page = 1): Promise<PagedRequests> {
   return apiRequest<PagedRequests>("/agents-creation-requests-list", { query: { page } });
+}
+
+/** Any logged-in user: only their own creation requests. */
+export function listAgentCreationRequestsForUser(page = 1): Promise<PagedRequests> {
+  return apiRequest<PagedRequests>("/agents-creation-requests-list-user", { query: { page } });
 }
 
 export interface CreateAgentRequestBody {
