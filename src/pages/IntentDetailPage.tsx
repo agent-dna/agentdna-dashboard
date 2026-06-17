@@ -64,18 +64,6 @@ export function IntentDetailPage() {
       render: (r) => <EntityCell name={r.entity.name} sub={r.entity.id} paletteIx={r.entity.name.charCodeAt(0)} />,
     },
     {
-      key: "type",
-      label: "Type",
-      render: (r) => (
-        <span
-          className={`chip ${r.type === "agent" ? "info" : "purple"}`}
-          style={{ fontSize: 10.5, padding: "2px 7px" }}
-        >
-          {r.type === "tool" ? "app" : r.type}
-        </span>
-      ),
-    },
-    {
       key: "count",
       label: "Interactions in this intent",
       align: "right",
