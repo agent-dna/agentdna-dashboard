@@ -9,13 +9,6 @@ export interface PolicyFile {
   uploadedAt?: string;
 }
 
-/**
- * PROPOSED — fetch a user's current policy file content. Admin viewing any
- * user's policy or user viewing their own.
- * Suggested contract: `GET /user-policy?userDID=<did>`.
- *
- * (Agent policies don't need a dedicated GET — they ride along in /agent-info.)
- */
 export function fetchUserPolicy(userDID: string): Promise<PolicyFile> {
   return apiRequest<PolicyFile>("/user-policy", { query: { userDID } });
 }

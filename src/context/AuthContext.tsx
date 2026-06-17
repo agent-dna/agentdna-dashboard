@@ -10,7 +10,7 @@ export interface AuthUser {
   email: string;
   org_id: string;
   api_key: string;
-  nft_id?: string;
+  userCardId?: string;
   is_admin: boolean;
   agent_access_list?: string[];
 }
@@ -71,7 +71,7 @@ function userFromToken(token: string | null): AuthUser | null {
     email: identifier,
     org_id: claims.org_id || "",
     api_key: claims.api_key || "",
-    nft_id: claims.nft_id,
+    userCardId: claims.nft_id,
     // Admin JWT has no is_admin field — treat as admin if sub is present and no email
     is_admin: claims.is_admin !== undefined ? !!claims.is_admin : !!claims.sub && !claims.email,
   };
@@ -93,7 +93,7 @@ function dummyUser(): AuthUser {
     email: u.email,
     org_id: u.org_id,
     api_key: u.api_key,
-    nft_id: u.nft_id,
+    userCardId: u.nft_id,
     is_admin: u.is_admin,
   };
 }
@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: res.email,
       org_id: res.org_id,
       api_key: res.api_key,
-      nft_id: res.nft_id,
+      userCardId: res.nft_id,
       is_admin: res.is_admin,
       agent_access_list: res.agent_access_list,
     };

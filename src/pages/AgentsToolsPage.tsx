@@ -58,7 +58,7 @@ export function AgentsToolsPage() {
     },
     {
       key: "id",
-      label: "ID",
+      label: "Agent ID",
       sortFn: (a, b) => a.id.localeCompare(b.id),
       render: (r) => <IdCell id={r.id} truncate truncateLength={10} />,
     },
@@ -143,7 +143,7 @@ export function AgentsToolsPage() {
         <EntityCell name={r.name} sub={r.provider} paletteIx={r.name.charCodeAt(0)} icon={r.provider.slice(0, 2).toUpperCase()} />
       ),
     },
-    { key: "id", label: "ID", sortFn: (a, b) => a.id.localeCompare(b.id), render: (r) => <IdCell id={r.id} /> },
+    { key: "id", label: "App ID", sortFn: (a, b) => a.id.localeCompare(b.id), render: (r) => <IdCell id={r.id} /> },
     {
       key: "score",
       label: "Reliability",

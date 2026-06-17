@@ -208,7 +208,7 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
             type="text"
             value={agentId}
             onChange={(e) => setAgentId(e.target.value)}
-            placeholder="did:rubix:agent…"
+            placeholder="Optional agent ID…"
             style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: 12.5 }}
           />
           <span style={{ fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400 }}>

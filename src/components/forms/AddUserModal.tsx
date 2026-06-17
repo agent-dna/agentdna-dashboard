@@ -16,7 +16,7 @@ export function AddUserModal({ open, onClose, onSuccess }: Props) {
   const { user } = useAuth();
   const defaultOrg = user?.org_id || "";
 
-  const [did, setDid] = useState("");
+  const [userId, setUserId] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,7 +27,7 @@ export function AddUserModal({ open, onClose, onSuccess }: Props) {
 
   useEffect(() => {
     if (open) {
-      setDid("");
+      setUserId("");
       setName("");
       setEmail("");
       setPassword("");
@@ -40,15 +40,15 @@ export function AddUserModal({ open, onClose, onSuccess }: Props) {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErr(null);
-    const trimmedDid = did.trim();
+    const trimmedUserId = userId.trim();
     const trimmedEmail = email.trim();
     const trimmedOrg = orgID.trim();
-    if (!trimmedDid) { setErr("DID is required."); return; }
+    if (!trimmedUserId) { setErr("User ID is required."); return; }
     if (!trimmedOrg) { setErr("Org ID is required."); return; }
     setSubmitting(true);
     try {
       await addUser({
-        did: trimmedDid,
+        did: trimmedUserId,
         name: name.trim() || undefined,
         email: trimmedEmail,
         password,
@@ -90,12 +90,12 @@ export function AddUserModal({ open, onClose, onSuccess }: Props) {
       <form id="add-user-form" onSubmit={onSubmit} style={formStyle}>
 
         <label style={labelStyle}>
-          DID
+          User ID
           <input
             type="text"
             required
-            value={did}
-            onChange={(e) => setDid(e.target.value)}
+            value={userId}
+            onChange={(e) => setUserId(e.target.value)}
             placeholder="bafybmi…"
             style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: 12.5 }}
             autoComplete="off"
