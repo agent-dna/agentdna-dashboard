@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { AddUserModal } from "../../components/forms/AddUserModal";
-import { UserAccessDrawer } from "../../components/forms/UserAccessDrawer";
 import { listUsers, type OrgUser } from "../../api/users";
 import { ApiError } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
@@ -27,7 +26,6 @@ export function UsersTab() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [drawerUser, setDrawerUser] = useState<OrgUser | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,8 +58,6 @@ export function UsersTab() {
         </span>
       ),
     },
-    { key: "accessAgentCount", label: "Agents", align: "right",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)" }}>{r.accessAgentCount}</span> },
     { key: "totalIntents", label: "Intents", align: "right",
       render: (r) => <span style={{ fontFamily: "var(--font-mono)" }}>{r.totalIntents}</span> },
     { key: "totalThreats", label: "Threats", align: "right",
@@ -70,25 +66,6 @@ export function UsersTab() {
         : <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)" }}>0</span> },
     { key: "createdAt", label: "Created", align: "right",
       render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)" }}>{fmtDate(r.createdAt)}</span> },
-    {
-      key: "actions",
-      label: "",
-      align: "right",
-      width: 100,
-      render: (r) => (
-        <div className="row-actions">
-          <button
-            className="btn-mini"
-            onClick={(e) => {
-              e.stopPropagation();
-              setDrawerUser(r);
-            }}
-          >
-            Manage
-          </button>
-        </div>
-      ),
-    },
   ];
 
   return (
@@ -135,7 +112,6 @@ export function UsersTab() {
       <DataTable
         rows={rows.map((r) => ({ ...r, id: r.userID }))}
         columns={cols}
-        onRowClick={(r) => setDrawerUser(r)}
         emptyText={loading ? "Loading…" : "No users in this org yet"}
       />
 
@@ -146,11 +122,6 @@ export function UsersTab() {
           setAddOpen(false);
           load();
         }}
-      />
-      <UserAccessDrawer
-        user={drawerUser}
-        onClose={() => setDrawerUser(null)}
-        onChanged={load}
       />
     </>
   );
