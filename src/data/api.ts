@@ -82,6 +82,29 @@ export async function fetchInteractions(page = 1): Promise<Interaction[]> {
   return (res.interactionList || []).map(mapInteraction);
 }
 
+export interface PagedInteractionsResult {
+  interactions: Interaction[];
+  total: number;
+  totalPages: number;
+  page: number;
+  pageSize: number;
+}
+
+export async function fetchInteractionsPaged(page = 1): Promise<PagedInteractionsResult> {
+  try {
+    const res = await apiRequest<PagedInteractions>("/interactions-list", { query: { page } });
+    return {
+      interactions: (res.interactionList || []).map(mapInteraction),
+      total: res.total || 0,
+      totalPages: res.totalPages || 1,
+      page: res.page || page,
+      pageSize: res.pageSize || 0,
+    };
+  } catch {
+    return { interactions: [], total: 0, totalPages: 1, page, pageSize: 0 };
+  }
+}
+
 export async function fetchAlerts(page = 1): Promise<Interaction[]> {
   // No dedicated alerts endpoint — filter the org's interactions client-side.
   const res = await apiRequest<PagedInteractions>("/interactions-list", { query: { page } });

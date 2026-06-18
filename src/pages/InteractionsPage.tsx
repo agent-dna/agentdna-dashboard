@@ -3,7 +3,7 @@ import { Icon } from "../components/Icon";
 import { FilterPill } from "../components/FilterPill";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { IdCell } from "../components/EntityCell";
-import { useInteractions } from "../data/hooks";
+import { useInteractionsPaged } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
 import { useResolveName } from "../context/DirectoryContext";
 import { useIntentLabel } from "../context/IntentNumbersContext";
@@ -116,7 +116,16 @@ export function useInteractionColumns(
 export function InteractionsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
-  const { data: interactions } = useInteractions();
+  const [page, setPage] = useState(1);
+  const [pageInput, setPageInput] = useState("");
+  const { data: paged, loading } = useInteractionsPaged(page);
+  const interactions = paged.interactions;
+  const { total, totalPages, pageSize } = paged;
+  const goToPage = () => {
+    const n = parseInt(pageInput, 10);
+    if (!Number.isNaN(n) && n >= 1 && n <= totalPages) setPage(n);
+    setPageInput("");
+  };
   const { openDrawer } = useDrawer();
   const cols = useInteractionColumns((k, e) => openDrawer(k, e));
   const resolve = useResolveName();
@@ -170,13 +179,13 @@ export function InteractionsPage() {
               />
             </div>
             <div className="seg">
-              <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>
+              <button className={filter === "all" ? "active" : ""} onClick={() => { setFilter("all"); setPage(1); }}>
                 All
               </button>
-              <button className={filter === "threats" ? "active" : ""} onClick={() => setFilter("threats")}>
+              <button className={filter === "threats" ? "active" : ""} onClick={() => { setFilter("threats"); setPage(1); }}>
                 Threats
               </button>
-              <button className={filter === "safe" ? "active" : ""} onClick={() => setFilter("safe")}>
+              <button className={filter === "safe" ? "active" : ""} onClick={() => { setFilter("safe"); setPage(1); }}>
                 Safe
               </button>
             </div>
@@ -184,15 +193,79 @@ export function InteractionsPage() {
             <FilterPill label="Time" value="last 7d" />
           </div>
           <span className="count">
-            {rows.length} of {interactions.length}
+            {total > 0 ? `${rows.length} on this page · ${total} total` : `${rows.length}`}
           </span>
         </div>
         <DataTable
-          rows={rows.slice(0, 40)}
+          rows={rows}
           columns={cols}
           onRowClick={(r) => openDrawer("interaction", r)}
-          emptyText="No interactions yet"
+          emptyText={loading ? "Loading…" : "No interactions yet"}
         />
+        {totalPages > 1 && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 8,
+              padding: "10px 16px",
+              borderTop: "1px solid var(--line)",
+            }}
+          >
+            {pageSize > 0 && (
+              <span style={{ fontSize: 12, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
+                {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}
+              </span>
+            )}
+            <span style={{ fontSize: 12, color: "var(--fg-muted)", fontFamily: "var(--font-mono)", marginRight: 4 }}>
+              Page {page} of {totalPages}
+            </span>
+            <button
+              className="btn primary"
+              style={{ padding: "4px 10px" }}
+              disabled={page <= 1 || loading}
+              onClick={() => setPage(page - 1)}
+            >
+              Prev
+            </button>
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={pageInput}
+              disabled={loading}
+              placeholder={String(page)}
+              title="Type a page number and press Enter"
+              onChange={(e) => setPageInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") goToPage();
+              }}
+              style={{
+                width: 56,
+                padding: "5px 8px",
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: "var(--font-mono)",
+                color: "var(--fg)",
+                background: "var(--bg)",
+                border: "2px solid var(--accent)",
+                borderRadius: 6,
+                boxShadow: "0 0 0 3px rgba(37, 99, 235, 0.12)",
+                textAlign: "center",
+                outline: "none",
+              }}
+            />
+            <button
+              className="btn primary"
+              style={{ padding: "4px 10px" }}
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

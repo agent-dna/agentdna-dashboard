@@ -70,6 +70,12 @@ export const useIntentsPaged = (page = 1) =>
     [page],
   );
 export const useInteractions = (page = 1) => useAsync<Interaction[]>(() => api.fetchInteractions(page), [], [page]);
+export const useInteractionsPaged = (page = 1) =>
+  useAsync<api.PagedInteractionsResult>(
+    () => api.fetchInteractionsPaged(page),
+    { interactions: [], total: 0, totalPages: 1, page: 1, pageSize: 0 },
+    [page],
+  );
 export const useAlerts = (page = 1) => useAsync<Interaction[]>(() => api.fetchAlerts(page), [], [page]);
 export const useHomeMetrics = (page = 1) =>
   useAsync<HomeMetrics>(
