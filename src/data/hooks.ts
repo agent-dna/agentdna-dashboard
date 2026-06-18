@@ -91,6 +91,13 @@ export const useAgentIntents = (id: string) =>
   useAsync<Intent[]>(() => api.fetchAgentIntents(id), [], [id]);
 export const useIntentInteractions = (id: string) =>
   useAsync<Interaction[]>(() => api.fetchIntentInteractions(id), [], [id]);
+
+export const useIntentInteractionsPaged = (id: string, page: number) =>
+  useAsync<api.PagedIntentInteractionsResult>(
+    () => api.fetchIntentInteractionsPaged(id, page),
+    { interactions: [], total: 0, totalPages: 1, page: 1 },
+    [id, page],
+  );
 export const useIntentParticipants = (id: string) =>
   useAsync<IntentParticipant[]>(() => api.fetchIntentParticipants(id), [], [id]);
 export const useLogs = (kind: "agent" | "intent", id: string) =>

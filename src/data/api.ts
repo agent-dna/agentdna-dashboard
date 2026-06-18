@@ -495,6 +495,32 @@ export async function fetchIntentInteractions(id: string): Promise<Interaction[]
   return (r?.interactions || []).map(mapInteraction);
 }
 
+export interface PagedIntentInteractionsResult {
+  interactions: Interaction[];
+  total: number;
+  totalPages: number;
+  page: number;
+}
+
+export async function fetchIntentInteractionsPaged(
+  intentId: string,
+  page = 1,
+): Promise<PagedIntentInteractionsResult> {
+  try {
+    const res = await apiRequest<PagedInteractions>("/interactions-list", {
+      query: { intentID: intentId, page },
+    });
+    return {
+      interactions: (res.interactionList || []).map(mapInteraction),
+      total: res.total || 0,
+      totalPages: res.totalPages || 1,
+      page: res.page || page,
+    };
+  } catch {
+    return { interactions: [], total: 0, totalPages: 1, page };
+  }
+}
+
 export async function fetchIntentParticipants(id: string): Promise<IntentParticipant[]> {
   const interactions = await fetchIntentInteractions(id);
   const map = new Map<string, IntentParticipant>();

@@ -8,7 +8,7 @@ import { EntityCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
 import { LogsTable } from "../components/LogsTable";
-import { useIntent, useIntentInteractions, useIntentParticipants, useLogs } from "../data/hooks";
+import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useLogs } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
 import { fmtRuntime, timeAgo } from "../lib/format";
 import { useInteractionColumns } from "./InteractionsPage";
@@ -23,9 +23,13 @@ export function IntentDetailPage() {
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
   const [tab, setTab] = useState<Tab>("interactions");
+  const [interactionsPage, setInteractionsPage] = useState(1);
 
   const { data: intent, loading } = useIntent(intentId);
-  const { data: interactions } = useIntentInteractions(intentId);
+  const { data: interactionsPaged, loading: interactionsLoading } = useIntentInteractionsPaged(intentId, interactionsPage);
+  const interactions = interactionsPaged.interactions;
+  const interactionsTotal = interactionsPaged.total;
+  const interactionsTotalPages = interactionsPaged.totalPages;
   const { data: participants } = useIntentParticipants(intentId);
   const { data: logs } = useLogs("intent", intentId);
   const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
@@ -56,7 +60,7 @@ export function IntentDetailPage() {
   }
 
   const participantRows = participants.map((p) => ({ ...p, id: `${p.type}:${p.entity.id}` }));
-  const threatCount = interactions.filter((i) => i.threat).length;
+  const threatCount = interactions.filter((i: { threat: boolean }) => i.threat).length;
 
   const participantCols: DataTableColumn<IntentParticipant & { id: string }>[] = [
     {
@@ -211,19 +215,30 @@ export function IntentDetailPage() {
           active={tab}
           onChange={(k) => setTab(k as Tab)}
           tabs={[
-            { key: "interactions", label: "Interactions", count: interactions.length },
+            { key: "interactions", label: "Interactions", count: interactionsTotal },
             { key: "participants", label: "Agents & Apps", count: participants.length },
             { key: "logs", label: "Logs", count: logs.length },
           ]}
         />
 
         {tab === "interactions" && (
-          <DataTable
-            rows={interactions}
-            columns={interactionCols}
-            onRowClick={(r) => openDrawer("interaction", r)}
-            emptyText="No interactions recorded for this intent yet."
-          />
+          <>
+            <DataTable
+              rows={interactions}
+              columns={interactionCols}
+              onRowClick={(r) => openDrawer("interaction", r)}
+              emptyText={interactionsLoading ? "Loading…" : "No interactions recorded for this intent yet."}
+            />
+            {interactionsTotalPages > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: "1px solid var(--line)" }}>
+                <span style={{ fontSize: 12, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
+                  {(interactionsPage - 1) * 10 + 1}–{Math.min(interactionsPage * 10, interactionsTotal)} of {interactionsTotal}
+                </span>
+                <button className="btn ghost" style={{ padding: "4px 10px" }} disabled={interactionsPage <= 1} onClick={() => setInteractionsPage(interactionsPage - 1)}>Prev</button>
+                <button className="btn ghost" style={{ padding: "4px 10px" }} disabled={interactionsPage >= interactionsTotalPages} onClick={() => setInteractionsPage(interactionsPage + 1)}>Next</button>
+              </div>
+            )}
+          </>
         )}
 
         {tab === "participants" && (
