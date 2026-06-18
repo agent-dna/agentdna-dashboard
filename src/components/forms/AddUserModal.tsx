@@ -108,7 +108,7 @@ export function AddUserModal({ open, onClose, onSuccess }: Props) {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Optional — leave blank for auto user_1, user_2, …"
+            placeholder="Name"
             style={inputStyle}
             autoComplete="off"
           />

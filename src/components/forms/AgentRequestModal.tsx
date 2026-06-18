@@ -208,11 +208,11 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
             type="text"
             value={agentId}
             onChange={(e) => setAgentId(e.target.value)}
-            placeholder="Optional agent ID…"
+            placeholder="Agent ID "
             style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: 12.5 }}
           />
           <span style={{ fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400 }}>
-            Optional — leave blank to let the backend assign one on approval.
+            Agent ID 
           </span>
         </label>
 

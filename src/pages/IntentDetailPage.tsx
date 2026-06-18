@@ -56,6 +56,7 @@ export function IntentDetailPage() {
   }
 
   const participantRows = participants.map((p) => ({ ...p, id: `${p.type}:${p.entity.id}` }));
+  const threatCount = interactions.filter((i) => i.threat).length;
 
   const participantCols: DataTableColumn<IntentParticipant & { id: string }>[] = [
     {
@@ -171,8 +172,8 @@ export function IntentDetailPage() {
               <InfoStat
                 label="Threat detected"
                 value={
-                  <span style={{ color: intent.threats > 0 ? "var(--threat)" : "var(--fg)", fontWeight: 600 }}>
-                    {intent.threats}
+                  <span style={{ color: threatCount > 0 ? "var(--threat)" : "var(--fg)", fontWeight: 600 }}>
+                    {threatCount}
                   </span>
                 }
                 mono
@@ -201,7 +202,7 @@ export function IntentDetailPage() {
         <MetricTile label="Interactions" value={interactions.length} icon="activity" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Agents touched" value={intent.agentsInteracted} icon="agents" sparkColor="#0EA5E9" spark={[]} />
         <MetricTile label="Apps touched" value={intent.toolsInteracted} icon="box" sparkColor="#0A2240" spark={[]} />
-        <MetricTile label="Threats" value={intent.threats} icon="shield" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Threats" value={threatCount} icon="shield" sparkColor="#DC2626" spark={[]} />
       </div>
 
       {/* Tabbed table */}
