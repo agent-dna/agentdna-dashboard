@@ -6,6 +6,23 @@ import { listUsers, type OrgUser } from "../../api/users";
 import { ApiError } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 
+function UsersPager({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const [input, setInput] = useState(String(page));
+  useEffect(() => { setInput(String(page)); }, [page]);
+  const commit = () => {
+    const n = parseInt(input, 10);
+    if (!Number.isNaN(n) && n >= 1 && n <= totalPages) onChange(n);
+    else setInput(String(page));
+  };
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page <= 1} onClick={() => onChange(page - 1)}>Prev</button>
+      <input type="number" min={1} max={totalPages} value={input} onChange={(e) => setInput(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") commit(); }} style={{ width: 56, padding: "3px 6px", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--fg)", background: "var(--bg)", border: "2px solid var(--accent)", borderRadius: 6, boxShadow: "0 0 0 3px rgba(37,99,235,0.12)", textAlign: "center", outline: "none" }} />
+      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page >= totalPages} onClick={() => onChange(page + 1)}>Next</button>
+    </div>
+  );
+}
+
 function fmtDate(s: string) {
   try {
     const d = new Date(s);
@@ -76,11 +93,7 @@ export function UsersTab() {
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {totalPages > 1 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button className="btn ghost" disabled={page <= 1} onClick={() => setPage(page - 1)} style={{ padding: "4px 10px" }}>Prev</button>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)" }}>{page} / {totalPages}</span>
-              <button className="btn ghost" disabled={page >= totalPages} onClick={() => setPage(page + 1)} style={{ padding: "4px 10px" }}>Next</button>
-            </div>
+            <UsersPager page={page} totalPages={totalPages} onChange={setPage} />
           )}
           <button className="btn" onClick={load}>
             <Icon name="refresh" size={14} /> Refresh

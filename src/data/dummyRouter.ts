@@ -162,7 +162,10 @@ export function dummyRespond(path: string, query?: Query, method = "GET"): unkno
   if (path === "/home-metrics") return homeMetrics();
 
   if (path === "/interactions-list") {
-    const all = allInteractions().sort((a, b) => (a.time < b.time ? 1 : -1));
+    const intentFilter = getStr(query, "intentID");
+    const all = allInteractions()
+      .filter((i) => !intentFilter || i.intentID === intentFilter)
+      .sort((a, b) => (a.time < b.time ? 1 : -1));
     const p = paginate(all, getPage(query));
     return { interactionList: p.slice, total: p.total, page: p.page, pageSize: p.pageSize, totalPages: p.totalPages };
   }
@@ -186,7 +189,10 @@ export function dummyRespond(path: string, query?: Query, method = "GET"): unkno
     const sorted = [...intents].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
     const p = paginate(sorted, getPage(query));
     // /intent-list omits the nested interactions array — they come from /intent-info.
-    const stripped = p.slice.map(({ interactions: _ignore, ...rest }) => rest);
+    const stripped = p.slice.map(({ interactions, ...rest }) => ({
+      ...rest,
+      threatCount: interactions.filter((i) => i.threat).length,
+    }));
     return { intentsList: stripped, total: p.total, page: p.page, pageSize: p.pageSize, totalPages: p.totalPages };
   }
 
@@ -235,7 +241,10 @@ export function dummyRespond(path: string, query?: Query, method = "GET"): unkno
     );
     list.sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
     const p = paginate(list, getPage(query));
-    const stripped = p.slice.map(({ interactions: _ignore, ...rest }) => rest);
+    const stripped = p.slice.map(({ interactions, ...rest }) => ({
+      ...rest,
+      threatCount: interactions.filter((i) => i.threat).length,
+    }));
     return {
       intentsList: stripped,
       total: p.total,

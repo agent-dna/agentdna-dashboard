@@ -48,16 +48,12 @@ function Pagination({
 }) {
   if (totalPages <= 1) return null;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <button className="btn ghost" disabled={page <= 1} onClick={() => onChange(page - 1)} style={{ padding: "4px 10px" }}>
-        Prev
-      </button>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)" }}>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page <= 1} onClick={() => onChange(page - 1)}>Prev</button>
+      <span style={{ padding: "4px 10px", fontSize: 12, fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--fg)", background: "var(--surface-raised)", border: "1px solid var(--line-strong)", borderRadius: 6, minWidth: 52, textAlign: "center" as const }}>
         {page} / {totalPages}
       </span>
-      <button className="btn ghost" disabled={page >= totalPages} onClick={() => onChange(page + 1)} style={{ padding: "4px 10px" }}>
-        Next
-      </button>
+      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page >= totalPages} onClick={() => onChange(page + 1)}>Next</button>
     </div>
   );
 }

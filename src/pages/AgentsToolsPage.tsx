@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
@@ -290,8 +290,8 @@ export function AgentsToolsPage() {
               spark={[]}
             />
             <MetricTile
-              label="Apps Reached"
-              value={agents.reduce((a, x) => a + x.connected, 0)}
+              label="Applications"
+              value={toolsTotal}
               icon="box"
               sparkColor="#0A2240"
               spark={[]}
@@ -438,37 +438,20 @@ function computeReliability(interactions: number, threats: number): number {
   return Math.max(0, Math.round(pct * 100) / 100);
 }
 
-function Pager({
-  page,
-  totalPages,
-  onChange,
-}: {
-  page: number;
-  totalPages: number;
-  onChange: (p: number) => void;
-}) {
+function Pager({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const [input, setInput] = useState(String(page));
+  useEffect(() => { setInput(String(page)); }, [page]);
   if (totalPages <= 1) return null;
+  const commit = () => {
+    const n = parseInt(input, 10);
+    if (!Number.isNaN(n) && n >= 1 && n <= totalPages) onChange(n);
+    else setInput(String(page));
+  };
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <button
-        className="btn ghost"
-        style={{ padding: "4px 8px", fontSize: 12 }}
-        disabled={page <= 1}
-        onClick={() => onChange(Math.max(1, page - 1))}
-      >
-        <Icon name="chevronLeft" size={12} /> Prev
-      </button>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)" }}>
-        {page} / {totalPages}
-      </span>
-      <button
-        className="btn ghost"
-        style={{ padding: "4px 8px", fontSize: 12 }}
-        disabled={page >= totalPages}
-        onClick={() => onChange(Math.min(totalPages, page + 1))}
-      >
-        Next <Icon name="chevron" size={12} />
-      </button>
+      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page <= 1} onClick={() => onChange(Math.max(1, page - 1))}>Prev</button>
+      <input type="number" min={1} max={totalPages} value={input} onChange={(e) => setInput(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") commit(); }} style={{ width: 56, padding: "3px 6px", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--fg)", background: "var(--bg)", border: "2px solid var(--accent)", borderRadius: 6, boxShadow: "0 0 0 3px rgba(37,99,235,0.12)", textAlign: "center", outline: "none" }} />
+      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page >= totalPages} onClick={() => onChange(Math.min(totalPages, page + 1))}>Next</button>
     </div>
   );
 }

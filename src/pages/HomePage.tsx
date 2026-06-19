@@ -5,7 +5,8 @@ import { MetricTile } from "../components/MetricTile";
 import { FilterPill } from "../components/FilterPill";
 import { Chart } from "../components/Chart";
 import { DataTable } from "../components/DataTable";
-import { useHomeMetrics, useInteractions, useSeries } from "../data/hooks";
+import { useHomeMetrics, useInteractionsPaged, useAlerts, useSeries } from "../data/hooks";
+import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { useTweaks } from "../context/TweaksContext";
 import { useInteractionColumns } from "./InteractionsPage";
@@ -16,12 +17,19 @@ export function HomePage() {
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
 
+  const [bottomTab, setBottomTab] = useState<"interactions" | "threats">("interactions");
+  const [interactionsPage, setInteractionsPage] = useState(1);
+
   const homeState = useHomeMetrics();
-  const interactionsState = useInteractions();
+  const interactionsState = useInteractionsPaged(interactionsPage);
+  const alertsState = useAlerts();
   const seriesState = useSeries(series);
 
   const metrics = homeState.data;
-  const interactions = interactionsState.data;
+  const interactions = interactionsState.data.interactions;
+  const interactionsTotal = interactionsState.data.total;
+  const interactionsTotalPages = interactionsState.data.totalPages;
+  const threats = alertsState.data;
   const data = seriesState.data;
 
   const labels =
@@ -29,7 +37,6 @@ export function HomePage() {
       ? Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`)
       : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  const recent = interactions.slice(0, 6);
   const cols = useInteractionColumns((k, e) => openDrawer(k, e));
 
   return (
@@ -196,22 +203,41 @@ export function HomePage() {
 
       <div className="card">
         <div className="card-head">
-          <div>
-            <h3>Recent interactions</h3>
-            <div className="sub">Last few moments of agent activity</div>
-          </div>
-          <div className="actions">
-            <button className="btn ghost" style={{ padding: "6px 10px", fontSize: 12 }}>
-              View all <Icon name="arrowRight" size={12} />
-            </button>
+          <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--line)", margin: "0 -20px", padding: "0 20px" }}>
+            {(["interactions", "threats"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setBottomTab(t)}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: "8px 14px", fontSize: 13, fontWeight: 600,
+                  color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
+                  borderBottom: bottomTab === t ? "2px solid var(--accent)" : "2px solid transparent",
+                  marginBottom: -1, textTransform: "capitalize",
+                }}
+              >
+                {t === "interactions" ? `Interactions` : `Threats`}
+                <span style={{
+                  marginLeft: 6, fontSize: 11, fontFamily: "var(--font-mono)",
+                  background: bottomTab === t ? "rgba(37,99,235,0.12)" : "var(--surface-raised)",
+                  color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
+                  padding: "1px 6px", borderRadius: 99,
+                }}>
+                  {t === "interactions" ? interactionsTotal : threats.length}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
         <DataTable
           onRowClick={(r) => openDrawer("interaction", r)}
           columns={cols}
-          rows={recent}
-          emptyText="No interactions yet"
+          rows={bottomTab === "interactions" ? interactions : threats}
+          emptyText={bottomTab === "interactions" ? "No interactions yet" : "No threats detected"}
         />
+        {bottomTab === "interactions" && (
+          <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} onChange={setInteractionsPage} />
+        )}
       </div>
     </div>
   );

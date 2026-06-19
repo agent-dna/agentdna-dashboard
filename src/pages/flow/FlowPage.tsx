@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon";
 import { TraceInspector } from "../../components/TraceInspector";
-import { useIntent, useIntentInteractions, useIntentsPaged } from "../../data/hooks";
+import { useIntent, useIntentBlockData, useIntentDiagram, useIntentInteractions, useIntentsPaged } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { FlowCanvas } from "./FlowCanvas";
-import { buildFlowFromIntent, type Flow } from "./flowData";
+import { buildFlowFromIntent, buildTraceFromBlocks, buildTraceFromDiagram, type Flow } from "./flowData";
 
 const STEP_MS = 2400;
 const STORAGE_KEY_INTENT = "flow.intent";
@@ -47,11 +47,19 @@ export function FlowPage() {
 
   const { data: intent } = useIntent(activeId);
   const { data: interactions } = useIntentInteractions(activeId);
+  const { data: blocks } = useIntentBlockData(activeId);
+  const { data: diagram } = useIntentDiagram(activeId);
 
   const flow: Flow | null = useMemo(() => {
     if (!intent) return null;
-    return buildFlowFromIntent({ intent, interactions, resolve });
-  }, [intent, interactions, resolve]);
+    const base = buildFlowFromIntent({ intent, interactions, resolve });
+    if (blocks && blocks.length > 0) {
+      base.trace = buildTraceFromBlocks(intent, blocks);
+    } else if (diagram) {
+      base.trace = buildTraceFromDiagram(intent, diagram.diagram, resolve);
+    }
+    return base;
+  }, [intent, interactions, blocks, diagram, resolve]);
 
   const N = flow?.steps.length ?? 0;
 
@@ -60,7 +68,7 @@ export function FlowPage() {
     const n = raw ? parseInt(raw, 10) : NaN;
     return Number.isFinite(n) && n >= 0 ? n : 0;
   });
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [inspectSpanId, setInspectSpanId] = useState<string | null>(null);
 
   // Clamp step when flow changes

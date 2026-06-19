@@ -86,14 +86,11 @@ export function IntentsPage() {
       label: "Threats",
       align: "right",
       sortFn: (a, b) => a.threats - b.threats,
-      render: (r) =>
-        r.threats > 0 ? (
-          <span className="chip threat" style={{ fontVariantNumeric: "tabular-nums" }}>
-            {r.threats}
-          </span>
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>
-        ),
+      render: (r) => (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: r.threats > 0 ? "var(--threat)" : "var(--fg-faint)" }}>
+          {r.threats}
+        </span>
+      ),
     },
     {
       key: "score",

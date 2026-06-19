@@ -12,6 +12,7 @@
  */
 
 import type { Intent, Interaction } from "../../types";
+import type { ApiDiagramNode, IntentBlock } from "../../data/api";
 import type { useResolveName } from "../../context/DirectoryContext";
 
 export type FlowNodeKind = "human" | "agent" | "tool";
@@ -46,7 +47,7 @@ export interface FlowStep {
 export interface TraceSpan {
   id: string;
   name: string;
-  kind: "chain" | "agent" | "tool";
+  kind: "chain" | "human" | "agent" | "tool";
   label: string;
   status: "ok" | "blocked";
   tokensIn: number;
@@ -56,6 +57,7 @@ export interface TraceSpan {
   output: string;
   model: string | null;
   metadata: Record<string, unknown>;
+  parentId: string | null;
   children: TraceSpan[];
 }
 
@@ -278,17 +280,18 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
 
   const rootSpan = mkSpan({
     id: `sp_${sanitize(intent.id)}_root`,
-    name: intent.name,
+    name: `Intent · ${intent.id.slice(-8)}`,
     kind: "chain",
     label: "TRACE",
     status: traceStatus,
     tokensIn: 0, tokensOut: 0, cost: 0,
-    input: `Execute intent: "${intent.name}"`,
+    input: `Execute intent: ${intent.id}`,
     output: halted
       ? "Intent halted: policy violation detected. No side-effects committed."
-      : "Intent completed. All identity, trust, and scope checks passed.",
+      : "Intent finished. All identity, trust, and scope checks passed.",
     model: null,
-    metadata: { intentId: intent.id, status: halted ? "halted" : "completed" },
+    parentId: null,
+    metadata: { intentId: intent.id, status: halted ? "halted" : "finished" },
   });
 
   // step key → span id (for populating FlowStep.spanId)
@@ -298,105 +301,92 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     stepSpan.set(`${toId}>${fromId}`, spanId);
   };
 
-  // Group sorted interactions by initiator DID
-  const byInitiator = new Map<string, Interaction[]>();
-  for (const ix of sorted) {
-    const arr = byInitiator.get(ix.initiator.id) || [];
-    arr.push(ix);
-    byInitiator.set(ix.initiator.id, arr);
-  }
-
   const humanNode = nodes.find((n) => n.kind === "human");
 
-  // Worker spans — delegations from the orchestrator
-  if (orchAgentDid) {
-    const orchInteractions = byInitiator.get(orchAgentDid) || [];
-    for (const ix of orchInteractions) {
-      if (ix.targetType !== "agent") continue;
-      const workerDid = ix.target.id;
-      const workerNodeId = idForDid(workerDid);
-      const workerNode = nodesById.get(workerNodeId);
+  // Build properly nested spans using a call-stack.
+  // Each interaction (from→to) is nested under the span whose entity last
+  // pushed `from`. Popping handles response returns and parallel branches.
+  const entityStack: Array<{ did: string; span: TraceSpan }> = [
+    { did: "__root__", span: rootSpan },
+  ];
 
-      const workerSpanId = `sp_${sanitize(intent.id)}_w_${sanitize(workerDid)}`;
-      const workerSpan = mkSpan({
-        id: workerSpanId,
-        name: workerNode?.name || ix.target.name || shortDid(workerDid),
-        kind: "agent",
-        label: workerNode?.label || "Worker",
-        status: ix.threat ? "blocked" : "ok",
-        tokensIn: 0, tokensOut: 0, cost: 0,
-        input: `Delegated task for intent "${intent.name}".\nVerify identity, check scope, execute subtask.`,
-        output: ix.threat
-          ? "Attempted tool call outside granted scope. Blocked by policy."
-          : "Subtask completed. Result returned to orchestrator.",
-        model: "agent/reason-v2",
-        metadata: { agentId: workerDid, intentId: intent.id },
-      });
-      rootSpan.children.push(workerSpan);
-      markStep(orchNodeId!, workerNodeId, workerSpanId);
-
-      // Tool calls from this worker
-      const workerInteractions = byInitiator.get(workerDid) || [];
-      for (const tix of workerInteractions) {
-        const toolDid = tix.target.id;
-        const toolNodeId = idForDid(toolDid);
-        const toolNode = nodesById.get(toolNodeId);
-
-        const toolSpanId = `sp_${sanitize(intent.id)}_t_${sanitize(toolDid)}_${sanitize(workerDid)}`;
-        const toolSpan = mkSpan({
-          id: toolSpanId,
-          name: toolNode?.name || tix.target.name || shortDid(toolDid),
-          kind: "tool",
-          label: toolNode?.label || "Tool",
-          status: tix.threat ? "blocked" : "ok",
-          tokensIn: 0, tokensOut: 0, cost: 0,
-          input: `{\n  "tool": "${toolNode?.name || tix.target.name}",\n  "scope": "${toolNode?.label || "unknown"}",\n  "caller": "${workerNode?.name || ix.target.name}",\n  "timeout_ms": 3000\n}`,
-          output: tix.threat
-            ? `{\n  "ok": false,\n  "error": "scope_denied",\n  "message": "capability not granted to caller"\n}`
-            : `{\n  "ok": true,\n  "elapsed_ms": ${Math.max(20, tix.runtime || 120)}\n}`,
-          model: null,
-          metadata: {
-            provider: "service",
-            scope: toolNode?.label || "unknown",
-            caller: workerNode?.name || ix.target.name,
-            intentId: intent.id,
-          },
-        });
-        workerSpan.children.push(toolSpan);
-        markStep(workerNodeId, toolNodeId, toolSpanId);
-      }
-    }
+  // If a human initiated the intent, add them as the first span under root
+  // and seed the stack with their DID so agent calls from the human nest under them.
+  const humanDid = sorted.find((ix) => resolve(ix.initiator.id).kind === "user")?.initiator.id ?? null;
+  if (humanDid && humanNode) {
+    const humanSpanId = `sp_${sanitize(intent.id)}_human`;
+    const humanSpan = mkSpan({
+      id: humanSpanId,
+      name: humanNode.name,
+      kind: "human",
+      label: "User",
+      status: "ok",
+      tokensIn: 0, tokensOut: 0, cost: 0,
+      input: intent.name || `Intent ${intent.id.slice(-8)}`,
+      output: halted ? "Intent completed with policy violation." : "Intent completed successfully.",
+      model: null,
+      parentId: rootSpan.id,
+      metadata: { intentId: intent.id, role: "initiator" },
+    });
+    rootSpan.children.push(humanSpan);
+    entityStack.push({ did: humanDid, span: humanSpan });
   }
 
-  // Also capture any direct agent→tool steps not under the orch
+  // Counter per target DID so repeated calls to the same target get unique IDs.
+  const spanSeq = new Map<string, number>();
+
   for (const ix of sorted) {
-    if (ix.initiator.id === orchAgentDid) continue;
-    if (ix.targetType !== "tool") continue;
-    const fromNodeId = idForDid(ix.initiator.id);
-    const toNodeId = idForDid(ix.target.id);
-    const key = `${fromNodeId}>${toNodeId}`;
-    if (!stepSpan.has(key)) {
-      // fall back to root span id
-      markStep(fromNodeId, toNodeId, rootSpan.id);
+    const fromDid = ix.initiator.id;
+    const toDid = ix.target.id;
+    const fromNodeId = idForDid(fromDid);
+    const toNodeId = idForDid(toDid);
+    const toNode = nodesById.get(toNodeId);
+    const fromNode = nodesById.get(fromNodeId);
+    const isBlocked = ix.threat;
+    const isTool = ix.targetType === "tool";
+
+    // Pop back to the frame that matches the current initiator.
+    while (entityStack.length > 1 && entityStack[entityStack.length - 1].did !== fromDid) {
+      entityStack.pop();
+    }
+
+    const parent = entityStack[entityStack.length - 1].span;
+    const seq = (spanSeq.get(toDid) || 0) + 1;
+    spanSeq.set(toDid, seq);
+    const spanId = `sp_${sanitize(intent.id)}_${sanitize(toDid)}_${seq}`;
+
+    const newSpan = mkSpan({
+      id: spanId,
+      name: toNode?.name || ix.target.name || shortDid(toDid),
+      kind: isTool ? "tool" : "agent",
+      label: toNode?.label || (isTool ? "Tool" : "Agent"),
+      status: isBlocked ? "blocked" : "ok",
+      tokensIn: 0, tokensOut: 0, cost: 0,
+      input: isTool
+        ? `{\n  "tool": "${toNode?.name || ix.target.name}",\n  "scope": "${toNode?.label || "unknown"}",\n  "caller": "${fromNode?.name || fromDid}",\n  "timeout_ms": 3000\n}`
+        : `Delegated task for intent "${intent.name}".\nVerify identity, check scope, execute subtask.`,
+      output: isBlocked
+        ? (isTool
+          ? `{\n  "ok": false,\n  "error": "scope_denied",\n  "message": "capability not granted to caller"\n}`
+          : "Attempted action outside granted scope. Blocked by policy.")
+        : (isTool
+          ? `{\n  "ok": true,\n  "elapsed_ms": ${Math.max(20, ix.runtime || 120)}\n}`
+          : "Subtask completed. Result returned to caller."),
+      model: isTool ? null : "agent/reason-v2",
+      parentId: parent.id,
+      metadata: isTool
+        ? { provider: "service", scope: toNode?.label || "unknown", caller: fromNode?.name || fromDid, intentId: intent.id }
+        : { agentId: toDid, intentId: intent.id },
+    });
+
+    parent.children.push(newSpan);
+    markStep(fromNodeId, toNodeId, spanId);
+
+    // Only agents can make further calls — push them so their children nest under them.
+    if (!isTool) {
+      entityStack.push({ did: toDid, span: newSpan });
     }
   }
-
-  const genSpanId = `sp_${sanitize(intent.id)}_gen`;
-  const genSpan = mkSpan({
-    id: genSpanId,
-    name: "generation",
-    kind: "agent",
-    label: "LLM",
-    status: traceStatus,
-    tokensIn: 0, tokensOut: 0, cost: 0,
-    input: `Compose the final response for the operator.\nSummarize the completed work or policy violation.`,
-    output: halted
-      ? `Intent halted before completion.\n\nA policy violation was detected and the orchestration was stopped. No side effects were committed.`
-      : `Completed "${intent.name}".\n\nAll agent interactions and tool calls completed successfully. Identity, trust, and scope checks passed.`,
-    model: "gpt-4o-mini",
-    metadata: { temperature: 0.2, max_tokens: 1024, env: "prod" },
-  });
-  rootSpan.children.push(genSpan);
 
   const spanById: Record<string, TraceSpan> = {};
   for (const s of allSpans) spanById[s.id] = s;
@@ -431,6 +421,239 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     steps,
     status: halted ? "halted" : "completed",
     trace: flowTrace,
+  };
+}
+
+// ---- Diagram-based trace builder (uses /intent-diagram tree directly) ----
+
+type ResolveNameFn = ReturnType<typeof useResolveName>;
+
+function diagramHasThreat(node: ApiDiagramNode): boolean {
+  if (node.threat) return true;
+  return node.children.some(diagramHasThreat);
+}
+
+export function buildTraceFromDiagram(
+  intent: Intent,
+  diagram: ApiDiagramNode,
+  resolve: ResolveNameFn,
+): FlowTrace {
+  const allSpans: TraceSpan[] = [];
+  const mkSpan = (s: Omit<TraceSpan, "children">): TraceSpan => {
+    const sp: TraceSpan = { ...s, children: [] };
+    allSpans.push(sp);
+    return sp;
+  };
+
+  const halted = diagramHasThreat(diagram);
+  const traceStatus: TraceSpan["status"] = halted ? "blocked" : "ok";
+
+  const rootSpan = mkSpan({
+    id: `sp_${sanitize(intent.id)}_root`,
+    name: `Intent · ${intent.id.slice(-8)}`,
+    kind: "chain",
+    label: "TRACE",
+    status: traceStatus,
+    tokensIn: 0, tokensOut: 0, cost: 0,
+    input: `Execute intent: ${intent.id}`,
+    output: halted
+      ? "Intent halted: policy violation detected."
+      : "Intent finished successfully.",
+    model: null,
+    parentId: null,
+    metadata: { intentId: intent.id, status: halted ? "halted" : "finished" },
+  });
+
+  const walk = (node: ApiDiagramNode, parentSpan: TraceSpan) => {
+    const isRoot = !node.interactionType;
+    const isTool = node.interactionType === "tool_call";
+    const resolved = resolve(node.did);
+    const kind: TraceSpan["kind"] = isRoot ? "human" : isTool ? "tool" : "agent";
+    const label = isRoot ? "User" : isTool ? "Tool" : "Agent";
+    const nodeId = node.interactionID ? sanitize(node.interactionID) : sanitize(node.did);
+    const spanId = `sp_${sanitize(intent.id)}_${nodeId}`;
+
+    const span = mkSpan({
+      id: spanId,
+      name: node.name || resolved.name || node.did.slice(-8),
+      kind,
+      label,
+      status: node.threat ? "blocked" : "ok",
+      tokensIn: 0, tokensOut: 0, cost: 0,
+      input: isTool
+        ? `{\n  "tool": "${node.name}",\n  "caller": "${parentSpan.name}"\n}`
+        : isRoot
+        ? intent.name || `Intent ${intent.id.slice(-8)}`
+        : `Delegated task for intent "${intent.name}".\nVerify identity, check scope, execute subtask.`,
+      output: node.threat
+        ? (isTool
+          ? `{\n  "ok": false,\n  "error": "scope_denied"\n}`
+          : "Blocked by policy.")
+        : (isTool
+          ? `{\n  "ok": true\n}`
+          : "Subtask completed. Result returned to caller."),
+      model: isTool || isRoot ? null : "agent/reason-v2",
+      parentId: parentSpan.id,
+      metadata: {
+        did: node.did,
+        ...(node.interactionID ? { interactionID: node.interactionID } : {}),
+        ...(node.interactionType ? { interactionType: node.interactionType } : {}),
+      },
+    });
+
+    parentSpan.children.push(span);
+
+    for (const child of node.children) {
+      walk(child, span);
+    }
+  };
+
+  walk(diagram, rootSpan);
+
+  const spanById: Record<string, TraceSpan> = {};
+  for (const s of allSpans) spanById[s.id] = s;
+
+  return {
+    trace: rootSpan,
+    spanById,
+    traceId: `tr_${sanitize(intent.id).slice(-8)}`,
+    sessionId: `sess_${sanitize(intent.id).slice(-6)}`,
+    userId: diagram.name || intent.initiator?.name || "operator",
+    env: "prod",
+    totalTokensIn: 0,
+    totalTokensOut: 0,
+    totalCost: 0,
+  };
+}
+
+// ---- Block-data-based trace builder (uses /intent-block-data) ----
+//
+// Outbound blocks push a new span onto the call stack.
+// Inbound blocks pop back to the matching agent, set its output, and — if
+// cbac_app is present — insert a tool child span first.
+
+export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): FlowTrace {
+  const sorted = [...blocks].sort((a, b) => a.block_index - b.block_index);
+
+  const allSpans: TraceSpan[] = [];
+  const mkSpan = (s: Omit<TraceSpan, "children">): TraceSpan => {
+    const sp: TraceSpan = { ...s, children: [] };
+    allSpans.push(sp);
+    return sp;
+  };
+
+  const halted = sorted.some((b) => b.threat_detected);
+  const traceStatus: TraceSpan["status"] = halted ? "blocked" : "ok";
+
+  const rootSpan = mkSpan({
+    id: `sp_${sanitize(intent.id)}_root`,
+    name: `Intent · ${intent.id.slice(-8)}`,
+    kind: "chain",
+    label: "TRACE",
+    status: traceStatus,
+    tokensIn: 0, tokensOut: 0, cost: 0,
+    input: `Execute intent: ${intent.id}`,
+    output: halted ? "Intent halted: policy violation detected." : "Intent finished successfully.",
+    model: null,
+    parentId: null,
+    metadata: { intentId: intent.id, status: halted ? "halted" : "finished" },
+  });
+
+  // Stack of active frames: { did, span }
+  // The root frame is a sentinel so we never pop below the intent root.
+  const stack: Array<{ did: string; span: TraceSpan }> = [
+    { did: "__root__", span: rootSpan },
+  ];
+
+  let humanName = intent.initiator?.name || "User";
+
+  for (const block of sorted) {
+    if (block.direction === "outbound") {
+      const isHuman = block.block_type === "intent";
+      if (isHuman) humanName = block.agent_name || humanName;
+
+      const parent = stack[stack.length - 1].span;
+      const spanId = `sp_${sanitize(intent.id)}_${sanitize(block.id)}`;
+
+      const span = mkSpan({
+        id: spanId,
+        name: block.agent_name || block.agent_did.slice(-8),
+        kind: isHuman ? "human" : "agent",
+        label: isHuman ? "User" : block.block_type === "delegate" ? "Orchestrator" : "Agent",
+        status: block.threat_detected ? "blocked" : "ok",
+        tokensIn: 0, tokensOut: 0, cost: 0,
+        input: block.message || "",
+        output: "",  // filled in when the matching inbound block arrives
+        model: isHuman ? null : "agent/reason-v2",
+        parentId: parent.id,
+        metadata: {
+          agentDid: block.agent_did,
+          blockType: block.block_type,
+          blockIndex: block.block_index,
+          ...(block.delegate_to ? { delegateTo: block.delegate_to } : {}),
+          ...(block.received_from ? { receivedFrom: block.received_from } : {}),
+        },
+      });
+
+      parent.children.push(span);
+      stack.push({ did: block.agent_did, span });
+    } else {
+      // inbound — find the matching agent frame and fill its output
+      let frameIdx = stack.length - 1;
+      while (frameIdx > 0 && stack[frameIdx].did !== block.agent_did) {
+        frameIdx--;
+      }
+
+      if (frameIdx > 0) {
+        const frame = stack[frameIdx];
+
+        // If a tool was involved, add it as a child before closing this span
+        if (block.cbac_app) {
+          const toolSpanId = `sp_${sanitize(intent.id)}_tool_${sanitize(block.id)}`;
+          const toolSpan = mkSpan({
+            id: toolSpanId,
+            name: block.cbac_app,
+            kind: "tool",
+            label: "Tool",
+            status: block.threat_detected ? "blocked" : "ok",
+            tokensIn: 0, tokensOut: 0, cost: 0,
+            input: block.message || "",
+            output: block.response || "",
+            model: null,
+            parentId: frame.span.id,
+            metadata: {
+              cbacApp: block.cbac_app,
+              cbacDecision: block.cbac_decision,
+              trustIssues: block.trust_issues,
+              blockIndex: block.block_index,
+            },
+          });
+          frame.span.children.push(toolSpan);
+        }
+
+        // Fill the agent span's output and propagate threat upward if needed
+        frame.span.output = block.response || block.message || "";
+        if (block.threat_detected) frame.span.status = "blocked";
+
+        // Pop this frame and everything above it
+        stack.splice(frameIdx);
+      }
+    }
+  }
+
+  const spanById: Record<string, TraceSpan> = {};
+  for (const s of allSpans) spanById[s.id] = s;
+
+  return {
+    trace: rootSpan,
+    spanById,
+    traceId: `tr_${sanitize(intent.id).slice(-8)}`,
+    sessionId: `sess_${sanitize(intent.id).slice(-6)}`,
+    userId: humanName,
+    env: "prod",
+    totalTokensIn: 0,
+    totalTokensOut: 0,
+    totalCost: 0,
   };
 }
 

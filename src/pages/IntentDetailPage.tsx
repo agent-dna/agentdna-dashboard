@@ -9,6 +9,7 @@ import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
 import { LogsTable } from "../components/LogsTable";
 import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useLogs } from "../data/hooks";
+import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { fmtRuntime, timeAgo } from "../lib/format";
 import { useInteractionColumns } from "./InteractionsPage";
@@ -216,7 +217,7 @@ export function IntentDetailPage() {
           onChange={(k) => setTab(k as Tab)}
           tabs={[
             { key: "interactions", label: "Interactions", count: interactionsTotal },
-            { key: "participants", label: "Agents & Apps", count: participants.length },
+            { key: "participants", label: "Agents & Apps", count: participantRows.length },
             { key: "logs", label: "Logs", count: logs.length },
           ]}
         />
@@ -229,15 +230,7 @@ export function IntentDetailPage() {
               onRowClick={(r) => openDrawer("interaction", r)}
               emptyText={interactionsLoading ? "Loading…" : "No interactions recorded for this intent yet."}
             />
-            {interactionsTotalPages > 1 && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: "1px solid var(--line)" }}>
-                <span style={{ fontSize: 12, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
-                  {(interactionsPage - 1) * 10 + 1}–{Math.min(interactionsPage * 10, interactionsTotal)} of {interactionsTotal}
-                </span>
-                <button className="btn ghost" style={{ padding: "4px 10px" }} disabled={interactionsPage <= 1} onClick={() => setInteractionsPage(interactionsPage - 1)}>Prev</button>
-                <button className="btn ghost" style={{ padding: "4px 10px" }} disabled={interactionsPage >= interactionsTotalPages} onClick={() => setInteractionsPage(interactionsPage + 1)}>Next</button>
-              </div>
-            )}
+            <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} loading={interactionsLoading} onChange={setInteractionsPage} />
           </>
         )}
 

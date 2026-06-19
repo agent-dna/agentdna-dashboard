@@ -10,7 +10,6 @@ import { IntentDetail } from "./components/drawer/IntentDetail";
 import { useDrawer } from "./context/DrawerContext";
 import { useTweaks } from "./context/TweaksContext";
 import { useAuth } from "./context/AuthContext";
-import { useAlerts } from "./data/hooks";
 import type { Agent, Tool, Intent, Interaction } from "./types";
 
 interface NavEntry {
@@ -23,7 +22,6 @@ interface NavEntry {
 export function App() {
   const { tweaks, setTweak } = useTweaks();
   const { drawer, closeDrawer } = useDrawer();
-  const { data: alerts } = useAlerts();
   const { user, logout } = useAuth();
   const location = useLocation();
 
@@ -34,7 +32,6 @@ export function App() {
     { to: "/graph", label: "Flow", icon: "activity" },
     { to: "/requests", label: "Requests", icon: "box" },
     { to: "/interactions", label: "Interactions", icon: "interactions" },
-    { to: "/alerts", label: "Threats", icon: "alerts", badge: alerts.length || undefined },
   ];
 
   const collapsed = tweaks.sidebar === "collapsed";

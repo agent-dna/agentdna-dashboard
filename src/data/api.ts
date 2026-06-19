@@ -260,6 +260,8 @@ interface ApiIntent {
   endedAt?: string;
   status: string;
   threatDetected: boolean;
+  /** Actual count of threat interactions within this intent. */
+  threatCount?: number;
   flowType?: string;
   executor?: string;
   chainDepth?: number;
@@ -313,7 +315,7 @@ function mapIntent(i: ApiIntent): Intent {
     agentsInteracted: i.agentsCount ?? 0,
     toolsInteracted: i.toolsCount ?? 0,
     interactionsCount: i.interactionsCount ?? 0,
-    threats: i.threatDetected ? 1 : 0,
+    threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
     score: 0,
     status: i.threatDetected ? "threat" : "safe",
   };
@@ -456,6 +458,7 @@ export async function fetchAgent(id: string): Promise<Agent | null> {
 interface ApiIntentInfo {
   intentID: string;
   initiatorDID: string;
+  initiatorName?: string;
   startedAt: string;
   endedAt?: string;
   status: string;
@@ -479,7 +482,9 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
   return mapIntent({
     intentID: r.intentID,
     initiatorDID: r.initiatorDID,
+    initiatorName: r.initiatorName,
     startedAt: r.startedAt,
+    endedAt: r.endedAt,
     status: r.status,
     threatDetected: r.threatDetected,
   });
@@ -545,7 +550,9 @@ export async function fetchIntentInteractionsPaged(
 }
 
 export async function fetchIntentParticipants(id: string): Promise<IntentParticipant[]> {
-  const interactions = await fetchIntentInteractions(id);
+  const intentInfo = await fetchIntentInfo(id);
+  const initiatorDID = (intentInfo?.initiatorDID ?? "").trim().toLowerCase();
+  const interactions = (intentInfo?.interactions || []).map(mapInteraction);
   const map = new Map<string, IntentParticipant>();
   for (const r of interactions) {
     const sides: { ref: { id: string; name: string }; type: "agent" | "tool" }[] = [
@@ -553,6 +560,7 @@ export async function fetchIntentParticipants(id: string): Promise<IntentPartici
       { ref: r.target, type: r.targetType },
     ];
     for (const { ref, type } of sides) {
+      if (initiatorDID && ref.id.trim().toLowerCase() === initiatorDID) continue;
       const k = `${type}:${ref.id}`;
       const existing = map.get(k);
       if (existing) {
@@ -576,4 +584,61 @@ export async function fetchIntentParticipants(id: string): Promise<IntentPartici
 // No log endpoint in spec yet — stays stubbed.
 export async function fetchLogs(_kind: "agent" | "intent", _id: string): Promise<LogEntry[]> {
   return [];
+}
+
+export interface IntentBlock {
+  id: string;
+  block_index: number;
+  agent_did: string;
+  agent_name: string;
+  direction: "outbound" | "inbound";
+  block_type: "intent" | "delegate" | "execute" | "response" | "verify";
+  message: string;
+  response: string;
+  delegate_to: string;
+  received_from: string;
+  cbac_app: string;
+  cbac_decision: string;
+  threat_detected: boolean;
+  trust_issues: string[];
+}
+
+export async function fetchIntentBlockData(intentId: string): Promise<IntentBlock[] | null> {
+  try {
+    const res = await apiRequest<{ status: boolean; data: IntentBlock[] }>("/intent-block-data", {
+      query: { intent_id: intentId },
+    });
+    const d = res as unknown as { status: boolean; data: IntentBlock[] };
+    return d.data ?? null;
+  } catch (e) {
+    console.warn(`[GET /intent-block-data?intent_id=${intentId}] failed`, e);
+    return null;
+  }
+}
+
+export interface ApiDiagramNode {
+  did: string;
+  name: string;
+  interactionID?: string;
+  interactionType?: "delegate" | "execute" | "tool_call" | "response" | "trigger";
+  direction?: "outbound" | "inbound";
+  threat: boolean;
+  children: ApiDiagramNode[];
+}
+
+export interface IntentDiagram {
+  intentID: string;
+  diagram: ApiDiagramNode;
+}
+
+export async function fetchIntentDiagram(id: string): Promise<IntentDiagram | null> {
+  try {
+    const res = await apiRequest<{ status: boolean; data: IntentDiagram }>("/intent-diagram", {
+      query: { intentID: id },
+    });
+    return (res as unknown as { status: boolean; data: IntentDiagram }).data ?? (res as unknown as IntentDiagram);
+  } catch (e) {
+    console.warn(`[GET /intent-diagram?intentID=${id}] failed`, e);
+    return null;
+  }
 }

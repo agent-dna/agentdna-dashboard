@@ -9,7 +9,6 @@ import { AgentsToolsPage } from "./pages/AgentsToolsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { IntentDetailPage } from "./pages/IntentDetailPage";
 import { InteractionsPage } from "./pages/InteractionsPage";
-import { AlertsPage } from "./pages/AlertsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RequestsPage } from "./pages/RequestsPage";
 import { FlowPage } from "./pages/flow/FlowPage";
@@ -46,7 +45,6 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="graph" element={<FlowPage />} />
                 <Route path="graph/:intentId" element={<FlowPage />} />
                 <Route path="interactions" element={<InteractionsPage />} />
-                <Route path="alerts" element={<AlertsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>

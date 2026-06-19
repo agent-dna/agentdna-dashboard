@@ -115,3 +115,9 @@ export const useAgentPolicyHistory = (id: string) =>
     null,
     [id],
   );
+
+export const useIntentDiagram = (id: string) =>
+  useAsync<api.IntentDiagram | null>(() => api.fetchIntentDiagram(id), null, [id]);
+
+export const useIntentBlockData = (id: string) =>
+  useAsync<api.IntentBlock[] | null>(() => api.fetchIntentBlockData(id), null, [id]);

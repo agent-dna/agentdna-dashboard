@@ -5,19 +5,15 @@ import type { FlowTrace, TraceSpan } from "../pages/flow/flowData";
 
 const KIND_COLOR: Record<string, string> = {
   chain: "#7C3AED",
+  human: "#0A2240",
   agent: "#2563EB",
   tool: "#0284C7",
   llm: "#DB2777",
 };
-const KIND_GLYPH: Record<string, string> = {
-  chain: "◇",
-  agent: "✦",
-  tool: "⌘",
-  llm: "✶",
-};
 
-function barKind(s: TraceSpan): string {
-  return s.kind === "agent" && s.label === "LLM" ? "llm" : s.kind;
+function spanKind(s: TraceSpan): string {
+  if (s.kind === "agent" && s.label === "LLM") return "llm";
+  return s.kind;
 }
 
 
@@ -68,8 +64,10 @@ function TreeNode({
 }) {
   const { span, lastChain } = row;
   const hasKids = span.children.length > 0;
-  const bk = barKind(span);
+  const bk = spanKind(span);
   const c = KIND_COLOR[bk];
+  const infoLabel = span.kind === "chain" ? "trace" : span.label;
+  const hasTokens = span.tokensIn > 0 || span.tokensOut > 0;
   return (
     <div
       className={`ti-node ${selected ? "sel" : ""} ${span.status === "blocked" ? "blk" : ""}`}
@@ -91,21 +89,17 @@ function TreeNode({
           ) : (
             <span className="ti-caret ghost" />
           )}
-          <span
-            className="ti-glyph"
-            style={{ color: c, borderColor: c + "44", background: c + "12" }}
-          >
-            {KIND_GLYPH[bk]}
-          </span>
+          <span className="ti-dot" style={{ background: c }} />
           <span className="ti-name">{span.name}</span>
-          {span.kind !== "chain" && <span className="ti-kind">{span.label}</span>}
           {span.status === "blocked" && <span className="ti-blk-tag">blocked</span>}
         </div>
-        {(span.tokensIn > 0 || span.tokensOut > 0) && (
-          <div className="ti-meta">
-            <span className="tok">{span.tokensIn} → {span.tokensOut} tok</span>
-          </div>
-        )}
+        <div className="ti-span-info" style={{ paddingLeft: hasKids ? 26 : 26 }}>
+          <span className="si-label">{infoLabel}</span>
+          {hasTokens && (
+            <span className="si-tok">{span.tokensIn}↑ {span.tokensOut}↓ tok</span>
+          )}
+          {span.model && <span className="si-model">{span.model}</span>}
+        </div>
       </div>
     </div>
   );
@@ -166,9 +160,10 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
     [trace, collapsed]
   );
   const sel = trace.spanById[selId] || trace.trace;
+  const parentSpan = sel.parentId ? trace.spanById[sel.parentId] : null;
   const toggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
   const isTool = sel.kind === "tool";
-  const selBk = barKind(sel);
+  const selBk = spanKind(sel);
   const spanCount = Object.keys(trace.spanById).length;
 
   return createPortal(
@@ -223,17 +218,11 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
 
           {/* detail pane */}
           <div className="ti-detail">
-            <div className="ti-detail-head">
+            <div className="ti-detail-head" style={{ borderBottom: `2px solid ${KIND_COLOR[selBk]}44` }}>
               <span
-                className="ti-d-glyph"
-                style={{
-                  color: KIND_COLOR[selBk],
-                  borderColor: KIND_COLOR[selBk] + "44",
-                  background: KIND_COLOR[selBk] + "12",
-                }}
-              >
-                {KIND_GLYPH[selBk]}
-              </span>
+                className="ti-d-dot"
+                style={{ background: KIND_COLOR[selBk] }}
+              />
               <div className="ti-d-title">
                 <div className="nm">{sel.name}</div>
                 <div className="sub">{sel.kind === "chain" ? "trace root" : sel.label}</div>
@@ -243,6 +232,20 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
                 {sel.status === "blocked" ? "BLOCKED" : "OK"}
               </span>
             </div>
+
+            {parentSpan && (
+              <div className="ti-ix-chain">
+                <span className="ti-ix-node parent">
+                  <span className="ti-ix-dot" style={{ background: KIND_COLOR[spanKind(parentSpan)] }} />
+                  <span className="ti-ix-name">{parentSpan.name}</span>
+                </span>
+                <span className="ti-ix-arrow">→</span>
+                <span className="ti-ix-node active" style={{ background: KIND_COLOR[selBk] + "18", borderColor: KIND_COLOR[selBk] + "55" }}>
+                  <span className="ti-ix-dot" style={{ background: KIND_COLOR[selBk] }} />
+                  <span className="ti-ix-name" style={{ color: KIND_COLOR[selBk] }}>{sel.name}</span>
+                </span>
+              </div>
+            )}
 
             <div className="ti-chips">
               <span className="ti-chip">
