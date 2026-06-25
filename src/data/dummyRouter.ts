@@ -139,6 +139,10 @@ export function dummyRespond(path: string, query?: Query, method = "GET"): unkno
         agent_access_list: [],
       };
     }
+    if (path === "/dashboard/v1/register-user") {
+      const u = dummy.currentUser;
+      return { api_key: u.api_key, name: u.email, email: u.email, orgID: u.org_id };
+    }
     if (path === "/agents-creation-requests-create") return { requestID: "req_dummy" };
     if (path === "/agents-creation-requests-edit") return { requestID: "req_dummy" };
     if (path === "/agent-creation-request-result-submit")
@@ -159,7 +163,30 @@ export function dummyRespond(path: string, query?: Query, method = "GET"): unkno
     return {};
   }
 
+  if (path === "/user-profile") {
+    const u = dummy.currentUser;
+    return {
+      name: u.email.split("@")[0],
+      email: u.email,
+      apiKey: u.api_key,
+      organizationID: u.org_id,
+      createdAt: new Date().toISOString(),
+      adminEmail: "admin@example.com",
+    };
+  }
+
   if (path === "/home-metrics") return homeMetrics();
+
+  if (path === "/dashboard/v1/global-stats") {
+    const hm = homeMetrics();
+    return {
+      totalUsers: users.length,
+      totalAgents: hm.agentCount,
+      totalInteractions: hm.interactionsCount,
+      totalIntents: hm.intentCount,
+      totalThreats: hm.threatCount,
+    };
+  }
 
   if (path === "/interactions-list") {
     const intentFilter = getStr(query, "intentID");
@@ -299,6 +326,10 @@ export function dummyRespond(path: string, query?: Query, method = "GET"): unkno
     const history = (dummy.agentPolicyHistory as Record<string, Array<{ updateID: string; time: number }>>)[agentDID] || [];
     const entry = history.find((h) => h.updateID === updateID);
     return { updateID, time: entry?.time || 0, policy: text };
+  }
+
+  if (path === "/token-usage") {
+    return { tokensUsed: 4210, tokensLimit: 100000, resetAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() };
   }
 
   if (path === "/user-policy") {

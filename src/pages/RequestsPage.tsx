@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
@@ -62,6 +63,7 @@ export function RequestsPage() {
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
   const resolve = useResolveName();
+  const navigate = useNavigate();
 
   const [tab, setTab] = useState<TabKey>("creation");
   const [page, setPage] = useState(1);
@@ -70,6 +72,7 @@ export function RequestsPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [noDid, setNoDid] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AgentRequest | null>(null);
@@ -84,6 +87,7 @@ export function RequestsPage() {
     if (tab === "users") return; // Users tab handles its own fetch
     setLoading(true);
     setError(null);
+    setNoDid(false);
     try {
       const fetcher =
         tab === "creation"
@@ -98,10 +102,17 @@ export function RequestsPage() {
       setTotal(res.total || 0);
       setTotalPages(res.totalPages || 1);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load requests");
-      setRows([]);
-      setTotal(0);
-      setTotalPages(1);
+      if (err instanceof ApiError && err.message === "no_did") {
+        setNoDid(true);
+        setRows([]);
+        setTotal(0);
+        setTotalPages(1);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Failed to load requests");
+        setRows([]);
+        setTotal(0);
+        setTotalPages(1);
+      }
     } finally {
       setLoading(false);
     }
@@ -210,7 +221,6 @@ export function RequestsPage() {
     {
       key: "createdAt",
       label: "Created",
-      align: "right",
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)" }}>
           {fmtDate(r.createdAt)}
@@ -341,11 +351,56 @@ export function RequestsPage() {
               </div>
             )}
 
-            <DataTable
-              rows={rows.map((r) => ({ ...r, id: r.requestID }))}
-              columns={baseColumns}
-              emptyText={loading ? "Loading…" : "No requests"}
-            />
+            {noDid ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "56px 24px",
+                  gap: 20,
+                  textAlign: "center",
+                }}
+              >
+                <div
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 14,
+                    background: "rgba(37,99,235,0.08)",
+                    border: "1px solid rgba(37,99,235,0.16)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Icon name="box" size={22} style={{ color: "var(--accent)" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg)", marginBottom: 6 }}>
+                    Deploy your first agent
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.6, maxWidth: 340 }}>
+                    Your account is ready. Copy your API key from the Profile page and follow the setup guide to register and deploy your first agent.
+                  </div>
+                </div>
+                <button
+                  className="btn primary"
+                  onClick={() => navigate("/profile")}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <Icon name="key" size={14} />
+                  Get your API key
+                </button>
+              </div>
+            ) : (
+              <DataTable
+                rows={rows.map((r) => ({ ...r, id: r.requestID }))}
+                columns={baseColumns}
+                emptyText={loading ? "Loading…" : "No requests"}
+              />
+            )}
           </>
         )}
       </div>

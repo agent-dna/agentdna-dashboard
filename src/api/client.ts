@@ -43,6 +43,7 @@ interface RequestOptions {
   body?: unknown;
   query?: Record<string, string | number | undefined | null>;
   auth?: boolean;
+  skipLogoutOn401?: boolean;
 }
 
 let onUnauthorized: (() => void) | null = null;
@@ -51,7 +52,7 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 }
 
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, query, auth = true } = opts;
+  const { method = "GET", body, query, auth = true, skipLogoutOn401 = true } = opts;
 
   if (isDummyMode()) {
     const out = dummyRespond(path, query, method);
@@ -83,8 +84,10 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   });
 
   if (res.status === 401) {
-    setToken(null);
-    if (onUnauthorized) onUnauthorized();
+    if (!skipLogoutOn401) {
+      setToken(null);
+      if (onUnauthorized) onUnauthorized();
+    }
     throw new ApiError("Unauthorized", 401);
   }
 

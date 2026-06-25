@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { login as apiLogin, adminLogin as apiAdminLogin, adminRegister as apiAdminRegister, registerAdminMiddleware, type LoginResponse } from "../api/auth";
+import { login as apiLogin, adminLogin as apiAdminLogin, adminRegister as apiAdminRegister, registerAdminMiddleware, registerUser as apiRegisterUser, type LoginResponse } from "../api/auth";
 import { getToken, setToken, setUnauthorizedHandler } from "../api/client";
 import { dummyCurrentUser, isDummyMode } from "../data/dummyRouter";
 
@@ -21,8 +21,10 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginAdmin: (email: string, password: string) => Promise<void>;
-  registerAdmin: (username: string, password: string, org: string) => Promise<void>;
+  registerAdmin: (username: string, email: string, password: string, org: string) => Promise<void>;
+  registerUser: (username: string, email: string, password: string, orgId: string) => Promise<void>;
   logout: () => void;
+  patchUser: (patch: Partial<AuthUser>) => void;
 }
 
 const Ctx = createContext<AuthContextValue | null>(null);
@@ -122,6 +124,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, []);
 
+  // Proactively sign out when the JWT expires mid-session
+  useEffect(() => {
+    if (dummy) return;
+    const id = window.setInterval(() => {
+      const tok = getToken();
+      if (tok && userFromToken(tok) === null) {
+        setToken(null);
+        writeStoredUser(null);
+        setUser(null);
+        setTokenState(null);
+      }
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, [dummy]);
+
   const applyAuthResponse = useCallback((res: LoginResponse) => {
     const u: AuthUser = {
       did: res.did,
@@ -186,12 +203,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [applyJwt]);
 
-  const registerAdmin = useCallback(async (username: string, password: string, org: string) => {
+  const registerAdmin = useCallback(async (username: string, email: string, password: string, org: string) => {
     setLoading(true);
     try {
       if (isDummyMode()) {
         const u = dummyUser();
-        u.email = username || u.email;
+        u.email = email || username || u.email;
         u.org_id = org || u.org_id;
         u.is_admin = true;
         setToken("dummy.jwt.token");
@@ -200,20 +217,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTokenState("dummy.jwt.token");
         return;
       }
-      // Step 1: register on admin server → get DID
-      const { did } = await apiAdminRegister({ username, org, password });
-      // Step 2: whitelist DID in user-server middleware (new_admins table)
+      const { did } = await apiAdminRegister({ username, email, org, password });
       await registerAdminMiddleware(did, org);
-      // Step 3: auto-login → get JWT and store it
       applyJwt(await apiAdminLogin(username, password));
     } finally {
       setLoading(false);
     }
   }, [applyJwt]);
 
+  const registerUser = useCallback(async (name: string, email: string, password: string, orgId: string) => {
+    setLoading(true);
+    try {
+      if (isDummyMode()) {
+        const u = dummyUser();
+        u.email = email || name || u.email;
+        u.org_id = orgId || u.org_id;
+        u.is_admin = false;
+        setToken("dummy.jwt.token");
+        writeStoredUser(u);
+        setUser(u);
+        setTokenState("dummy.jwt.token");
+        return;
+      }
+      await apiRegisterUser({ name: name || undefined, email, password, orgID: orgId });
+      applyAuthResponse(await apiLogin(email, password));
+    } finally {
+      setLoading(false);
+    }
+  }, [applyAuthResponse]);
+
+  const patchUser = useCallback((patch: Partial<AuthUser>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      writeStoredUser(next);
+      return next;
+    });
+  }, []);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, token, loading, login, loginAdmin, registerAdmin, logout }),
-    [user, token, loading, login, loginAdmin, registerAdmin, logout],
+    () => ({ user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser }),
+    [user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

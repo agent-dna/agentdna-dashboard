@@ -103,3 +103,11 @@ export interface HomeMetrics {
   page: number;
   agentList: HomeAgentSummary[];
 }
+
+export interface PublicMetrics {
+  totalUsers: number;
+  totalAgents: number;
+  totalInteractions: number;
+  totalIntents: number;
+  totalThreats: number;
+}

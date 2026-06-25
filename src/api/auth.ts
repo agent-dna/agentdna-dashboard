@@ -61,17 +61,41 @@ export async function adminLogin(username: string, password: string): Promise<st
   return res.data as string;
 }
 
-/** POST /agent-admin/v1/register-admin — returns the new admin's DID */
 export interface AdminRegisterBody {
   username: string;
+  email: string;
   org: string;
   password: string;
 }
 
-export async function adminRegister(body: AdminRegisterBody): Promise<{ did: string }> {
-  const res = await adminFetch("/register-admin", body);
-  // On success, message contains the DID; data is null
-  return { did: res.message };
+export function adminRegister(body: AdminRegisterBody): Promise<{ did: string }> {
+  return apiRequest<{ did: string }>("/create-admin", {
+    method: "POST",
+    body,
+    auth: false,
+  });
+}
+
+export interface RegisterUserBody {
+  name?: string;
+  email: string;
+  password: string;
+  orgID: string;
+}
+
+export interface RegisterUserResponse {
+  api_key: string;
+  name: string;
+  email: string;
+  orgID: string;
+}
+
+export function registerUser(body: RegisterUserBody): Promise<RegisterUserResponse> {
+  return apiRequest<RegisterUserResponse>("/register-user", {
+    method: "POST",
+    body,
+    auth: false,
+  });
 }
 
 /**

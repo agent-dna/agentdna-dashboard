@@ -63,13 +63,9 @@ export function InteractionDetail({ interaction: i }: Props) {
           <h2>Interaction</h2>
           <div className="meta">
             <span style={{ fontFamily: "var(--font-mono)" }}>{i.id}</span>
-            {i.threat ? (
+            {i.threat && (
               <span className="chip threat">
                 <span className="dot-status threat" /> threat
-              </span>
-            ) : (
-              <span className="chip safe">
-                <span className="dot-status safe" /> safe
               </span>
             )}
           </div>

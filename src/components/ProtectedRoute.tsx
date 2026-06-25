@@ -12,10 +12,10 @@ export function ProtectedRoute({ children, adminOnly }: ProtectedRouteProps) {
   const location = useLocation();
 
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/" state={{ from: location }} replace />;
   }
   if (adminOnly && !user.is_admin) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;
 }

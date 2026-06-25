@@ -22,11 +22,11 @@ interface NavEntry {
 export function App() {
   const { tweaks, setTweak } = useTweaks();
   const { drawer, closeDrawer } = useDrawer();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
 
   const NAV_WORKSPACE: NavEntry[] = [
-    { to: "/", label: "Home", icon: "home" },
+    { to: "/dashboard", label: "Home", icon: "home" },
     { to: "/intents", label: "Intents", icon: "intents" },
     { to: "/agents", label: "Agents & Apps", icon: "agents" },
     { to: "/graph", label: "Flow", icon: "activity" },
@@ -39,8 +39,8 @@ export function App() {
     tweaks.density === "compact" ? "density-compact" : tweaks.density === "comfortable" ? "density-comfy" : "";
 
   const breadcrumb = (() => {
-    const item = NAV_WORKSPACE.find((n) => n.to === location.pathname) ?? NAV_WORKSPACE[0];
-    return item.label;
+    if (location.pathname === "/profile") return "Profile";
+    return NAV_WORKSPACE.find((n) => location.pathname.startsWith(n.to))?.label ?? "Home";
   })();
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function App() {
             <NavLink
               key={n.to}
               to={n.to}
-              end={n.to === "/"}
+              end={n.to === "/requests"}
               className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
               title={n.label}
             >
@@ -73,14 +73,18 @@ export function App() {
 
           <div style={{ flex: 1 }} />
           <div className="sb-section">Account</div>
-          <div className="sb-item" title="Sign out" onClick={logout}>
-            <Icon className="icon" name="arrowRight" size={18} />
-            <span className="label">Sign out</span>
-          </div>
+          <NavLink
+            to="/profile"
+            className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+            title="Profile"
+          >
+            <Icon className="icon" name="user" size={18} />
+            <span className="label">Profile</span>
+          </NavLink>
         </nav>
         <div className="sb-foot">
           <div className="who">
-            {user?.email || "Guest"}
+            {(user?.email || "Guest").split("@")[0]}
             <div className="sub">{user?.org_id || ""}</div>
           </div>
         </div>

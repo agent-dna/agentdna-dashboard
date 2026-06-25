@@ -14,6 +14,7 @@ import type {
   LogEntry,
   IntentParticipant,
   HomeMetrics,
+  PublicMetrics,
 } from "../types";
 
 // ============ Helpers (API → internal type mappers) ============
@@ -65,6 +66,10 @@ function mapInteraction(i: ApiInteraction): Interaction {
 
 export function fetchHomeMetrics(page = 1): Promise<HomeMetrics> {
   return apiRequest<HomeMetrics>("/home-metrics", { query: { page } });
+}
+
+export function fetchPublicMetrics(): Promise<PublicMetrics> {
+  return apiRequest<PublicMetrics>("/global-stats", { auth: false });
 }
 
 // ============ Lists (org-scoped) ============

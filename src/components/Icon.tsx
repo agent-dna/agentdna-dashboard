@@ -34,7 +34,10 @@ export type IconName =
   | "flow"
   | "chevronLeft"
   | "play"
-  | "pause";
+  | "pause"
+  | "user"
+  | "key"
+  | "trash";
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
   name: IconName;
@@ -191,6 +194,24 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <rect x="6" y="4" width="4" height="16" rx="1" />
       <rect x="14" y="4" width="4" height="16" rx="1" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="8" cy="15" r="4" />
+      <path d="M12 11l8-8M18 6l2 2M15 9l2 2" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6M14 11v6" />
     </>
   ),
 };
