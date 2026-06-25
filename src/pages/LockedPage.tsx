@@ -1,8 +1,8 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
+import { TrendingUp, ShieldAlert, ArrowUpRight, Network, Rocket, Code } from "lucide-react";
 
-/* ── Inline canvas (same as LandingPage) ─────────────────────────────────── */
-
+/* ── Particle canvas ─────────────────────────────────────────────────────── */
 interface Particle { x: number; y: number; vx: number; vy: number; r: number }
 
 function NetworkCanvas() {
@@ -10,17 +10,19 @@ function NetworkCanvas() {
   useEffect(() => {
     const canvas = ref.current; if (!canvas) return;
     const ctx = canvas.getContext("2d"); if (!ctx) return;
-    const COUNT = 45; const DIST = 150; const particles: Particle[] = [];
+    const COUNT = 45, DIST = 150;
+    const particles: Particle[] = [];
     const resize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
     resize();
     const ro = new ResizeObserver(resize); ro.observe(canvas);
-    for (let i = 0; i < COUNT; i++) particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4, r: Math.random() * 2 + 1.5 });
+    for (let i = 0; i < COUNT; i++)
+      particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4, r: Math.random() * 2 + 1.5 });
     let raf: number;
     const draw = () => {
       const { width: w, height: h } = canvas; ctx.clearRect(0, 0, w, h);
       for (const p of particles) { p.x += p.vx; p.y += p.vy; if (p.x < 0) p.x = w; else if (p.x > w) p.x = 0; if (p.y < 0) p.y = h; else if (p.y > h) p.y = 0; }
-      for (let i = 0; i < particles.length; i++) for (let j = i + 1; j < particles.length; j++) { const a = particles[i]; const b = particles[j]; const dx = a.x - b.x; const dy = a.y - b.y; const d = Math.sqrt(dx * dx + dy * dy); if (d < DIST) { ctx.beginPath(); ctx.strokeStyle = `rgba(37,99,235,${((1 - d / DIST) * 0.07).toFixed(3)})`; ctx.lineWidth = 1; ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
-      for (const p of particles) { ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fillStyle = "rgba(37,99,235,0.12)"; ctx.fill(); }
+      for (let i = 0; i < particles.length; i++) for (let j = i + 1; j < particles.length; j++) { const a = particles[i], b = particles[j], dx = a.x - b.x, dy = a.y - b.y, d = Math.sqrt(dx * dx + dy * dy); if (d < DIST) { ctx.beginPath(); ctx.strokeStyle = `rgba(0,81,213,${((1 - d / DIST) * 0.07).toFixed(3)})`; ctx.lineWidth = 1; ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+      for (const p of particles) { ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fillStyle = "rgba(0,81,213,0.10)"; ctx.fill(); }
       raf = requestAnimationFrame(draw);
     };
     draw();
@@ -29,103 +31,74 @@ function NetworkCanvas() {
   return <canvas ref={ref} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }} />;
 }
 
-/* ── Inline SVGs ─────────────────────────────────────────────────────────── */
-
-const IcTrendUp = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" />
-  </svg>
-);
-const IcArrow = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-  </svg>
-);
-const IcChevR = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
-const IcLock = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);
-const IcGlobe = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
-    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-  </svg>
-);
-const IcActivity = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-  </svg>
-);
-const IcCode = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-  </svg>
-);
-
 /* ── Data ─────────────────────────────────────────────────────────────────── */
 
 const METRICS = [
-  { label: "Agents deployed",    value: "12",  trend: "+8.2%"  },
-  { label: "Total users",         value: "2",   trend: "+5.1%"  },
-  { label: "Total interactions",  value: "204", trend: "+12.4%" },
-  { label: "Intents secured",     value: "24",  trend: "+3.7%"  },
-  { label: "Threats detected",    value: "9",   trend: "+1.9%"  },
+  { id: "agents",       label: "AGENTS DEPLOYED",    value: 12,  change: "+8.2%",  isPositive: true,  barWidth: "65%", barColor: "#2563EB" },
+  { id: "users",        label: "TOTAL USERS",         value: 2,   change: "+5.1%",  isPositive: true,  barWidth: "65%", barColor: "#2563EB" },
+  { id: "interactions", label: "TOTAL INTERACTIONS",  value: 204, change: "+12.4%", isPositive: true,  barWidth: "65%", barColor: "#2563EB" },
+  { id: "intents",      label: "INTENTS SECURED",     value: 24,  change: "+3.7%",  isPositive: true,  barWidth: "65%", barColor: "#2563EB" },
+  { id: "threats",      label: "THREATS DETECTED",    value: 9,   change: "+1.9%",  isPositive: false, barWidth: "15%", barColor: "#BA1A1A" },
 ];
 
 const FEATURES = [
-  { Ic: IcGlobe,    tag: "Monitoring",  title: "Real-time observability",    desc: "Track every agent interaction as it happens with live telemetry, execution traces, and instant alerting on anomalous behaviour." },
-  { Ic: IcActivity, tag: "Analytics",   title: "Intent chain analytics",     desc: "Deep visibility into intent chains, execution paths, and multi-step agent decision trees across your entire fleet." },
-  { Ic: IcCode,     tag: "Integration", title: "Drop-in SDK & API",          desc: "Production-ready middleware that wraps your existing agents in under five minutes — no model changes required." },
+  { Ic: Network, tag: "HUB",            title: "Agent Registry",          desc: "Browse and manage all agents registered in your organisation. View policies, scores, and deployment history.",                                         cta: "Explore Registry" },
+  { Ic: Rocket,  tag: "TUTORIAL",       title: "Deploy your first agent", desc: "Step-by-step guide to generating an API key, deploying an agent, and monitoring its first interactions.",                                           cta: "Start Tutorial"   },
+  { Ic: Code,    tag: "AGENT EXAMPLES", title: "Starter templates",       desc: "Production-ready agent blueprints with built-in intent tracking, threat hooks, and org-scoped policies.",                                            cta: "View Templates"   },
 ];
 
 /* ── Component ───────────────────────────────────────────────────────────── */
 
 export function LockedPage() {
   const navigate = useNavigate();
-  const BLUE = "#2563EB";
-  const BLUE_BG = "rgba(37,99,235,0.09)";
 
   return (
     <div style={pageStyle}>
       <style>{`
-        .lp-metric-card { transition: border-color 180ms, box-shadow 180ms, transform 180ms; }
-        .lp-metric-card:hover { border-color: #2563EB !important; box-shadow: 0 8px 24px rgba(37,99,235,0.18), 0 2px 6px rgba(37,99,235,0.10) !important; transform: translateY(-3px); }
-        .lp-feature-card { transition: border-color 180ms, box-shadow 180ms, transform 180ms; }
-        .lp-feature-card:hover { border-color: #2563EB !important; box-shadow: 0 12px 32px rgba(37,99,235,0.14), 0 4px 10px rgba(37,99,235,0.10) !important; transform: translateY(-4px); }
+        @keyframes lp-ping {
+          75%, 100% { transform: scale(2); opacity: 0; }
+        }
+        .lp-ping { animation: lp-ping 1.4s cubic-bezier(0,0,0.2,1) infinite; }
+        .lp-metric:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0,81,213,0.18), 0 2px 8px rgba(0,0,0,0.18) !important; }
+        .lp-feature:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(0,81,213,0.14), 0 4px 12px rgba(0,0,0,0.06) !important; border-color: #DEE8FF !important; }
+        .lp-feature:hover .lp-feat-icon { transform: scale(1.08); }
+        .lp-feature:hover .lp-feat-title { color: #0051d5 !important; }
+        .lp-metric, .lp-feature { transition: transform 200ms, box-shadow 200ms, border-color 200ms; }
+        .lp-feat-icon { transition: transform 200ms; }
+        .lp-feat-title { transition: color 200ms; }
       `}</style>
 
-      {/* ── Hero ───────────────────────────────────────────────────────────── */}
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section style={heroSection}>
         <NetworkCanvas />
-        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 22 }}>
-          {/* lock badge */}
-          <div style={lockBadge}>
-            <IcLock />
-            <span>Feature locked</span>
+        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 24, textAlign: "center" as const }}>
+
+          {/* Animated ping pill */}
+          <div style={pingPill}>
+            <span style={{ position: "relative", display: "inline-flex", width: 8, height: 8 }}>
+              <span className="lp-ping" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#0051d5", opacity: 0.75 }} />
+              <span style={{ position: "relative", display: "inline-flex", width: 8, height: 8, borderRadius: "50%", background: "#0051d5" }} />
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#0051d5" }}>Live Network Metrics</span>
           </div>
 
+          {/* Heading */}
           <h1 style={h1Style}>
             The{" "}
-            <span style={{ color: BLUE, textDecoration: "underline", textDecorationColor: BLUE, textDecorationThickness: 3, textUnderlineOffset: 6 }}>
+            <span style={{ color: "#0051d5", textDecoration: "underline wavy #DEE8FF", textDecorationThickness: "4px", textUnderlineOffset: "6px" }}>
               control center
             </span>
             <br />for your AI agents.
           </h1>
 
           <p style={subtitleStyle}>
-            Real-time observability, intent tracking, and threat detection
-            <br />across every agent interaction in your organisation.
+            Real-time observability, intent tracking, and threat detection across every
+            <br />agent interaction in your organisation.
           </p>
 
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as const, justifyContent: "center" }}>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" as const, justifyContent: "center" }}>
             <button style={primaryCta}>
-              Get started free <IcArrow />
+              Get started free <ArrowUpRight size={16} />
             </button>
             <button style={secondaryCta} onClick={() => navigate("/profile")}>
               Get your API key
@@ -134,79 +107,78 @@ export function LockedPage() {
         </div>
       </section>
 
-      {/* ── Live metrics ───────────────────────────────────────────────────── */}
-      <section style={metricsSection}>
-        <div style={sectionLabel}>
-          <span style={liveDot} />
-          Live network metrics
-        </div>
+      {/* ── Metrics ──────────────────────────────────────────────────────── */}
+      <section style={section}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16 }}>
+          {METRICS.map((m) => (
+            <div key={m.id} className="lp-metric" style={metricCard}>
+              {/* Top row: label + badge */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: "#9ca3af" }}>
+                  {m.label}
+                </span>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 2, flexShrink: 0,
+                  background: m.isPositive ? "rgba(34,197,94,0.10)" : "rgba(239,68,68,0.10)",
+                  color: m.isPositive ? "#4ade80" : "#f87171",
+                  borderRadius: 4, padding: "2px 6px", fontSize: 10, fontWeight: 700,
+                }}>
+                  {m.isPositive ? <TrendingUp size={11} /> : <ShieldAlert size={11} />}
+                  {m.change}
+                </span>
+              </div>
 
-        <div style={metricsGrid}>
-          {METRICS.map(({ label, value, trend }) => (
-            <div key={label} className="lp-metric-card" style={metricCard}>
-              <div style={metricAccentBar} />
-              <div style={metricCardBody}>
-                <div style={trendBadge}>
-                  <IcTrendUp />
-                  <span>{trend}</span>
-                </div>
-                <div style={metricValue}>{value}</div>
-                <div style={metricLabel}>{label}</div>
+              {/* Large value */}
+              <div style={{ margin: "14px 0 10px" }}>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 800, letterSpacing: "-0.04em", lineHeight: 1, color: "#ffffff" }}>
+                  {m.value}
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ height: 3, width: "100%", background: "rgba(255,255,255,0.10)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: m.barWidth, background: m.barColor, borderRadius: 99, transition: "width 1s" }} />
               </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── Features ───────────────────────────────────────────────────────── */}
-      <section style={exploreSection}>
+      {/* ── Explore ──────────────────────────────────────────────────────── */}
+      <section style={{ ...section, paddingBottom: 64 }}>
         <div style={{ marginBottom: 32 }}>
           <h2 style={sectionH2}>Explore AgentDNA</h2>
-          <p style={sectionSub}>Everything you need to deploy and govern AI agents at scale.</p>
+          <p style={{ fontSize: 14, color: "#44474d", margin: 0 }}>
+            Everything you need to deploy and govern AI agents at scale.
+          </p>
         </div>
 
-        <div style={featureGrid}>
-          {FEATURES.map(({ Ic, tag, title, desc }) => (
-            <div key={tag} className="lp-feature-card" style={featureCard}>
-              <div style={{ width: 41, height: 41, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: BLUE_BG, color: BLUE }}>
-                <Ic />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
+          {FEATURES.map(({ Ic, tag, title, desc, cta }) => (
+            <div key={tag} className="lp-feature" style={featureCard}>
+              <div className="lp-feat-icon" style={featureIconBox}>
+                <Ic size={24} color="#ffffff" />
               </div>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" as const, borderRadius: 99, padding: "2px 8px", color: BLUE, background: BLUE_BG }}>
-                {tag}
-              </span>
-              <h3 style={featureTitle}>{title}</h3>
-              <p style={featureDesc}>{desc}</p>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: BLUE }}>
-                Explore <IcChevR />
-              </span>
+
+              <span style={featureTagStyle}>{tag}</span>
+
+              <h3 className="lp-feat-title" style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "#111c2d", margin: "4px 0 0", letterSpacing: "-0.02em" }}>
+                {title}
+              </h3>
+
+              <p style={{ fontSize: 13, color: "#44474d", lineHeight: 1.65, margin: 0, flex: 1 }}>
+                {desc}
+              </p>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: "#0051d5", marginTop: 4 }}>
+                {cta} <span style={{ transition: "transform 200ms" }}>→</span>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── Upgrade banner ─────────────────────────────────────────────────── */}
-      <section style={bannerSection}>
-        <div style={upgradeBanner}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#1d1d1f", marginBottom: 4 }}>
-              Ready to unlock the full platform?
-            </div>
-            <div style={{ fontSize: 13, color: "#6e6e73" }}>
-              Deploy your first agent and start monitoring in under 5 minutes.
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
-            <button style={primaryCta}>
-              Upgrade plan <IcArrow />
-            </button>
-            <button style={secondaryCta} onClick={() => navigate("/profile")}>
-              Get API key
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
       <footer style={footerStyle}>
         <span style={{ fontSize: 12, color: "#6e6e73" }}>Secured by AgentDNA · org-scoped JWT</span>
         <span style={{ fontSize: 12, color: "#6e6e73" }}>© {new Date().getFullYear()} AgentDNA</span>
@@ -219,7 +191,7 @@ export function LockedPage() {
 
 const pageStyle: CSSProperties = {
   minHeight: "100%",
-  background: "#ffffff",
+  background: "#F9F9FF",
   display: "flex",
   flexDirection: "column",
   fontFamily: "var(--font-body)",
@@ -231,39 +203,36 @@ const heroSection: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
-  textAlign: "center",
   padding: "72px 24px 64px",
   overflow: "hidden",
 };
 
-const lockBadge: CSSProperties = {
+const pingPill: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 7,
-  fontSize: 12.5,
-  fontWeight: 600,
-  color: "#2563EB",
-  background: "rgba(37,99,235,0.07)",
-  border: "1px solid rgba(37,99,235,0.18)",
+  background: "#E7EEFF",
+  border: "1px solid #DEE8FF",
   borderRadius: 99,
   padding: "6px 16px",
+  boxShadow: "0 1px 4px rgba(0,81,213,0.08)",
 };
 
 const h1Style: CSSProperties = {
   fontFamily: "var(--font-display)",
-  fontSize: "clamp(28px, 4.5vw, 52px)",
+  fontSize: "clamp(28px, 4vw, 52px)",
   fontWeight: 800,
   letterSpacing: "-0.04em",
-  color: "#1d1d1f",
-  lineHeight: 1.08,
+  color: "#111c2d",
+  lineHeight: 1.06,
   margin: 0,
 };
 
 const subtitleStyle: CSSProperties = {
   fontSize: 15,
-  color: "#6e6e73",
-  lineHeight: 1.65,
-  maxWidth: 480,
+  color: "#44474d",
+  lineHeight: 1.7,
+  maxWidth: 520,
   margin: 0,
 };
 
@@ -271,123 +240,50 @@ const primaryCta: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 8,
-  background: "#2563EB",
+  background: "#0051d5",
   border: "none",
-  borderRadius: 11,
-  padding: "12px 26px",
+  borderRadius: 9,
+  padding: "12px 24px",
   fontSize: 14,
   fontWeight: 700,
   color: "#fff",
   cursor: "pointer",
   fontFamily: "var(--font-body)",
-  boxShadow: "0 4px 16px rgba(37,99,235,0.28)",
+  boxShadow: "0 4px 16px rgba(0,81,213,0.22)",
 };
 
 const secondaryCta: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  background: "#fff",
-  border: "1.5px solid rgba(0,0,0,0.14)",
-  borderRadius: 11,
-  padding: "12px 26px",
+  background: "#ffffff",
+  border: "1.5px solid #E2E8F0",
+  borderRadius: 9,
+  padding: "12px 24px",
   fontSize: 14,
   fontWeight: 600,
-  color: "#1d1d1f",
+  color: "#111c2d",
   cursor: "pointer",
   fontFamily: "var(--font-body)",
 };
 
-const metricsSection: CSSProperties = {
+const section: CSSProperties = {
   width: "100%",
-  maxWidth: 1120,
+  maxWidth: 1280,
   margin: "0 auto",
   padding: "0 32px 56px",
   boxSizing: "border-box",
 };
 
-const sectionLabel: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  fontSize: 11.5,
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase" as const,
-  color: "#6e6e73",
-  marginBottom: 20,
-};
-
-const liveDot: CSSProperties = {
-  display: "inline-block",
-  width: 7,
-  height: 7,
-  borderRadius: "50%",
-  background: "#2563EB",
-  boxShadow: "0 0 0 3px rgba(37,99,235,0.18)",
-};
-
-const metricsGrid: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(5, 1fr)",
-  gap: 16,
-};
-
 const metricCard: CSSProperties = {
-  background: "#0f2d5c",
-  border: "none",
-  borderRadius: 16,
+  position: "relative",
   overflow: "hidden",
+  background: "#0A192F",
+  border: "1px solid rgba(255,255,255,0.05)",
+  borderRadius: 12,
+  padding: "20px",
   display: "flex",
   flexDirection: "column",
-  boxShadow: "0 4px 24px rgba(15,45,92,0.28), 0 1px 6px rgba(0,0,0,0.12)",
-};
-
-const metricAccentBar: CSSProperties = {
-  height: 3,
-  background: "rgba(255,255,255,0.18)",
-  flexShrink: 0,
-};
-
-const metricCardBody: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 7,
-  padding: "13px 20px 14px",
-};
-
-const trendBadge: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 3,
-  fontSize: 10.5,
-  fontWeight: 700,
-  color: "#ffffff",
-  background: "rgba(255,255,255,0.15)",
-  borderRadius: 99,
-  padding: "3px 7px",
-};
-
-const metricValue: CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 32,
-  fontWeight: 800,
-  letterSpacing: "-0.04em",
-  lineHeight: 1,
-  color: "#ffffff",
-};
-
-const metricLabel: CSSProperties = {
-  fontSize: 12,
-  color: "#ffffff",
-  fontWeight: 700,
-};
-
-const exploreSection: CSSProperties = {
-  width: "100%",
-  maxWidth: 1120,
-  margin: "0 auto 64px",
-  padding: "0 32px",
-  boxSizing: "border-box",
+  boxShadow: "0 4px 20px rgba(10,25,47,0.36), 0 1px 4px rgba(0,0,0,0.12)",
 };
 
 const sectionH2: CSSProperties = {
@@ -395,76 +291,51 @@ const sectionH2: CSSProperties = {
   fontSize: 28,
   fontWeight: 800,
   letterSpacing: "-0.03em",
-  color: "#1d1d1f",
+  color: "#111c2d",
   margin: "0 0 8px",
-};
-
-const sectionSub: CSSProperties = {
-  fontSize: 14,
-  color: "#6e6e73",
-  margin: 0,
-};
-
-const featureGrid: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
-  gap: 20,
 };
 
 const featureCard: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   alignItems: "flex-start",
-  gap: 12,
-  background: "rgba(255,255,255,0.55)",
-  backdropFilter: "blur(16px) saturate(160%)",
-  WebkitBackdropFilter: "blur(16px) saturate(160%)",
-  border: "1.5px solid rgba(37,99,235,0.22)",
-  borderRadius: 15,
-  padding: "24px 22px",
-  boxShadow: "0 6px 24px rgba(37,99,235,0.10), 0 2px 6px rgba(0,0,0,0.04)",
-};
-
-const featureTitle: CSSProperties = {
-  fontFamily: "var(--font-display)",
-  fontSize: 15,
-  fontWeight: 700,
-  letterSpacing: "-0.02em",
-  color: "#1d1d1f",
-  margin: 0,
-};
-
-const featureDesc: CSSProperties = {
-  fontSize: 12,
-  color: "#6e6e73",
-  lineHeight: 1.6,
-  margin: 0,
-  flex: 1,
-};
-
-const bannerSection: CSSProperties = {
-  width: "100%",
-  maxWidth: 1120,
-  margin: "0 auto 64px",
-  padding: "0 32px",
+  gap: 14,
+  background: "#ffffff",
+  border: "1px solid #E2E8F0",
+  borderRadius: 16,
+  padding: "32px 28px",
+  height: 360,
   boxSizing: "border-box",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+  cursor: "pointer",
 };
 
-const upgradeBanner: CSSProperties = {
+const featureIconBox: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
-  gap: 20,
-  background: "rgba(37,99,235,0.04)",
-  border: "1.5px solid rgba(37,99,235,0.18)",
-  borderRadius: 14,
-  padding: "24px 28px",
-  flexWrap: "wrap" as const,
+  justifyContent: "center",
+  width: 48,
+  height: 48,
+  borderRadius: 12,
+  background: "#0051d5",
+  boxShadow: "0 4px 12px rgba(0,81,213,0.28)",
+  flexShrink: 0,
+};
+
+const featureTagStyle: CSSProperties = {
+  display: "inline-block",
+  background: "#E7EEFF",
+  color: "#0051d5",
+  borderRadius: 99,
+  padding: "3px 10px",
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
 };
 
 const footerStyle: CSSProperties = {
   width: "100%",
-  maxWidth: 1120,
+  maxWidth: 1280,
   margin: "0 auto",
   padding: "16px 32px",
   boxSizing: "border-box",
