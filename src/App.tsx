@@ -1,69 +1,131 @@
-import { Routes, Route, BrowserRouter, Link, useLocation } from "react-router-dom";
-import "./App.css";
-
-import DashboardPage from "./pages/DashboardPage";
-import AgentProfilePage from "./pages/AgentProfilePage";
-import EmailSearchPage from "./pages/EmailSearchPage";
-import logo from "./assets/a4d2293fc03eb10393506a75b7c4bd9ad839d7ba-efzz4AxP.png";
 import { useEffect } from "react";
-import ToolProfilePage from "./pages/ToolProfile";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Icon, type IconName } from "./components/Icon";
+import logoMark from "./assets/agentdna-logo.png";
+import { Drawer } from "./components/Drawer";
+import { TweaksPanel } from "./components/TweaksPanel";
+import { EntityDetail } from "./components/drawer/EntityDetail";
+import { InteractionDetail } from "./components/drawer/InteractionDetail";
+import { IntentDetail } from "./components/drawer/IntentDetail";
+import { useDrawer } from "./context/DrawerContext";
+import { useTweaks } from "./context/TweaksContext";
+import { useAuth } from "./context/AuthContext";
+import type { Agent, Tool, Intent, Interaction } from "./types";
 
-
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
-
-
-function ScrollToTop() {
-  const { pathname } = useLocation();
-
-  useEffect(() => {
-    window.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "instant", // or "smooth" if you want
-    });
-  }, [pathname]);
-
-  return null;
+interface NavEntry {
+  to: string;
+  label: string;
+  icon: IconName;
+  badge?: number;
 }
 
-function App() {
+export function App() {
+  const { tweaks, setTweak } = useTweaks();
+  const { drawer, closeDrawer } = useDrawer();
+  const { user } = useAuth();
+  const location = useLocation();
+
+  const NAV_WORKSPACE: NavEntry[] = [
+    { to: "/dashboard", label: "Home", icon: "home" },
+    { to: "/intents", label: "Intents", icon: "intents" },
+    { to: "/agents", label: "Agents & Apps", icon: "agents" },
+    { to: "/graph", label: "Flow", icon: "activity" },
+    { to: "/requests", label: "Requests", icon: "box" },
+    { to: "/interactions", label: "Interactions", icon: "interactions" },
+  ];
+
+  const collapsed = tweaks.sidebar === "collapsed";
+  const densityClass =
+    tweaks.density === "compact" ? "density-compact" : tweaks.density === "comfortable" ? "density-comfy" : "";
+
+  const breadcrumb = (() => {
+    if (location.pathname === "/profile") return "Profile";
+    return NAV_WORKSPACE.find((n) => location.pathname.startsWith(n.to))?.label ?? "Home";
+  })();
+
+  useEffect(() => {
+    const value = `"${tweaks.font}", system-ui, -apple-system, sans-serif`;
+    document.documentElement.style.setProperty("--font-body", value);
+    return () => {
+      document.documentElement.style.removeProperty("--font-body");
+    };
+  }, [tweaks.font]);
+
   return (
-    <BrowserRouter>
-          <ScrollToTop />
+    <div className={`app ${collapsed ? "collapsed" : ""} ${densityClass}`.trim()}>
+      <aside className="sidebar">
+          <img src={logoMark} alt="AgentDNA" className="brand-full" />
+        <nav className="sb-nav">
+          <div className="sb-section">Workspace</div>
+          {NAV_WORKSPACE.map((n) => (
+            <NavLink
+              key={n.to}
+              to={n.to}
+              end={n.to === "/requests"}
+              className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+              title={n.label}
+            >
+              <Icon className="icon" name={n.icon} size={18} />
+              <span className="label">{n.label}</span>
+              {n.badge != null && <span className="badge">{n.badge}</span>}
+            </NavLink>
+          ))}
 
-      <div className="page">
-        <header className="nav">
-          {/* Left: Logo */}
-          <Link to="/" className="brand">
-            <img src={logo} alt="AgentDNA Logo" className="brand-logo" />
-          </Link>
-          {/* <div className="brand">
-            <img src={logo} alt="AgentDNA Logo" className="brand-logo" />
-          </div> */}
-
-          {/* Right: Actions */}
-          <div className="nav-actions">
-            {/* <button className="nav-link-btn">Hub</button> */}
-            <Link to="https://hub.agentdna.io/" className="nav-link-btn">
-              HUB
-            </Link>
-
-            <Link to="https://agentdna.io/beta" className="outline">
-              Try Beta
-            </Link>
+          <div style={{ flex: 1 }} />
+          <div className="sb-section">Account</div>
+          <NavLink
+            to="/profile"
+            className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+            title="Profile"
+          >
+            <Icon className="icon" name="user" size={18} />
+            <span className="label">Profile</span>
+          </NavLink>
+        </nav>
+        <div className="sb-foot">
+          <div className="who">
+            {(user?.email || "Guest").split("@")[0]}
+            <div className="sub">{user?.org_id || ""}</div>
           </div>
-        </header>
+        </div>
+      </aside>
 
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/agent/:id" element={<AgentProfilePage />} />
-          <Route path="/tool/:id" element={<ToolProfilePage />} />
-          <Route path="/search/:email" element={<EmailSearchPage />} />
+      <div className="main">
+        <div className="topbar">
+          <button
+            className="icon-btn"
+            onClick={() => setTweak("sidebar", collapsed ? "expanded" : "collapsed")}
+            title="Toggle sidebar"
+          >
+            <Icon name="sidebar" size={16} />
+          </button>
+          <div className="crumbs">
+            <span style={{ textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.04em", color: "var(--fg)" }}>
+              {user?.org_id || "Organization"}
+            </span>
+            <span className="sep">/</span>
+            <span className="here">{breadcrumb}</span>
+          </div>
+          <div className="search">
+            <Icon name="search" className="icon" size={16} />
+            <input placeholder="Search agents, tools, intents…" />
+          </div>
+        </div>
 
-        </Routes>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <Outlet />
+        </div>
       </div>
-      <footer className="footer">© 2026 AgentDNA. All rights reserved.</footer>
-    </BrowserRouter>
+
+      <Drawer open={!!drawer} onClose={closeDrawer}>
+        {drawer?.kind === "agent" && <EntityDetail entity={drawer.entity as Agent} kind="agent" />}
+        {drawer?.kind === "tool" && <EntityDetail entity={drawer.entity as Tool} kind="tool" />}
+        {drawer?.kind === "interaction" && <InteractionDetail interaction={drawer.entity as Interaction} />}
+        {drawer?.kind === "intent" && <IntentDetail intent={drawer.entity as Intent} />}
+      </Drawer>
+
+      <TweaksPanel />
+    </div>
   );
 }
 
