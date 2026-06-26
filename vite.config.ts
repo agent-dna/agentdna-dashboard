@@ -11,6 +11,7 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: [
       "dashboard-dev.agentdna.io",
+      "dashboard.agentdna.io",
     ],
   },
 });
