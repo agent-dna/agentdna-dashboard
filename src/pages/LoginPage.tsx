@@ -249,7 +249,7 @@ export function LoginPage() {
           </div>
         </div>
 
-        <p style={brandFooterStyle}>Secured by AgentDNA · org-scoped JWT</p>
+        <p style={brandFooterStyle}>Secured by AgentDNA</p>
       </div>
     </div>
   );

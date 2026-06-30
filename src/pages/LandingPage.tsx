@@ -405,7 +405,7 @@ export function LandingPage() {
       <footer style={footerOuter}>
         <div style={footerInner}>
           <img src={logo} alt="AgentDNA" style={{ height: 30, width: "auto" }} />
-          <span style={footerMid}>Secured by AgentDNA · org-scoped JWT</span>
+          <span style={footerMid}>Secured by AgentDNA</span>
           <span style={footerRight}>© {new Date().getFullYear()} AgentDNA</span>
         </div>
       </footer>

@@ -180,7 +180,7 @@ export function LockedPage() {
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <footer style={footerStyle}>
-        <span style={{ fontSize: 12, color: "#6e6e73" }}>Secured by AgentDNA · org-scoped JWT</span>
+        <span style={{ fontSize: 12, color: "#6e6e73" }}>Secured by AgentDNA</span>
         <span style={{ fontSize: 12, color: "#6e6e73" }}>© {new Date().getFullYear()} AgentDNA</span>
       </footer>
     </div>
