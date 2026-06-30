@@ -12,7 +12,7 @@ interface LocationState {
 type Role = "user" | "admin";
 type Mode = "login" | "register";
 
-const USER_ORG_ID = "TEST_ORG_1";
+const USER_ORG_ID = "AGENT_DNA_BETA";
 
 export function LoginPage() {
   const { user, login, loginAdmin, registerAdmin, registerUser } = useAuth();
@@ -26,7 +26,7 @@ export function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [org, setOrg] = useState("");
+  const [org] = useState(USER_ORG_ID);
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -38,7 +38,7 @@ export function LoginPage() {
 
   const resetFields = () => {
     setEmail(""); setUsername(""); setPassword("");
-    setConfirmPassword(""); setOrg(""); setError(null);
+    setConfirmPassword(""); setError(null);
   };
 
   const switchRole = (r: Role) => { setRole(r); setMode("login"); resetFields(); };
@@ -203,11 +203,9 @@ export function LoginPage() {
                   <Field label="Organisation name">
                     <input
                       type="text"
-                      required
+                      readOnly
                       value={org}
-                      onChange={(e) => setOrg(e.target.value)}
-                      placeholder="my-organisation"
-                      style={inputStyle}
+                      style={{ ...inputStyle, background: "var(--bg-2)", color: "var(--fg-muted)", cursor: "not-allowed" }}
                     />
                   </Field>
                 ) : (
@@ -251,7 +249,7 @@ export function LoginPage() {
           </div>
         </div>
 
-        <p style={brandFooterStyle}>Secured by AgentDNA · org-scoped JWT</p>
+        <p style={brandFooterStyle}>Secured by AgentDNA</p>
       </div>
     </div>
   );

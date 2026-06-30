@@ -239,8 +239,10 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       checks: { identity: true, trust: true, scope: !isBlocked },
       latency: Math.max(40, Math.floor(ixn.runtime || Math.floor(60 + Math.random() * 400))),
     });
+    // Only the target — the entity where the threat was detected — gets the
+    // red box. The initiator (`fromNode`) is the culprit, not the victim, so
+    // it keeps its normal styling.
     if (isBlocked) {
-      fromNode.threat = true;
       toNode.threat = true;
     }
   }

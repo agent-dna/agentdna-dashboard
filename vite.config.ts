@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
 
-    port: Number(process.env.VITE_PORT) || 4004,
+    port: Number(process.env.VITE_PORT) || 4009,
     host: true,
     strictPort: true,
     allowedHosts: [

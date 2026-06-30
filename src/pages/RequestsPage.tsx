@@ -129,37 +129,30 @@ export function RequestsPage() {
     if (showDeployModal) {
       setDeploy({ open: true, phase: "loading", agentName: r.agentName });
     }
-    // Keep the spinner on screen long enough to read, even if the API is fast
-    // (the dummy router resolves instantly).
-    const MIN_VISIBLE_MS = 1400;
+    console.log(`[approve] clicked → requestID=${r.requestID} requestType=${r.requestType} status=${status}`);
+
     const startedAt = performance.now();
     try {
+      let response: unknown;
       if (r.requestType === "deploy_agent") {
-        await submitAgentCreationResult(r.requestID, status);
+        response = await submitAgentCreationResult(r.requestID, status);
       } else {
-        await submitAccessRequestResult(r.requestID, status);
+        response = await submitAccessRequestResult(r.requestID, status);
       }
+      const apiElapsed = performance.now() - startedAt;
+      console.log(`[approve] response received in ${apiElapsed.toFixed(0)}ms →`, response);
       if (showDeployModal) {
-        const elapsed = performance.now() - startedAt;
-        if (elapsed < MIN_VISIBLE_MS) {
-          await new Promise((res) => window.setTimeout(res, MIN_VISIBLE_MS - elapsed));
-        }
         setDeploy((d) => ({ ...d, phase: "done" }));
-        // Auto-close the "Deployed" card after a beat and refresh the list.
-        window.setTimeout(() => {
-          setDeploy({ open: false, phase: "loading" });
-          load();
-        }, 1500);
-      } else {
-        load();
       }
+      load();
     } catch (err) {
+      const apiElapsed = performance.now() - startedAt;
       const message = err instanceof ApiError ? err.message : "Action failed";
+      console.error(
+        `[approve] error after ${apiElapsed.toFixed(0)}ms → status=${err instanceof ApiError ? err.status : "n/a"} message="${message}"`,
+        err,
+      );
       if (showDeployModal) {
-        const elapsed = performance.now() - startedAt;
-        if (elapsed < MIN_VISIBLE_MS) {
-          await new Promise((res) => window.setTimeout(res, MIN_VISIBLE_MS - elapsed));
-        }
         setDeploy((d) => ({ ...d, phase: "error", errorMessage: message }));
       } else {
         alert(message);
