@@ -143,14 +143,8 @@ export function RequestsPage() {
       console.log(`[approve] response received in ${apiElapsed.toFixed(0)}ms →`, response);
       if (showDeployModal) {
         setDeploy((d) => ({ ...d, phase: "done" }));
-        // Auto-close the "Deployed" card after a beat and refresh the list.
-        window.setTimeout(() => {
-          setDeploy({ open: false, phase: "loading" });
-          load();
-        }, 1500);
-      } else {
-        load();
       }
+      load();
     } catch (err) {
       const apiElapsed = performance.now() - startedAt;
       const message = err instanceof ApiError ? err.message : "Action failed";
