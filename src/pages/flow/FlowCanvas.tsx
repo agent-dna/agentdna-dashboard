@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   User,
   Bot,
-  AppWindow,
+  LayoutGrid,
   GitBranch,
   Database,
   Mail,
@@ -35,7 +35,7 @@ function appIconFor(name: string): LucideIcon {
   for (const [re, Ic] of APP_ICON_RULES) {
     if (re.test(name)) return Ic;
   }
-  return AppWindow;
+  return LayoutGrid;
 }
 
 function NodeIcon({ node }: { node: FlowNode }) {
