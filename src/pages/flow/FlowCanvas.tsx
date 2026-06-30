@@ -1,7 +1,49 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { avInitials, type Flow } from "./flowData";
+import {
+  User,
+  Bot,
+  AppWindow,
+  GitBranch,
+  Database,
+  Mail,
+  Terminal,
+  Globe,
+  Cloud,
+  Server,
+  MessageSquare,
+  Webhook,
+  type LucideIcon,
+} from "lucide-react";
+import type { Flow, FlowNode } from "./flowData";
 
 const NODE_DOT = { human: "#1E3A8A", agent: "#2563EB", tool: "#0EA5E9" } as const;
+
+/** Keyword → icon for known app/tool integrations (matched against the node name). */
+const APP_ICON_RULES: [RegExp, LucideIcon][] = [
+  [/git(hub|lab)?/i, GitBranch],
+  [/slack|discord|teams|chat/i, MessageSquare],
+  [/mail|gmail|outlook|smtp/i, Mail],
+  [/sql|postgres|mysql|mongo|database|db\b/i, Database],
+  [/terminal|shell|bash|cli/i, Terminal],
+  [/aws|gcp|azure|s3|cloud/i, Cloud],
+  [/server|api|backend/i, Server],
+  [/webhook/i, Webhook],
+  [/web|browser|http|site/i, Globe],
+];
+
+function appIconFor(name: string): LucideIcon {
+  for (const [re, Ic] of APP_ICON_RULES) {
+    if (re.test(name)) return Ic;
+  }
+  return AppWindow;
+}
+
+function NodeIcon({ node }: { node: FlowNode }) {
+  if (node.kind === "human") return <User size={20} strokeWidth={2.2} />;
+  if (node.kind === "agent") return <Bot size={20} strokeWidth={2.2} />;
+  const Ic = appIconFor(node.name);
+  return <Ic size={19} strokeWidth={2.2} />;
+}
 
 interface Point {
   x: number;
@@ -254,7 +296,7 @@ export function FlowCanvas({ flow, step }: FlowCanvasProps) {
               return (
                 <div key={n.id} className={cls} style={{ left: p.x, top: p.y }}>
                   <span className="ring" />
-                  <div className="nv">{avInitials(n)}</div>
+                  <div className="nv"><NodeIcon node={n} /></div>
                   <div className="nt">
                     <span className="nm">{n.name}</span>
                     {n.label ? <span className="lb">{n.label}</span> : null}

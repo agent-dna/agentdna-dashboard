@@ -77,13 +77,32 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(url.toString(), {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const reqStartedAt = performance.now();
+  console.log(`[REQUEST ${method} ${url.pathname}${url.search}] sent at ${new Date().toISOString()}`, body ?? {});
+
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (networkErr) {
+    const elapsed = performance.now() - reqStartedAt;
+    console.error(
+      `[REQUEST ${method} ${url.pathname}${url.search}] network error after ${elapsed.toFixed(0)}ms →`,
+      networkErr,
+    );
+    throw new ApiError(
+      networkErr instanceof Error ? `Network error: ${networkErr.message}` : "Network error",
+      0,
+    );
+  }
+
+  const elapsed = performance.now() - reqStartedAt;
 
   if (res.status === 401) {
+    console.warn(`[REQUEST ${method} ${url.pathname}${url.search}] 401 after ${elapsed.toFixed(0)}ms`);
     if (!skipLogoutOn401) {
       setToken(null);
       if (onUnauthorized) onUnauthorized();
@@ -94,16 +113,20 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   let payload: ApiResponse<T> | null = null;
   try {
     payload = (await res.json()) as ApiResponse<T>;
-  } catch {
+  } catch (parseErr) {
+    console.error(
+      `[REQUEST ${method} ${url.pathname}${url.search}] invalid JSON after ${elapsed.toFixed(0)}ms (HTTP ${res.status}) →`,
+      parseErr,
+    );
     throw new ApiError(`Invalid JSON response (HTTP ${res.status})`, res.status);
   }
 
   if (!res.ok || payload?.status === false) {
-    console.warn(`[${method} ${url.pathname}${url.search}] ${res.status}`, payload);
+    console.warn(`[REQUEST ${method} ${url.pathname}${url.search}] failed after ${elapsed.toFixed(0)}ms — HTTP ${res.status}`, payload);
     throw new ApiError(payload?.message || `HTTP ${res.status}`, res.status);
   }
 
-  console.log(`[${method} ${url.pathname}${url.search}]`, payload?.data);
+  console.log(`[REQUEST ${method} ${url.pathname}${url.search}] succeeded after ${elapsed.toFixed(0)}ms →`, payload?.data);
   return payload.data;
 }
 

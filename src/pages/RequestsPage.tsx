@@ -148,7 +148,10 @@ export function RequestsPage() {
     } catch (err) {
       const apiElapsed = performance.now() - startedAt;
       const message = err instanceof ApiError ? err.message : "Action failed";
-      console.log(`[approve] error after ${apiElapsed.toFixed(0)}ms →`, message);
+      console.error(
+        `[approve] error after ${apiElapsed.toFixed(0)}ms → status=${err instanceof ApiError ? err.status : "n/a"} message="${message}"`,
+        err,
+      );
       if (showDeployModal) {
         setDeploy((d) => ({ ...d, phase: "error", errorMessage: message }));
       } else {
