@@ -341,9 +341,9 @@ export function AgentsToolsPage() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <span className="count">
-              {rows.length} of {isMyAccess ? all.length : isAgents ? agentsTotal : toolsTotal}
+              {rows.length} of {isAgents ? agentsTotal : toolsTotal}
             </span>
-            {!isMyAccess && (
+            {(
               <Pager
                 page={isAgents ? agentsPage : toolsPage}
                 totalPages={isAgents ? agentsTotalPages : toolsTotalPages}
@@ -353,16 +353,12 @@ export function AgentsToolsPage() {
           </div>
         </div>
 
-        {isAgents || isMyAccess ? (
+        {isAgents ? (
           <DataTable
             columns={agentCols}
             rows={rows as Agent[]}
             onRowClick={(r) => navigate(`/agents/${r.id}`)}
-            emptyText={
-              isMyAccess
-                ? "You don't have access to any agents yet — submit a request."
-                : "No agents yet"
-            }
+            emptyText="No agents yet"
           />
         ) : (
           <DataTable
