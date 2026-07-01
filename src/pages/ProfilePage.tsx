@@ -322,36 +322,6 @@ export function ProfilePage() {
             {!isAdmin && profile?.adminEmail && (
               <InfoRow label="Admin contact" value={profile.adminEmail} />
             )}
-
-            {/* Admin org stats */}
-            {isAdmin && adminProfile && !profileLoading && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 4 }}>
-                {([
-                  { label: "Agents", value: adminProfile.agentCount, icon: "agents" },
-                  { label: "Intents", value: adminProfile.intentCount, icon: "intents" },
-                  { label: "Users", value: adminProfile.totalUsers, icon: "user" },
-                  { label: "Threats", value: adminProfile.threatCount, icon: "shield" },
-                ] as const).map(({ label, value, icon }) => (
-                  <div key={label} style={{
-                    background: "var(--bg-2)",
-                    border: "1px solid var(--line)",
-                    borderRadius: 10,
-                    padding: "12px 14px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 4,
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <Icon name={icon} size={12} style={{ color: "var(--fg-muted)" }} />
-                      <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--fg-muted)" }}>{label}</span>
-                    </div>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color: "var(--fg)", letterSpacing: "-0.02em" }}>
-                      {value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Change password */}
