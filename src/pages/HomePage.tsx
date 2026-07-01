@@ -41,6 +41,31 @@ export function HomePage() {
 
   const isEmpty = !homeState.loading && metrics.agentCount === 0;
 
+  function handleExport() {
+    const rows: string[][] = [
+      ["AgentDNA Dashboard Export", new Date().toISOString()],
+      [],
+      ["SUMMARY"],
+      ["Metric", "Value"],
+      ["Active Agents", String(metrics.agentCount)],
+      ["Total Intents", String(metrics.intentCount)],
+      ["Total Interactions", String(metrics.interactionsCount)],
+      ["Threats Detected", String(metrics.threatCount)],
+      [],
+      ["AGENT LIST"],
+      ["Agent ID", "Agent Name", "Total Interactions", "Total Threats"],
+      ...(metrics.agentList || []).map((a) => [a.agentID, a.agentName, String(a.totalInteractions), String(a.totalThreats)]),
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `agentdna-dashboard-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (isEmpty) {
     return (
       <div className="page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", gap: 0 }}>
@@ -113,7 +138,6 @@ export function HomePage() {
           </div>
         </div>
         <div className="right">
-          <FilterPill label="Env" value="production" />
           <FilterPill
             label="Range"
             value={series === "24h" ? "Last 24h" : "Last 7d"}
@@ -123,7 +147,7 @@ export function HomePage() {
             <Icon name="refresh" size={14} />
             Refresh
           </button>
-          <button className="btn primary">
+          <button className="btn primary" onClick={handleExport}>
             <Icon name="download" size={14} />
             Export
           </button>
@@ -266,21 +290,21 @@ export function HomePage() {
       </div>
 
       <div className="card">
-        <div className="card-head">
-          <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--line)", margin: "0 -20px", padding: "0 20px" }}>
+        <div className="tb-toolbar">
+          <div className="filters">
             {(["interactions", "threats"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setBottomTab(t)}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
-                  padding: "8px 14px", fontSize: 13, fontWeight: 600,
+                  padding: "6px 14px", fontSize: 13, fontWeight: 600,
                   color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
                   borderBottom: bottomTab === t ? "2px solid var(--accent)" : "2px solid transparent",
-                  marginBottom: -1, textTransform: "capitalize",
+                  textTransform: "capitalize",
                 }}
               >
-                {t === "interactions" ? `Interactions` : `Threats`}
+                {t === "interactions" ? "Interactions" : "Threats"}
                 <span style={{
                   marginLeft: 6, fontSize: 11, fontFamily: "var(--font-mono)",
                   background: bottomTab === t ? "rgba(37,99,235,0.12)" : "var(--surface-raised)",
@@ -292,6 +316,9 @@ export function HomePage() {
               </button>
             ))}
           </div>
+          {bottomTab === "interactions" && (
+            <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} inline onChange={setInteractionsPage} />
+          )}
         </div>
         <DataTable
           onRowClick={(r) => openDrawer("interaction", r)}
@@ -299,9 +326,6 @@ export function HomePage() {
           rows={bottomTab === "interactions" ? interactions : threats}
           emptyText={bottomTab === "interactions" ? "No interactions yet" : "No threats detected"}
         />
-        {bottomTab === "interactions" && (
-          <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} onChange={setInteractionsPage} />
-        )}
       </div>
     </div>
   );

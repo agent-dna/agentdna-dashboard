@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { Icon } from "../components/Icon";
 import { useAuth } from "../context/AuthContext";
 import { fetchTokenUsage, type TokenUsage } from "../api/keys";
-import { fetchUserProfile, updateUserProfile, changePassword, type UserProfile } from "../api/profile";
+import { fetchUserProfile, fetchAdminProfile, updateUserProfile, changePassword, type UserProfile, type AdminProfile } from "../api/profile";
 import { ApiError } from "../api/client";
 
 function maskKey(key: string) {
@@ -90,6 +90,7 @@ export function ProfilePage() {
   const { user, patchUser, logout } = useAuth();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
 
   const [revealed, setRevealed] = useState(false);
@@ -114,11 +115,18 @@ export function ProfilePage() {
 
   useEffect(() => {
     setProfileLoading(true);
-    fetchUserProfile()
-      .then(setProfile)
-      .catch(() => setProfile(null))
-      .finally(() => setProfileLoading(false));
-  }, []);
+    if (user?.is_admin) {
+      fetchAdminProfile()
+        .then(setAdminProfile)
+        .catch(() => setAdminProfile(null))
+        .finally(() => setProfileLoading(false));
+    } else {
+      fetchUserProfile()
+        .then(setProfile)
+        .catch(() => setProfile(null))
+        .finally(() => setProfileLoading(false));
+    }
+  }, [user?.is_admin]);
 
   useEffect(() => {
     setUsageLoading(true);
@@ -128,7 +136,11 @@ export function ProfilePage() {
       .finally(() => setUsageLoading(false));
   }, []);
 
-  const apiKey = profile?.apiKey || user?.api_key || "";
+  const isAdmin = !!user?.is_admin;
+  const activeProfile = isAdmin ? adminProfile : profile;
+  const apiKey = activeProfile?.apiKey || user?.api_key || "";
+  const displayName = activeProfile?.name || (isAdmin ? "ADMIN" : "");
+  const displayOrg = activeProfile?.organizationID || user?.org_id || (isAdmin ? "AGENT_DNA_BETA" : "");
 
   function formatDate(dateStr: string) {
     try {
@@ -136,6 +148,11 @@ export function ProfilePage() {
     } catch {
       return dateStr;
     }
+  }
+
+  function formatEpoch(epoch: number) {
+    // backend sends Unix seconds
+    return new Date(epoch * 1000).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
   }
 
   const SUPPORT_EMAIL = "support@agentdna.ai";
@@ -159,7 +176,7 @@ export function ProfilePage() {
 
   function startEdit(field: "name" | "email") {
     setEditField(field);
-    setEditValue(field === "name" ? (profile?.name || "") : (profile?.email || ""));
+    setEditValue(field === "name" ? (displayName || "") : (activeProfile?.email || ""));
     setEditError(null);
   }
 
@@ -205,7 +222,7 @@ export function ProfilePage() {
     }
   }
 
-  const initials = (profile?.name || user?.email || "?")
+  const initials = (displayName || user?.email || "?")
     .split(/[\s@._-]+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -250,10 +267,10 @@ export function ProfilePage() {
             </div>
             <div>
               <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg)" }}>
-                {profileLoading ? "—" : (profile?.name || profile?.email || user?.email || "—")}
+                {profileLoading ? "—" : (displayName || activeProfile?.email || user?.email || "—")}
               </div>
               <div style={{ fontSize: 13, color: "var(--fg-muted)", marginTop: 2 }}>
-                {profileLoading ? "—" : (profile?.organizationID || user?.org_id || "—")}
+                {profileLoading ? "—" : displayOrg}
               </div>
               {user?.is_admin && (
                 <span className="chip info" style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -267,7 +284,7 @@ export function ProfilePage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <EditableInfoRow
               label="Name"
-              value={profileLoading ? "—" : (profile?.name || "—")}
+              value={profileLoading ? "—" : (displayName || "—")}
               editing={editField === "name"}
               editValue={editValue}
               onEdit={() => startEdit("name")}
@@ -279,7 +296,7 @@ export function ProfilePage() {
 
             <EditableInfoRow
               label="Email"
-              value={profileLoading ? "—" : (profile?.email || user?.email || "—")}
+              value={profileLoading ? "—" : (activeProfile?.email || user?.email || "—")}
               editing={editField === "email"}
               editValue={editValue}
               onEdit={() => startEdit("email")}
@@ -295,12 +312,14 @@ export function ProfilePage() {
               </div>
             )}
 
-            <InfoRow label="Organization" value={profileLoading ? "—" : (profile?.organizationID || user?.org_id || "—")} />
-            <InfoRow label="Role" value={user?.is_admin ? "Administrator" : "User"} />
-            {profile?.createdAt && (
+            <InfoRow label="Organization" value={profileLoading ? "—" : displayOrg} />
+            <InfoRow label="Role" value={isAdmin ? "Administrator" : "User"} />
+            {isAdmin && adminProfile?.createdAt ? (
+              <InfoRow label="Member since" value={formatEpoch(adminProfile.createdAt)} />
+            ) : profile?.createdAt ? (
               <InfoRow label="Member since" value={formatDate(profile.createdAt)} />
-            )}
-            {profile?.adminEmail && (
+            ) : null}
+            {!isAdmin && profile?.adminEmail && (
               <InfoRow label="Admin contact" value={profile.adminEmail} />
             )}
           </div>

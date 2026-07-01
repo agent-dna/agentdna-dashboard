@@ -12,8 +12,8 @@ import { InteractionsPage } from "./pages/InteractionsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RequestsPage } from "./pages/RequestsPage";
 import { ProfilePage } from "./pages/ProfilePage";
-import { LockedPage } from "./pages/LockedPage";
-import { LandingPage } from "./pages/LandingPage";
+import { LandingPage } from "./pages/LockedPage";
+// import { LandingPage } from "./pages/LandingPage";
 import { FlowPage } from "./pages/flow/FlowPage";
 import { DrawerProvider } from "./context/DrawerContext";
 import { TweaksProvider } from "./context/TweaksContext";
@@ -50,7 +50,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="graph/:intentId" element={<FlowPage />} />
                 <Route path="interactions" element={<InteractionsPage />} />
                 <Route path="profile" element={<ProfilePage />} />
-                <Route path="locked" element={<LockedPage />} />
+                {/* <Route path="locked" element={<LockedPage />} /> */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Route>
             </Routes>

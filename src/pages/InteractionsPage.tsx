@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Icon } from "../components/Icon";
 import { Pagination } from "../components/Pagination";
-import { FilterPill } from "../components/FilterPill";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { IdCell } from "../components/EntityCell";
 import { useInteractionsPaged } from "../data/hooks";
@@ -115,7 +114,6 @@ export function useInteractionColumns(
 }
 
 export function InteractionsPage() {
-  const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
   const [page, setPage] = useState(1);
   const { data: paged, loading } = useInteractionsPaged(page);
@@ -128,20 +126,6 @@ export function InteractionsPage() {
   let rows = interactions;
   if (filter === "threats") rows = rows.filter((r) => r.threat);
   if (filter === "safe") rows = rows.filter((r) => !r.threat);
-  if (search) {
-    const q = search.toLowerCase();
-    rows = rows.filter((r) => {
-      const initName = resolve(r.initiator.id).name.toLowerCase();
-      const tgtName = resolve(r.target.id).name.toLowerCase();
-      return (
-        r.id.toLowerCase().includes(q) ||
-        r.initiator.id.toLowerCase().includes(q) ||
-        r.target.id.toLowerCase().includes(q) ||
-        initName.includes(q) ||
-        tgtName.includes(q)
-      );
-    });
-  }
 
   return (
     <div className="page">
@@ -165,14 +149,6 @@ export function InteractionsPage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            <div className="search" style={{ width: 280, marginLeft: 0 }}>
-              <Icon name="search" className="icon" size={16} />
-              <input
-                placeholder="Search by ID, initiator, target…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
             <div className="seg">
               <button className={filter === "all" ? "active" : ""} onClick={() => { setFilter("all"); setPage(1); }}>
                 All
@@ -184,12 +160,13 @@ export function InteractionsPage() {
                 Safe
               </button>
             </div>
-            <FilterPill label="Type" value="any" />
-            <FilterPill label="Time" value="last 7d" />
           </div>
-          <span className="count">
-            {total > 0 ? `${rows.length} on this page · ${total} total` : `${rows.length}`}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="count">
+              {total > 0 ? `${rows.length} on this page · ${total} total` : `${rows.length}`}
+            </span>
+            <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize || undefined} loading={loading} inline onChange={setPage} />
+          </div>
         </div>
         <DataTable
           rows={rows}
@@ -197,7 +174,6 @@ export function InteractionsPage() {
           onRowClick={(r) => openDrawer("interaction", r)}
           emptyText={loading ? "Loading…" : "No interactions yet"}
         />
-        <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize || undefined} loading={loading} onChange={setPage} />
       </div>
     </div>
   );

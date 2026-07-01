@@ -2,28 +2,47 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
-import { FilterPill } from "../components/FilterPill";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { ScoreBar } from "../components/ScoreBar";
-import { useIntents } from "../data/hooks";
+import { useIntentsPaged } from "../data/hooks";
 import { useIntentLabel } from "../context/IntentNumbersContext";
 import { fmtRuntime, timeAgo } from "../lib/format";
 import type { Intent } from "../types";
 
+function Pagination({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page <= 1} onClick={() => onChange(page - 1)}>Prev</button>
+      <span style={{ padding: "4px 10px", fontSize: 12, fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--fg)", background: "var(--surface-raised)", border: "1px solid var(--line-strong)", borderRadius: 6, minWidth: 52, textAlign: "center" as const }}>
+        {page} / {totalPages}
+      </span>
+      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page >= totalPages} onClick={() => onChange(page + 1)}>Next</button>
+    </div>
+  );
+}
+
 export function IntentsPage() {
-  const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
-  const { data: intents } = useIntents();
+  const [page, setPage] = useState(1);
+  const { data: paged } = useIntentsPaged(page);
+  const intents = paged.items;
+  const totalPages = paged.totalPages || 1;
+  const total = paged.total || intents.length;
   const navigate = useNavigate();
   const intentLabel = useIntentLabel();
 
   let rows = intents;
   if (filter === "threats") rows = rows.filter((r) => r.threats > 0);
   if (filter === "safe") rows = rows.filter((r) => r.threats === 0);
-  if (search) {
-    const q = search.toLowerCase();
-    rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q));
-  }
 
   const totalAgents = intents.reduce((a, x) => a + x.agentsInteracted, 0);
   const totalTools = intents.reduce((a, x) => a + x.toolsInteracted, 0);
@@ -163,14 +182,6 @@ export function IntentsPage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            <div className="search" style={{ width: 280, marginLeft: 0 }}>
-              <Icon name="search" className="icon" size={16} />
-              <input
-                placeholder="Search intents…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
             <div className="seg">
               <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>
                 All
@@ -182,12 +193,11 @@ export function IntentsPage() {
                 Safe
               </button>
             </div>
-            <FilterPill label="Initiator" value="any" />
-            <FilterPill label="Score" value="≥ 0" />
           </div>
-          <span className="count">
-            {rows.length} of {intents.length}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="count">{rows.length} of {total}</span>
+            <Pagination page={page} totalPages={totalPages} onChange={(p) => { setPage(p); }} />
+          </div>
         </div>
 
         <DataTable

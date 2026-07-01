@@ -21,8 +21,8 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginAdmin: (email: string, password: string) => Promise<void>;
-  registerAdmin: (username: string, email: string, password: string, org: string) => Promise<void>;
-  registerUser: (username: string, email: string, password: string, orgId: string) => Promise<void>;
+  registerAdmin: (username: string, email: string, password: string, org: string, otp?: string) => Promise<void>;
+  registerUser: (username: string, email: string, password: string, orgId: string, otp?: string) => Promise<void>;
   logout: () => void;
   patchUser: (patch: Partial<AuthUser>) => void;
 }
@@ -203,7 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [applyJwt]);
 
-  const registerAdmin = useCallback(async (username: string, email: string, password: string, org: string) => {
+  const registerAdmin = useCallback(async (username: string, email: string, password: string, org: string, otp = "") => {
     setLoading(true);
     try {
       if (isDummyMode()) {
@@ -217,7 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTokenState("dummy.jwt.token");
         return;
       }
-      const { did } = await apiAdminRegister({ username, email, org, password });
+      const { did } = await apiAdminRegister({ username, email, org, password, otp });
       await registerAdminMiddleware(did, org);
       applyJwt(await apiAdminLogin(username, password));
     } finally {
@@ -225,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [applyJwt]);
 
-  const registerUser = useCallback(async (name: string, email: string, password: string, orgId: string) => {
+  const registerUser = useCallback(async (name: string, email: string, password: string, orgId: string, otp = "") => {
     setLoading(true);
     try {
       if (isDummyMode()) {
@@ -239,7 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTokenState("dummy.jwt.token");
         return;
       }
-      await apiRegisterUser({ name: name || undefined, email, password, orgID: orgId });
+      await apiRegisterUser({ name: name || undefined, email, password, orgID: orgId, otp });
       applyAuthResponse(await apiLogin(email, password));
     } finally {
       setLoading(false);

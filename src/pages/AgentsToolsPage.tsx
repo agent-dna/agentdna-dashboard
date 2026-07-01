@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
-import { FilterPill } from "../components/FilterPill";
 import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell, IdCell } from "../components/EntityCell";
@@ -13,15 +12,15 @@ import { useAgentsPaged, useToolsPaged } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
+import { exportAgentsListPdf, exportToolsListPdf } from "../lib/exportListPdf";
 import type { Agent, Tool } from "../types";
 
-type Tab = "agents" | "tools" | "my-access";
+type Tab = "agents" | "tools";
 
 export function AgentsToolsPage() {
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
-  const [tab, setTab] = useState<Tab>(isAdmin ? "agents" : "my-access");
-  const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<Tab>("agents");
   const [agentsPage, setAgentsPage] = useState(1);
   const [toolsPage, setToolsPage] = useState(1);
   const agentsState = useAgentsPaged(agentsPage);
@@ -37,17 +36,8 @@ export function AgentsToolsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState<{ open: boolean; agent?: Agent }>({ open: false });
 
-  const myAccessIds = new Set(user?.agent_access_list || []);
-  const myAccessAgents = agents.filter((a) => myAccessIds.has(a.id));
-
   const isAgents = tab === "agents";
-  const isMyAccess = tab === "my-access";
-  const all = isMyAccess ? myAccessAgents : isAgents ? agents : tools;
-  const rows = all.filter((r) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q);
-  });
+  const rows = isAgents ? agents : tools;
 
   const agentCols: DataTableColumn<Agent>[] = [
     {
@@ -224,56 +214,24 @@ export function AgentsToolsPage() {
           <div className="sub">Identity-verified actors and the capabilities they can invoke</div>
         </div>
         <div className="right">
-          {!isAdmin && (
-            <button className="btn" onClick={() => setAccessOpen({ open: true })}>
-              <Icon name="shield" size={14} />
-              Request access
-            </button>
-          )}
-          {tab === "agents" || isMyAccess ? (
-            <button className="btn primary" onClick={() => setCreateOpen(true)}>
-              <Icon name="plus" size={14} />
-              {isAdmin ? "Create agent" : "Request agent"}
-            </button>
-          ) : (
-            <button className="btn">
-              <Icon name="download" size={14} />
-              Export
-            </button>
-          )}
+          <button
+            className="btn"
+            onClick={() =>
+              isAgents
+                ? exportAgentsListPdf(agents, agentsTotal || agents.length)
+                : exportToolsListPdf(tools, toolsTotal || tools.length)
+            }
+          >
+            <Icon name="download" size={14} />
+            Export
+          </button>
         </div>
       </div>
 
       <div className="metrics">
-        {isMyAccess ? (
+        {isAgents ? (
           <>
-            <MetricTile label="My Agents" value={myAccessAgents.length} icon="agents" sparkColor="#2563EB" spark={[]} />
-            <MetricTile
-              label="Avg. Reliability"
-              value={myAccessAgents.length ? Math.round(myAccessAgents.reduce((a, x) => a + x.score, 0) / myAccessAgents.length) : 0}
-              unit="/ 100"
-              icon="target"
-              sparkColor="#0EA5E9"
-              spark={[]}
-            />
-            <MetricTile
-              label="Total Interactions"
-              value={myAccessAgents.reduce((a, x) => a + x.interactions, 0)}
-              icon="activity"
-              sparkColor="#0A2240"
-              spark={[]}
-            />
-            <MetricTile
-              label="Threats"
-              value={myAccessAgents.reduce((a, x) => a + x.threats, 0)}
-              icon="shield"
-              sparkColor="#DC2626"
-              spark={[]}
-            />
-          </>
-        ) : isAgents ? (
-          <>
-            <MetricTile label="Total Agents" value={agents.length} icon="agents" sparkColor="#2563EB" spark={[]} />
+            <MetricTile label="Total Agents" value={agentsTotal || agents.length} icon="agents" sparkColor="#2563EB" spark={[]} />
             <MetricTile
               label="Avg. Reliability"
               value={agents.length ? Math.round(agents.reduce((a, x) => a + x.score, 0) / agents.length) : 0}
@@ -299,7 +257,7 @@ export function AgentsToolsPage() {
           </>
         ) : (
           <>
-            <MetricTile label="Total Apps" value={tools.length} icon="box" sparkColor="#2563EB" spark={[]} />
+            <MetricTile label="Total Apps" value={toolsTotal || tools.length} icon="box" sparkColor="#2563EB" spark={[]} />
             <MetricTile
               label="Avg. Reliability"
               value={tools.length ? Math.round(tools.reduce((a, x) => a + x.score, 0) / tools.length) : 0}
@@ -355,7 +313,6 @@ export function AgentsToolsPage() {
           active={tab}
           onChange={(k) => setTab(k as Tab)}
           tabs={[
-            ...(!isAdmin ? [{ key: "my-access", label: "My Access", count: myAccessAgents.length }] : []),
             { key: "agents", label: "Agents", count: agents.length },
             { key: "tools", label: "Apps", count: tools.length },
           ]}
@@ -363,23 +320,12 @@ export function AgentsToolsPage() {
 
         <div className="tb-toolbar">
           <div className="filters">
-            <div className="search" style={{ width: 280, marginLeft: 0 }}>
-              <Icon name="search" className="icon" size={16} />
-              <input
-                placeholder={`Search ${tab}…`}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <FilterPill label="Status" value="all" />
-            <FilterPill label={isAgents ? "Env" : "Scope"} value="any" />
-            <FilterPill label="Score" value="≥ 0" />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <span className="count">
-              {rows.length} of {isMyAccess ? all.length : isAgents ? agentsTotal : toolsTotal}
+              {rows.length} of {isAgents ? agentsTotal : toolsTotal}
             </span>
-            {!isMyAccess && (
+            {(
               <Pager
                 page={isAgents ? agentsPage : toolsPage}
                 totalPages={isAgents ? agentsTotalPages : toolsTotalPages}
@@ -389,16 +335,12 @@ export function AgentsToolsPage() {
           </div>
         </div>
 
-        {isAgents || isMyAccess ? (
+        {isAgents ? (
           <DataTable
             columns={agentCols}
             rows={rows as Agent[]}
             onRowClick={(r) => navigate(`/agents/${r.id}`)}
-            emptyText={
-              isMyAccess
-                ? "You don't have access to any agents yet — submit a request."
-                : "No agents yet"
-            }
+            emptyText="No agents yet"
           />
         ) : (
           <DataTable

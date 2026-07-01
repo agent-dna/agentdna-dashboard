@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MetricTile } from "../components/MetricTile";
-import { FilterPill } from "../components/FilterPill";
 import { DataTable } from "../components/DataTable";
 import { Icon } from "../components/Icon";
 import { useAlerts, useAgentsPaged } from "../data/hooks";
@@ -128,11 +127,7 @@ export function AlertsPage() {
         <div className="card">
           <div className="tb-toolbar">
             <div className="filters">
-              <FilterPill label="Severity" value="any" />
-              <FilterPill label="Initiator" value="any" />
-              <FilterPill label="Status" value="open" />
-              <FilterPill label="Time" value="last 7d" />
-            </div>
+              </div>
             <span className="count">{threats.length} flagged</span>
           </div>
           <DataTable

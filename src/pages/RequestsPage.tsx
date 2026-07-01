@@ -278,16 +278,13 @@ export function RequestsPage() {
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: "creation", label: "Agent Creation" },
-    ...(isAdmin ? ([{ key: "access-org", label: "Access (org)" }] as const) : []),
-    { key: "access-mine", label: "My Access" },
+    ...(isAdmin ? [] : [{ key: "access-mine" as const, label: "My Access" }]),
     ...(isAdmin ? ([{ key: "users", label: "Users" }] as const) : []),
   ];
 
   const subtitle =
     tab === "creation"
       ? "Agent deployment workflow"
-      : tab === "access-org"
-      ? "Access requests submitted to your organization"
       : tab === "users"
       ? "Organization members and their agent access"
       : "Your submitted access requests";
@@ -303,12 +300,6 @@ export function RequestsPage() {
           {tab !== "users" && (
             <button className="btn" onClick={load}>
               <Icon name="refresh" size={14} /> Refresh
-            </button>
-          )}
-          {tab === "creation" && (
-            <button className="btn primary" onClick={() => setCreateOpen(true)}>
-              <Icon name="plus" size={14} />
-              {isAdmin ? "Create agent" : "Request agent"}
             </button>
           )}
         </div>
