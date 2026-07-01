@@ -113,7 +113,6 @@ export function HomePage() {
           </div>
         </div>
         <div className="right">
-          <FilterPill label="Env" value="production" />
           <FilterPill
             label="Range"
             value={series === "24h" ? "Last 24h" : "Last 7d"}

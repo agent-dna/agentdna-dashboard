@@ -5,15 +5,40 @@ import { MetricTile } from "../components/MetricTile";
 import { FilterPill } from "../components/FilterPill";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { ScoreBar } from "../components/ScoreBar";
-import { useIntents } from "../data/hooks";
+import { useIntentsPaged } from "../data/hooks";
 import { useIntentLabel } from "../context/IntentNumbersContext";
 import { fmtRuntime, timeAgo } from "../lib/format";
 import type { Intent } from "../types";
 
+function Pagination({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page <= 1} onClick={() => onChange(page - 1)}>Prev</button>
+      <span style={{ padding: "4px 10px", fontSize: 12, fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--fg)", background: "var(--surface-raised)", border: "1px solid var(--line-strong)", borderRadius: 6, minWidth: 52, textAlign: "center" as const }}>
+        {page} / {totalPages}
+      </span>
+      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page >= totalPages} onClick={() => onChange(page + 1)}>Next</button>
+    </div>
+  );
+}
+
 export function IntentsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
-  const { data: intents } = useIntents();
+  const [page, setPage] = useState(1);
+  const { data: paged } = useIntentsPaged(page);
+  const intents = paged.items;
+  const totalPages = paged.totalPages || 1;
+  const total = paged.total || intents.length;
   const navigate = useNavigate();
   const intentLabel = useIntentLabel();
 
@@ -185,9 +210,10 @@ export function IntentsPage() {
             <FilterPill label="Initiator" value="any" />
             <FilterPill label="Score" value="≥ 0" />
           </div>
-          <span className="count">
-            {rows.length} of {intents.length}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="count">{rows.length} of {total}</span>
+            <Pagination page={page} totalPages={totalPages} onChange={(p) => { setPage(p); }} />
+          </div>
         </div>
 
         <DataTable
