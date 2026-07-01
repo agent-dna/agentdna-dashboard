@@ -15,12 +15,12 @@ import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
 import type { Agent, Tool } from "../types";
 
-type Tab = "agents" | "tools" | "my-access";
+type Tab = "agents" | "tools";
 
 export function AgentsToolsPage() {
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
-  const [tab, setTab] = useState<Tab>(isAdmin ? "agents" : "my-access");
+  const [tab, setTab] = useState<Tab>("agents");
   const [search, setSearch] = useState("");
   const [agentsPage, setAgentsPage] = useState(1);
   const [toolsPage, setToolsPage] = useState(1);
@@ -37,12 +37,8 @@ export function AgentsToolsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState<{ open: boolean; agent?: Agent }>({ open: false });
 
-  const myAccessIds = new Set(user?.agent_access_list || []);
-  const myAccessAgents = agents.filter((a) => myAccessIds.has(a.id));
-
   const isAgents = tab === "agents";
-  const isMyAccess = tab === "my-access";
-  const all = isMyAccess ? myAccessAgents : isAgents ? agents : tools;
+  const all = isAgents ? agents : tools;
   const rows = all.filter((r) => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -230,12 +226,7 @@ export function AgentsToolsPage() {
               Request access
             </button>
           )}
-          {tab === "agents" || isMyAccess ? (
-            <button className="btn primary" onClick={() => setCreateOpen(true)}>
-              <Icon name="plus" size={14} />
-              {isAdmin ? "Create agent" : "Request agent"}
-            </button>
-          ) : (
+          {!isAgents && (
             <button className="btn">
               <Icon name="download" size={14} />
               Export
@@ -245,33 +236,7 @@ export function AgentsToolsPage() {
       </div>
 
       <div className="metrics">
-        {isMyAccess ? (
-          <>
-            <MetricTile label="My Agents" value={myAccessAgents.length} icon="agents" sparkColor="#2563EB" spark={[]} />
-            <MetricTile
-              label="Avg. Reliability"
-              value={myAccessAgents.length ? Math.round(myAccessAgents.reduce((a, x) => a + x.score, 0) / myAccessAgents.length) : 0}
-              unit="/ 100"
-              icon="target"
-              sparkColor="#0EA5E9"
-              spark={[]}
-            />
-            <MetricTile
-              label="Total Interactions"
-              value={myAccessAgents.reduce((a, x) => a + x.interactions, 0)}
-              icon="activity"
-              sparkColor="#0A2240"
-              spark={[]}
-            />
-            <MetricTile
-              label="Threats"
-              value={myAccessAgents.reduce((a, x) => a + x.threats, 0)}
-              icon="shield"
-              sparkColor="#DC2626"
-              spark={[]}
-            />
-          </>
-        ) : isAgents ? (
+        {isAgents ? (
           <>
             <MetricTile label="Total Agents" value={agentsTotal || agents.length} icon="agents" sparkColor="#2563EB" spark={[]} />
             <MetricTile
@@ -355,7 +320,6 @@ export function AgentsToolsPage() {
           active={tab}
           onChange={(k) => setTab(k as Tab)}
           tabs={[
-            ...(!isAdmin ? [{ key: "my-access", label: "My Access", count: myAccessAgents.length }] : []),
             { key: "agents", label: "Agents", count: agents.length },
             { key: "tools", label: "Apps", count: tools.length },
           ]}
