@@ -339,9 +339,9 @@ export function LandingPage() {
 
         {/* footer */}
         <div style={rFooter}>
-          <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-mono)", fontSize:10.5, color:"#5F73A0" }}>
+          {/* <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-mono)", fontSize:10.5, color:"#5F73A0" }}>
             <span style={{ width:10, height:8, borderRadius:"2px 2px 0 0", border:"1.5px solid #059669", borderBottom:"none", marginTop:2 }} />
-          </span>
+          </span> */}
           {/* <span style={{ fontFamily:"var(--font-body)", fontSize:12, color:"#5F73A0" }}>
             Need access?{" "}<span style={{ color:"#2563EB", fontWeight:600, cursor:"pointer" }}>Book a demo</span>
           </span> */}
