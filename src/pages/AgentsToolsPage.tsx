@@ -273,7 +273,7 @@ export function AgentsToolsPage() {
           </>
         ) : isAgents ? (
           <>
-            <MetricTile label="Total Agents" value={agents.length} icon="agents" sparkColor="#2563EB" spark={[]} />
+            <MetricTile label="Total Agents" value={agentsTotal || agents.length} icon="agents" sparkColor="#2563EB" spark={[]} />
             <MetricTile
               label="Avg. Reliability"
               value={agents.length ? Math.round(agents.reduce((a, x) => a + x.score, 0) / agents.length) : 0}
@@ -299,7 +299,7 @@ export function AgentsToolsPage() {
           </>
         ) : (
           <>
-            <MetricTile label="Total Apps" value={tools.length} icon="box" sparkColor="#2563EB" spark={[]} />
+            <MetricTile label="Total Apps" value={toolsTotal || tools.length} icon="box" sparkColor="#2563EB" spark={[]} />
             <MetricTile
               label="Avg. Reliability"
               value={tools.length ? Math.round(tools.reduce((a, x) => a + x.score, 0) / tools.length) : 0}

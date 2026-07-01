@@ -302,12 +302,6 @@ export function RequestsPage() {
               <Icon name="refresh" size={14} /> Refresh
             </button>
           )}
-          {tab === "creation" && (
-            <button className="btn primary" onClick={() => setCreateOpen(true)}>
-              <Icon name="plus" size={14} />
-              {isAdmin ? "Create agent" : "Request agent"}
-            </button>
-          )}
         </div>
       </div>
 
