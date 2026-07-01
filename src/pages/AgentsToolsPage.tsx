@@ -13,6 +13,7 @@ import { useAgentsPaged, useToolsPaged } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
+import { exportAgentsListPdf, exportToolsListPdf } from "../lib/exportListPdf";
 import type { Agent, Tool } from "../types";
 
 type Tab = "agents" | "tools";
@@ -220,18 +221,17 @@ export function AgentsToolsPage() {
           <div className="sub">Identity-verified actors and the capabilities they can invoke</div>
         </div>
         <div className="right">
-          {!isAdmin && (
-            <button className="btn" onClick={() => setAccessOpen({ open: true })}>
-              <Icon name="shield" size={14} />
-              Request access
-            </button>
-          )}
-          {!isAgents && (
-            <button className="btn">
-              <Icon name="download" size={14} />
-              Export
-            </button>
-          )}
+          <button
+            className="btn"
+            onClick={() =>
+              isAgents
+                ? exportAgentsListPdf(agents, agentsTotal || agents.length)
+                : exportToolsListPdf(tools, toolsTotal || tools.length)
+            }
+          >
+            <Icon name="download" size={14} />
+            Export
+          </button>
         </div>
       </div>
 

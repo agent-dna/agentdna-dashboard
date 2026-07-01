@@ -187,9 +187,12 @@ export function InteractionsPage() {
             <FilterPill label="Type" value="any" />
             <FilterPill label="Time" value="last 7d" />
           </div>
-          <span className="count">
-            {total > 0 ? `${rows.length} on this page · ${total} total` : `${rows.length}`}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="count">
+              {total > 0 ? `${rows.length} on this page · ${total} total` : `${rows.length}`}
+            </span>
+            <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize || undefined} loading={loading} inline onChange={setPage} />
+          </div>
         </div>
         <DataTable
           rows={rows}
@@ -197,7 +200,6 @@ export function InteractionsPage() {
           onRowClick={(r) => openDrawer("interaction", r)}
           emptyText={loading ? "Loading…" : "No interactions yet"}
         />
-        <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize || undefined} loading={loading} onChange={setPage} />
       </div>
     </div>
   );

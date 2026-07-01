@@ -41,6 +41,31 @@ export function HomePage() {
 
   const isEmpty = !homeState.loading && metrics.agentCount === 0;
 
+  function handleExport() {
+    const rows: string[][] = [
+      ["AgentDNA Dashboard Export", new Date().toISOString()],
+      [],
+      ["SUMMARY"],
+      ["Metric", "Value"],
+      ["Active Agents", String(metrics.agentCount)],
+      ["Total Intents", String(metrics.intentCount)],
+      ["Total Interactions", String(metrics.interactionsCount)],
+      ["Threats Detected", String(metrics.threatCount)],
+      [],
+      ["AGENT LIST"],
+      ["Agent ID", "Agent Name", "Total Interactions", "Total Threats"],
+      ...(metrics.agentList || []).map((a) => [a.agentID, a.agentName, String(a.totalInteractions), String(a.totalThreats)]),
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `agentdna-dashboard-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (isEmpty) {
     return (
       <div className="page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", gap: 0 }}>
@@ -122,7 +147,7 @@ export function HomePage() {
             <Icon name="refresh" size={14} />
             Refresh
           </button>
-          <button className="btn primary">
+          <button className="btn primary" onClick={handleExport}>
             <Icon name="download" size={14} />
             Export
           </button>
@@ -266,30 +291,35 @@ export function HomePage() {
 
       <div className="card">
         <div className="card-head">
-          <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--line)", margin: "0 -20px", padding: "0 20px" }}>
-            {(["interactions", "threats"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setBottomTab(t)}
-                style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  padding: "8px 14px", fontSize: 13, fontWeight: 600,
-                  color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
-                  borderBottom: bottomTab === t ? "2px solid var(--accent)" : "2px solid transparent",
-                  marginBottom: -1, textTransform: "capitalize",
-                }}
-              >
-                {t === "interactions" ? `Interactions` : `Threats`}
-                <span style={{
-                  marginLeft: 6, fontSize: 11, fontFamily: "var(--font-mono)",
-                  background: bottomTab === t ? "rgba(37,99,235,0.12)" : "var(--surface-raised)",
-                  color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
-                  padding: "1px 6px", borderRadius: 99,
-                }}>
-                  {t === "interactions" ? interactionsTotal : threats.length}
-                </span>
-              </button>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--line)", margin: "0 -20px", padding: "0 20px" }}>
+            <div style={{ display: "flex", gap: 0 }}>
+              {(["interactions", "threats"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setBottomTab(t)}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    padding: "8px 14px", fontSize: 13, fontWeight: 600,
+                    color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
+                    borderBottom: bottomTab === t ? "2px solid var(--accent)" : "2px solid transparent",
+                    marginBottom: -1, textTransform: "capitalize",
+                  }}
+                >
+                  {t === "interactions" ? `Interactions` : `Threats`}
+                  <span style={{
+                    marginLeft: 6, fontSize: 11, fontFamily: "var(--font-mono)",
+                    background: bottomTab === t ? "rgba(37,99,235,0.12)" : "var(--surface-raised)",
+                    color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
+                    padding: "1px 6px", borderRadius: 99,
+                  }}>
+                    {t === "interactions" ? interactionsTotal : threats.length}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {bottomTab === "interactions" && (
+              <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} inline onChange={setInteractionsPage} />
+            )}
           </div>
         </div>
         <DataTable
@@ -298,9 +328,6 @@ export function HomePage() {
           rows={bottomTab === "interactions" ? interactions : threats}
           emptyText={bottomTab === "interactions" ? "No interactions yet" : "No threats detected"}
         />
-        {bottomTab === "interactions" && (
-          <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} onChange={setInteractionsPage} />
-        )}
       </div>
     </div>
   );

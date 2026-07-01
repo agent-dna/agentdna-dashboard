@@ -6,10 +6,11 @@ interface PaginationProps {
   total?: number;
   pageSize?: number;
   loading?: boolean;
+  inline?: boolean;
   onChange: (page: number) => void;
 }
 
-export function Pagination({ page, totalPages, total, pageSize, loading, onChange }: PaginationProps) {
+export function Pagination({ page, totalPages, total, pageSize, loading, inline, onChange }: PaginationProps) {
   const [input, setInput] = useState(String(page));
 
   useEffect(() => { setInput(String(page)); }, [page]);
@@ -26,7 +27,7 @@ export function Pagination({ page, totalPages, total, pageSize, loading, onChang
   };
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: "1px solid var(--line)" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, ...(inline ? {} : { padding: "10px 16px", borderTop: "1px solid var(--line)" }) }}>
       {from !== null && to !== null && total != null && (
         <span style={{ fontSize: 12, color: "var(--fg-muted)", fontFamily: "var(--font-mono)", marginRight: 4 }}>
           {from}–{to} of {total}
