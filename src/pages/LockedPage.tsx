@@ -4,7 +4,7 @@ import logo from "../assets/agentdna-logo.png";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { fetchPublicMetrics } from "../data/api";
-import { sendOtp } from "../api/auth";
+import { sendOtp, forgotPassword, resetPassword } from "../api/auth";
 import type { PublicMetrics } from "../types";
 
 const USER_ORG_ID = "AGENT_DNA_BETA";
@@ -19,8 +19,9 @@ function fmt(n: number): string {
 
 
 /* ── Types ──────────────────────────────────────────────────────── */
-type Mode = "signin" | "register";
-type Role = "user" | "admin";
+type Mode   = "signin" | "register";
+type Role   = "user" | "admin";
+type Screen = "auth" | "forgot";
 interface LocationState { from?: { pathname?: string } }
 
 /* ── Component ──────────────────────────────────────────────────── */
@@ -30,6 +31,7 @@ export function LandingPage() {
   const location  = useLocation();
   const { user, login, loginAdmin, registerAdmin, registerUser } = useAuth();
 
+  const [screen, setScreen]         = useState<Screen>("auth");
   const [mode, setMode]             = useState<Mode>("signin");
   const [role, setRole]             = useState<Role>("user");
   const [email, setEmail]           = useState("");
@@ -39,8 +41,9 @@ export function LandingPage() {
   const [error, setError]           = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [metrics, setMetrics]       = useState<PublicMetrics | null>(null);
+  const [fpSuccess, setFpSuccess]   = useState<string | null>(null);
 
-  // OTP flow
+  // OTP flow (shared between register OTP and forgot-password OTP)
   const [otp, setOtp]               = useState("");
   const [otpSent, setOtpSent]       = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -80,6 +83,47 @@ export function LandingPage() {
   const resetOtp = () => { setOtp(""); setOtpSent(false); setOtpError(null); setCountdown(0); };
   const switchMode = (m: Mode) => { setMode(m); setError(null); setEmail(""); setUsername(""); setPassword(""); setConfirm(""); resetOtp(); };
   const switchRole = (r: Role) => { setRole(r); setMode("signin"); setError(null); resetOtp(); };
+
+  const goToForgot = () => {
+    setScreen("forgot");
+    setEmail(""); setPassword(""); setConfirm(""); setError(null); setFpSuccess(null); resetOtp();
+  };
+
+  const backToAuth = () => {
+    setScreen("auth"); setMode("signin"); setEmail(""); setPassword(""); setConfirm(""); setError(null); resetOtp();
+  };
+
+  const handleForgotSendOtp = async () => {
+    if (!email.trim()) { setOtpError("Enter your email first."); return; }
+    setOtpLoading(true); setOtpError(null);
+    try {
+      await forgotPassword(email.trim());
+      setOtpSent(true);
+      setCountdown(300);
+    } catch (err) {
+      setOtpError(err instanceof ApiError ? err.message : "Failed to send OTP.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (password !== confirm) { setError("Passwords do not match."); return; }
+    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (!otp.trim()) { setError("Enter the OTP sent to your email."); return; }
+    setSubmitting(true);
+    try {
+      await resetPassword(email.trim(), otp.trim(), password);
+      setFpSuccess("Password updated successfully. Please sign in.");
+      backToAuth();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleSendOtp = async () => {
     if (!email.trim()) { setOtpError("Enter your email first."); return; }
@@ -189,14 +233,100 @@ export function LandingPage() {
         {/* logo left · tabs right */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <img src={logo} alt="AgentDNA" style={{ height:38, width:"auto" }} />
-          <div style={tabs}>
-            <div className={mode === "signin"   ? "agd-ton" : "agd-toff"} onClick={() => switchMode("signin")}   style={tab}>Sign in</div>
-            <div className={mode === "register" ? "agd-ton" : "agd-toff"} onClick={() => switchMode("register")} style={tab}>Register</div>
-          </div>
+          {screen === "auth" && (
+            <div style={tabs}>
+              <div className={mode === "signin"   ? "agd-ton" : "agd-toff"} onClick={() => switchMode("signin")}   style={tab}>Sign in</div>
+              <div className={mode === "register" ? "agd-ton" : "agd-toff"} onClick={() => switchMode("register")} style={tab}>Register</div>
+            </div>
+          )}
+          {screen === "forgot" && (
+            <button type="button" onClick={backToAuth} style={{ fontFamily:"var(--font-body)", fontSize:12.5, fontWeight:600, color:"#5F73A0", background:"none", border:"1.5px solid rgba(15,32,70,0.14)", borderRadius:999, padding:"5px 14px", cursor:"pointer" }}>
+              ← Back to sign in
+            </button>
+          )}
         </div>
 
-        {/* form area */}
+        {/* ── FORGOT PASSWORD SCREEN ──────────────────────────────── */}
+        {screen === "forgot" && (
+          <div style={{ flex:1, display:"flex", flexDirection:"column" as const, justifyContent:"center", gap:0 }}>
+            <h2 style={fH2}>{otpSent ? "Reset your password" : "Forgot password"}</h2>
+            <p style={{ margin:"8px 0 0", fontSize:13, color:"#5F73A0", lineHeight:1.55 }}>
+              {otpSent
+                ? `Enter the 6-digit code sent to ${email} and your new password.`
+                : "Enter the email address linked to your account and we'll send you a reset code."}
+            </p>
+
+            {!otpSent ? (
+              /* Step 1 — enter email */
+              <div style={{ marginTop:20, display:"flex", flexDirection:"column", gap:9 }}>
+                <label style={fl}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <span style={flt}>Work email</span>
+                    {otpError && <span style={{ fontFamily:"var(--font-body)", fontSize:11, color:"#DC2626" }}>{otpError}</span>}
+                  </div>
+                  <input className="agd-in" type="email" required value={email} onChange={(e) => { setEmail(e.target.value); setOtpError(null); }} placeholder="you@company.com" />
+                </label>
+                <button type="button" disabled={otpLoading} onClick={handleForgotSendOtp} className="agd-btn" style={subBtn}>
+                  {otpLoading ? "Sending…" : "Send reset code →"}
+                </button>
+              </div>
+            ) : (
+              /* Step 2 — OTP + new password */
+              <form onSubmit={handleForgotSubmit} style={{ marginTop:20, display:"flex", flexDirection:"column", gap:9 }}>
+                <label style={fl}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <span style={flt}>OTP code</span>
+                    <button
+                      type="button"
+                      disabled={otpLoading || countdown > 0}
+                      onClick={() => { resetOtp(); }}
+                      style={{ fontFamily:"var(--font-body)", fontSize:11, fontWeight:700, color: countdown > 0 ? "#9FB2D6" : "#2563EB", background:"none", border:"none", cursor: countdown > 0 ? "default" : "pointer", padding:0 }}
+                    >
+                      {countdown > 0 ? `Resend in ${Math.floor(countdown/60)}:${String(countdown%60).padStart(2,"0")}` : "Resend"}
+                    </button>
+                  </div>
+                  <input
+                    className="agd-in"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="Enter 6-digit code"
+                    style={{ letterSpacing:"0.2em", fontFamily:"var(--font-mono)", fontSize:16 }}
+                  />
+                </label>
+                <label style={fl}>
+                  <span style={flt}>New password</span>
+                  <input className="agd-in" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" />
+                </label>
+                <label style={fl}>
+                  <span style={flt}>Confirm password</span>
+                  <input className="agd-in" type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••••••" />
+                </label>
+                {error && (
+                  <div style={{ padding:"8px 12px", borderRadius:8, background:"rgba(220,38,38,0.06)", border:"1px solid rgba(220,38,38,0.18)", color:"#DC2626", fontSize:12.5 }}>
+                    {error}
+                  </div>
+                )}
+                <button type="submit" disabled={submitting} className="agd-btn" style={subBtn}>
+                  {submitting ? "Updating…" : "Update password →"}
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* ── AUTH SCREEN ─────────────────────────────────────────── */}
+        {screen === "auth" && (
         <div style={{ flex:1, display:"flex", flexDirection:"column" as const, justifyContent:"center", gap:0 }}>
+
+          {fpSuccess && (
+            <div style={{ marginBottom:12, padding:"9px 13px", borderRadius:9, background:"rgba(5,150,105,0.07)", border:"1px solid rgba(5,150,105,0.22)", color:"#059669", fontSize:12.5, display:"flex", alignItems:"center", gap:7 }}>
+              <span style={{ fontSize:14 }}>✓</span>{fpSuccess}
+            </div>
+          )}
 
           <h2 style={fH2}>{heading}</h2>
 
@@ -272,7 +402,7 @@ export function LandingPage() {
             <label style={fl}>
               <div style={{ display:"flex", justifyContent:"space-between" }}>
                 <span style={flt}>Password</span>
-                {mode === "signin" && <span style={{ fontFamily:"var(--font-body)", fontSize:11.5, fontWeight:600, color:"#2563EB", cursor:"pointer" }}>Forgot?</span>}
+                {mode === "signin" && <span onClick={goToForgot} style={{ fontFamily:"var(--font-body)", fontSize:11.5, fontWeight:600, color:"#2563EB", cursor:"pointer" }}>Forgot?</span>}
               </div>
               <input className="agd-in" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" />
             </label>
@@ -336,6 +466,7 @@ export function LandingPage() {
             </button> */}
           </div>
         </div>
+        )}
 
         {/* footer */}
         <div style={rFooter}>

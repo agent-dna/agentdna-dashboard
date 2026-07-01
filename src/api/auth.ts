@@ -70,6 +70,24 @@ export function sendOtp(email: string): Promise<{ message: string }> {
   });
 }
 
+/** POST /forgot-password — sends OTP to email for password reset */
+export function forgotPassword(email: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>("/forgot-password", {
+    method: "POST",
+    body: { email },
+    auth: false,
+  });
+}
+
+/** POST /reset-password — resets password using OTP */
+export function resetPassword(email: string, otp: string, new_password: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>("/reset-password", {
+    method: "POST",
+    body: { email, otp, new_password },
+    auth: false,
+  });
+}
+
 export interface AdminRegisterBody {
   username: string;
   email: string;
@@ -102,7 +120,7 @@ export interface RegisterUserResponse {
 }
 
 export function registerUser(body: RegisterUserBody): Promise<RegisterUserResponse> {
-  return apiRequest<RegisterUserResponse>("/signup", {
+  return apiRequest<RegisterUserResponse>("/register-user", {
     method: "POST",
     body,
     auth: false,
