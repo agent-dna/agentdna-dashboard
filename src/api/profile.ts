@@ -17,6 +17,26 @@ export function fetchUserProfile(): Promise<UserProfile> {
   });
 }
 
+export interface AdminProfile {
+  name: string;
+  email: string;
+  organizationID: string;
+  apiKey: string;
+  agentCount: number;
+  intentCount: number;
+  threatCount: number;
+  totalUsers: number;
+  createdAt: number; // Unix epoch seconds
+}
+
+export function fetchAdminProfile(): Promise<AdminProfile> {
+  return apiRequest<AdminProfile>("/admin-profile", {
+    method: "GET",
+    auth: true,
+    skipLogoutOn401: true,
+  });
+}
+
 export interface UpdateProfileBody {
   name?: string;
   email?: string;
