@@ -290,39 +290,35 @@ export function HomePage() {
       </div>
 
       <div className="card">
-        <div className="card-head">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--line)", margin: "0 -20px", padding: "0 20px" }}>
-            <div style={{ display: "flex", gap: 0 }}>
-              {(["interactions", "threats"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setBottomTab(t)}
-                  style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    padding: "8px 14px", fontSize: 13, fontWeight: 600,
-                    color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
-                    borderBottom: bottomTab === t ? "2px solid var(--accent)" : "2px solid transparent",
-                    marginBottom: -1, textTransform: "capitalize",
-                  }}
-                >
-                  {t === "interactions" ? `Interactions` : `Threats`}
-                  <span style={{
-                    marginLeft: 6, fontSize: 11, fontFamily: "var(--font-mono)",
-                    background: bottomTab === t ? "rgba(37,99,235,0.12)" : "var(--surface-raised)",
-                    color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
-                    padding: "1px 6px", borderRadius: 99,
-                  }}>
-                    {t === "interactions" ? interactionsTotal : threats.length}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {bottomTab === "interactions" && (
-              <div style={{ marginLeft: "auto" }}>
-                <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} inline onChange={setInteractionsPage} />
-              </div>
-            )}
+        <div className="tb-toolbar">
+          <div className="filters">
+            {(["interactions", "threats"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setBottomTab(t)}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: "6px 14px", fontSize: 13, fontWeight: 600,
+                  color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
+                  borderBottom: bottomTab === t ? "2px solid var(--accent)" : "2px solid transparent",
+                  textTransform: "capitalize",
+                }}
+              >
+                {t === "interactions" ? "Interactions" : "Threats"}
+                <span style={{
+                  marginLeft: 6, fontSize: 11, fontFamily: "var(--font-mono)",
+                  background: bottomTab === t ? "rgba(37,99,235,0.12)" : "var(--surface-raised)",
+                  color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
+                  padding: "1px 6px", borderRadius: 99,
+                }}>
+                  {t === "interactions" ? interactionsTotal : threats.length}
+                </span>
+              </button>
+            ))}
           </div>
+          {bottomTab === "interactions" && (
+            <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} inline onChange={setInteractionsPage} />
+          )}
         </div>
         <DataTable
           onRowClick={(r) => openDrawer("interaction", r)}
