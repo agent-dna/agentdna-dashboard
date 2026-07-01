@@ -124,7 +124,7 @@ export function App() {
         {drawer?.kind === "intent" && <IntentDetail intent={drawer.entity as Intent} />}
       </Drawer>
 
-      <TweaksPanel />
+      {/* <TweaksPanel /> */}
     </div>
   );
 }

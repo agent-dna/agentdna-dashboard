@@ -305,27 +305,27 @@ export function LandingPage() {
           </form>
 
           {/* divider */}
-          <div style={div}>
+          {/* <div style={div}>
             <span style={{ flex:1, height:1, background:"rgba(15,32,70,0.10)" }} />
             <span style={divTxt}>or continue with</span>
             <span style={{ flex:1, height:1, background:"rgba(15,32,70,0.10)" }} />
-          </div>
+          </div> */}
 
           {/* social — disabled */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9 }}>
 
             {/* Okta */}
-            <button disabled style={socBtnDisabled} title="Coming soon">
+            {/* <button disabled style={socBtnDisabled} title="Coming soon">
               <svg width="16" height="16" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="100" cy="100" r="100" fill="#007DC1"/>
                 <circle cx="100" cy="100" r="42" fill="white"/>
                 <circle cx="100" cy="100" r="17" fill="#007DC1"/>
               </svg>
               Continue with Okta
-            </button>
+            </button> */}
 
             {/* Google */}
-            <button disabled style={socBtnDisabled} title="Coming soon">
+            {/* <button disabled style={socBtnDisabled} title="Coming soon">
               <svg width="16" height="16" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                 <path fill="#4285F4" d="M47.5 24.6c0-1.6-.1-3.1-.4-4.6H24v8.7h13.2c-.6 3-2.4 5.5-5 7.2v6h8c4.8-4.4 7.3-10.8 7.3-17.3z"/>
                 <path fill="#34A853" d="M24 48c6.5 0 12-2.2 16-5.9l-8-6c-2.2 1.5-5 2.3-8 2.3-6.2 0-11.4-4.2-13.3-9.9H2.7v6.2C6.7 42.5 14.8 48 24 48z"/>
@@ -333,7 +333,7 @@ export function LandingPage() {
                 <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.9 2.2 30.4 0 24 0 14.8 0 6.7 5.5 2.7 13.3l8 6.2C12.6 13.7 17.8 9.5 24 9.5z"/>
               </svg>
               Continue with Google
-            </button>
+            </button> */}
           </div>
         </div>
 
@@ -341,11 +341,10 @@ export function LandingPage() {
         <div style={rFooter}>
           <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-mono)", fontSize:10.5, color:"#5F73A0" }}>
             <span style={{ width:10, height:8, borderRadius:"2px 2px 0 0", border:"1.5px solid #059669", borderBottom:"none", marginTop:2 }} />
-            SOC 2 · encrypted
           </span>
-          <span style={{ fontFamily:"var(--font-body)", fontSize:12, color:"#5F73A0" }}>
+          {/* <span style={{ fontFamily:"var(--font-body)", fontSize:12, color:"#5F73A0" }}>
             Need access?{" "}<span style={{ color:"#2563EB", fontWeight:600, cursor:"pointer" }}>Book a demo</span>
-          </span>
+          </span> */}
         </div>
       </div>
     </div>
