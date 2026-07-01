@@ -139,6 +139,8 @@ export function ProfilePage() {
   const isAdmin = !!user?.is_admin;
   const activeProfile = isAdmin ? adminProfile : profile;
   const apiKey = activeProfile?.apiKey || user?.api_key || "";
+  const displayName = activeProfile?.name || (isAdmin ? "ADMIN" : "");
+  const displayOrg = activeProfile?.organizationID || user?.org_id || (isAdmin ? "AGENT_DNA_BETA" : "");
 
   function formatDate(dateStr: string) {
     try {
@@ -174,7 +176,7 @@ export function ProfilePage() {
 
   function startEdit(field: "name" | "email") {
     setEditField(field);
-    setEditValue(field === "name" ? (profile?.name || "") : (profile?.email || ""));
+    setEditValue(field === "name" ? (displayName || "") : (activeProfile?.email || ""));
     setEditError(null);
   }
 
@@ -220,7 +222,7 @@ export function ProfilePage() {
     }
   }
 
-  const initials = (activeProfile?.name || user?.email || "?")
+  const initials = (displayName || user?.email || "?")
     .split(/[\s@._-]+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -265,10 +267,10 @@ export function ProfilePage() {
             </div>
             <div>
               <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg)" }}>
-                {profileLoading ? "—" : (activeProfile?.name || activeProfile?.email || user?.email || "—")}
+                {profileLoading ? "—" : (displayName || activeProfile?.email || user?.email || "—")}
               </div>
               <div style={{ fontSize: 13, color: "var(--fg-muted)", marginTop: 2 }}>
-                {profileLoading ? "—" : (activeProfile?.organizationID || user?.org_id || "—")}
+                {profileLoading ? "—" : displayOrg}
               </div>
               {user?.is_admin && (
                 <span className="chip info" style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -282,7 +284,7 @@ export function ProfilePage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <EditableInfoRow
               label="Name"
-              value={profileLoading ? "—" : (activeProfile?.name || "—")}
+              value={profileLoading ? "—" : (displayName || "—")}
               editing={editField === "name"}
               editValue={editValue}
               onEdit={() => startEdit("name")}
@@ -310,7 +312,7 @@ export function ProfilePage() {
               </div>
             )}
 
-            <InfoRow label="Organization" value={profileLoading ? "—" : (activeProfile?.organizationID || user?.org_id || "—")} />
+            <InfoRow label="Organization" value={profileLoading ? "—" : displayOrg} />
             <InfoRow label="Role" value={isAdmin ? "Administrator" : "User"} />
             {isAdmin && adminProfile?.createdAt ? (
               <InfoRow label="Member since" value={formatEpoch(adminProfile.createdAt)} />
