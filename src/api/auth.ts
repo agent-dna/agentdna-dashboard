@@ -61,11 +61,21 @@ export async function adminLogin(username: string, password: string): Promise<st
   return res.data as string;
 }
 
+/** POST /send-otp — public, triggers OTP email before registration */
+export function sendOtp(email: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>("/send-otp", {
+    method: "POST",
+    body: { email },
+    auth: false,
+  });
+}
+
 export interface AdminRegisterBody {
   username: string;
   email: string;
   org: string;
   password: string;
+  otp: string;
 }
 
 export function adminRegister(body: AdminRegisterBody): Promise<{ did: string }> {
@@ -81,6 +91,7 @@ export interface RegisterUserBody {
   email: string;
   password: string;
   orgID: string;
+  otp: string;
 }
 
 export interface RegisterUserResponse {
@@ -91,7 +102,7 @@ export interface RegisterUserResponse {
 }
 
 export function registerUser(body: RegisterUserBody): Promise<RegisterUserResponse> {
-  return apiRequest<RegisterUserResponse>("/register-user", {
+  return apiRequest<RegisterUserResponse>("/signup", {
     method: "POST",
     body,
     auth: false,

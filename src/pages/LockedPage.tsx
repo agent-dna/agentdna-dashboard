@@ -1,9 +1,10 @@
-import { useState, useEffect, type FormEvent, type CSSProperties } from "react";
+import { useState, useEffect, useRef, type FormEvent, type CSSProperties } from "react";
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import logo from "../assets/agentdna-logo.png";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { fetchPublicMetrics } from "../data/api";
+import { sendOtp } from "../api/auth";
 import type { PublicMetrics } from "../types";
 
 const USER_ORG_ID = "AGENT_DNA_BETA";
@@ -39,6 +40,21 @@ export function LandingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [metrics, setMetrics]       = useState<PublicMetrics | null>(null);
 
+  // OTP flow
+  const [otp, setOtp]               = useState("");
+  const [otpSent, setOtpSent]       = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError]     = useState<string | null>(null);
+  const [countdown, setCountdown]   = useState(0);
+  const timerRef                    = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // countdown tick
+  useEffect(() => {
+    if (countdown <= 0) { if (timerRef.current) clearInterval(timerRef.current); return; }
+    timerRef.current = setInterval(() => setCountdown((c) => c - 1), 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [countdown]);
+
   useEffect(() => {
     fetchPublicMetrics().then(setMetrics).catch(() => {});
   }, []);
@@ -61,17 +77,33 @@ export function LandingPage() {
   const isUserRegister  = role === "user"  && isRegister;
   const isAdminRegister = role === "admin" && isRegister;
 
-  const switchMode = (m: Mode) => { setMode(m); setError(null); setEmail(""); setUsername(""); setPassword(""); setConfirm(""); };
-  const switchRole = (r: Role) => { setRole(r); setMode("signin"); setError(null); };
+  const resetOtp = () => { setOtp(""); setOtpSent(false); setOtpError(null); setCountdown(0); };
+  const switchMode = (m: Mode) => { setMode(m); setError(null); setEmail(""); setUsername(""); setPassword(""); setConfirm(""); resetOtp(); };
+  const switchRole = (r: Role) => { setRole(r); setMode("signin"); setError(null); resetOtp(); };
+
+  const handleSendOtp = async () => {
+    if (!email.trim()) { setOtpError("Enter your email first."); return; }
+    setOtpLoading(true); setOtpError(null);
+    try {
+      await sendOtp(email.trim());
+      setOtpSent(true);
+      setCountdown(300); // 5 min
+    } catch (err) {
+      setOtpError(err instanceof ApiError ? err.message : "Failed to send OTP.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     if (isRegister && password !== confirm) { setError("Passwords do not match."); return; }
+    if (isRegister && !otp.trim()) { setError("Enter the OTP sent to your email."); return; }
     setSubmitting(true);
     try {
-      if (isAdminRegister)     await registerAdmin(username.trim(), email.trim(), password, USER_ORG_ID);
-      else if (isUserRegister) await registerUser(username.trim(), email.trim(), password, USER_ORG_ID);
+      if (isAdminRegister)     await registerAdmin(username.trim(), email.trim(), password, USER_ORG_ID, otp.trim());
+      else if (isUserRegister) await registerUser(username.trim(), email.trim(), password, USER_ORG_ID, otp.trim());
       else if (isAdminLogin)   await loginAdmin(username.trim(), password);
       else                     await login(email.trim(), password);
       const to = (location.state as LocationState | null)?.from?.pathname || "/dashboard";
@@ -194,9 +226,46 @@ export function LandingPage() {
             {/* email */}
             {(role === "user" || isRegister) && (
               <label style={fl}>
-                <span style={flt}>Work email</span>
-                <input className="agd-in" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={flt}>Work email</span>
+                  {isRegister && (
+                    <button
+                      type="button"
+                      disabled={otpLoading || countdown > 0}
+                      onClick={handleSendOtp}
+                      style={{ fontFamily:"var(--font-body)", fontSize:11, fontWeight:700, color: countdown > 0 ? "#9FB2D6" : "#2563EB", background:"none", border:"none", cursor: countdown > 0 ? "default" : "pointer", padding:0 }}
+                    >
+                      {otpLoading ? "Sending…" : countdown > 0 ? `Resend in ${Math.floor(countdown/60)}:${String(countdown%60).padStart(2,"0")}` : otpSent ? "Resend OTP" : "Send OTP →"}
+                    </button>
+                  )}
+                </div>
+                <input className="agd-in" type="email" required value={email} onChange={(e) => { setEmail(e.target.value); resetOtp(); }} placeholder="you@company.com" />
               </label>
+            )}
+
+            {/* OTP input — register only, appears after OTP is sent */}
+            {isRegister && otpSent && (
+              <label style={fl}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={flt}>OTP code</span>
+                  <span style={{ fontFamily:"var(--font-mono)", fontSize:10.5, color:"#059669" }}>✓ Sent to {email}</span>
+                </div>
+                <input
+                  className="agd-in"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="Enter 6-digit code"
+                  style={{ letterSpacing: "0.2em", fontFamily:"var(--font-mono)", fontSize:16 }}
+                />
+                {otpError && <span style={{ fontFamily:"var(--font-body)", fontSize:11.5, color:"#DC2626" }}>{otpError}</span>}
+              </label>
+            )}
+            {isRegister && !otpSent && otpError && (
+              <span style={{ fontFamily:"var(--font-body)", fontSize:11.5, color:"#DC2626", marginTop:-4 }}>{otpError}</span>
             )}
 
             {/* password */}
