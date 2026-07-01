@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
-import { FilterPill } from "../components/FilterPill";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { ScoreBar } from "../components/ScoreBar";
 import { useIntentsPaged } from "../data/hooks";
@@ -32,7 +31,6 @@ function Pagination({
 }
 
 export function IntentsPage() {
-  const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
   const [page, setPage] = useState(1);
   const { data: paged } = useIntentsPaged(page);
@@ -45,10 +43,6 @@ export function IntentsPage() {
   let rows = intents;
   if (filter === "threats") rows = rows.filter((r) => r.threats > 0);
   if (filter === "safe") rows = rows.filter((r) => r.threats === 0);
-  if (search) {
-    const q = search.toLowerCase();
-    rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q));
-  }
 
   const totalAgents = intents.reduce((a, x) => a + x.agentsInteracted, 0);
   const totalTools = intents.reduce((a, x) => a + x.toolsInteracted, 0);
@@ -188,14 +182,6 @@ export function IntentsPage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            <div className="search" style={{ width: 280, marginLeft: 0 }}>
-              <Icon name="search" className="icon" size={16} />
-              <input
-                placeholder="Search intents…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
             <div className="seg">
               <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>
                 All
@@ -207,8 +193,6 @@ export function IntentsPage() {
                 Safe
               </button>
             </div>
-            <FilterPill label="Initiator" value="any" />
-            <FilterPill label="Score" value="≥ 0" />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span className="count">{rows.length} of {total}</span>

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
-import { FilterPill } from "../components/FilterPill";
 import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell, IdCell } from "../components/EntityCell";
@@ -22,7 +21,6 @@ export function AgentsToolsPage() {
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
   const [tab, setTab] = useState<Tab>("agents");
-  const [search, setSearch] = useState("");
   const [agentsPage, setAgentsPage] = useState(1);
   const [toolsPage, setToolsPage] = useState(1);
   const agentsState = useAgentsPaged(agentsPage);
@@ -39,12 +37,7 @@ export function AgentsToolsPage() {
   const [accessOpen, setAccessOpen] = useState<{ open: boolean; agent?: Agent }>({ open: false });
 
   const isAgents = tab === "agents";
-  const all = isAgents ? agents : tools;
-  const rows = all.filter((r) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q);
-  });
+  const rows = isAgents ? agents : tools;
 
   const agentCols: DataTableColumn<Agent>[] = [
     {
@@ -327,17 +320,6 @@ export function AgentsToolsPage() {
 
         <div className="tb-toolbar">
           <div className="filters">
-            <div className="search" style={{ width: 280, marginLeft: 0 }}>
-              <Icon name="search" className="icon" size={16} />
-              <input
-                placeholder={`Search ${tab}…`}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <FilterPill label="Status" value="all" />
-            <FilterPill label={isAgents ? "Env" : "Scope"} value="any" />
-            <FilterPill label="Score" value="≥ 0" />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <span className="count">

@@ -318,7 +318,9 @@ export function HomePage() {
               ))}
             </div>
             {bottomTab === "interactions" && (
-              <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} inline onChange={setInteractionsPage} />
+              <div style={{ marginLeft: "auto" }}>
+                <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} inline onChange={setInteractionsPage} />
+              </div>
             )}
           </div>
         </div>
