@@ -117,12 +117,18 @@ export function ProfilePage() {
     setProfileLoading(true);
     if (user?.is_admin) {
       fetchAdminProfile()
-        .then(setAdminProfile)
+        .then((p) => {
+          setAdminProfile(p);
+          if (p.name) patchUser({ name: p.name });
+        })
         .catch(() => setAdminProfile(null))
         .finally(() => setProfileLoading(false));
     } else {
       fetchUserProfile()
-        .then(setProfile)
+        .then((p) => {
+          setProfile(p);
+          if (p.name) patchUser({ name: p.name });
+        })
         .catch(() => setProfile(null))
         .finally(() => setProfileLoading(false));
     }
@@ -524,7 +530,6 @@ export function ProfilePage() {
               icon: "helix" as const,
               title: "Install the SDK",
               desc: "Install the AgentDNA SDK in your project and initialise it with your API key and organisation ID.",
-              code: "npm install @agentdna/sdk",
             },
             {
               step: "03",
@@ -532,7 +537,7 @@ export function ProfilePage() {
               title: "Wrap your agent",
               desc: "Wrap your agent's inference calls with the AgentDNA middleware to start capturing interactions and intents automatically.",
             },
-          ].map(({ step, icon, title, desc, code }) => (
+          ].map(({ step, icon, title, desc }) => (
             <div
               key={step}
               style={{
@@ -565,21 +570,6 @@ export function ProfilePage() {
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg)" }}>{title}</div>
               <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.55 }}>{desc}</div>
-              {code && (
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 12.5,
-                    background: "var(--bg-2, var(--bg))",
-                    border: "1px solid var(--line-strong)",
-                    borderRadius: 6,
-                    padding: "8px 12px",
-                    color: "var(--fg)",
-                  }}
-                >
-                  {code}
-                </div>
-              )}
             </div>
           ))}
         </div>

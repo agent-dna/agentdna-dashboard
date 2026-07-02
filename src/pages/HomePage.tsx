@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
-import { FilterPill } from "../components/FilterPill";
+
 import { Chart } from "../components/Chart";
 import { DataTable } from "../components/DataTable";
 import { useHomeMetrics, useInteractionsPaged, useAlerts, useSeries } from "../data/hooks";
@@ -138,12 +138,7 @@ export function HomePage() {
           </div>
         </div>
         <div className="right">
-          <FilterPill
-            label="Range"
-            value={series === "24h" ? "Last 24h" : "Last 7d"}
-            onClick={() => setSeries((s) => (s === "24h" ? "7d" : "24h"))}
-          />
-          <button className="btn">
+<button className="btn">
             <Icon name="refresh" size={14} />
             Refresh
           </button>
