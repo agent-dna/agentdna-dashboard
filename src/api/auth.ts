@@ -91,7 +91,7 @@ export function resetPassword(email: string, otp: string, new_password: string):
 export interface AdminRegisterBody {
   username: string;
   email: string;
-  org: string;
+  orgID: string;
   password: string;
   otp: string;
 }

@@ -217,7 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTokenState("dummy.jwt.token");
         return;
       }
-      const { did } = await apiAdminRegister({ username, email, org, password, otp });
+      const { did } = await apiAdminRegister({ username, email, orgID: org, password, otp });
       await registerAdminMiddleware(did, org);
       applyJwt(await apiAdminLogin(username, password));
     } finally {
