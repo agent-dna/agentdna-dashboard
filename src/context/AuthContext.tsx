@@ -1,12 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { login as apiLogin, adminLogin as apiAdminLogin, adminRegister as apiAdminRegister, registerAdminMiddleware, registerUser as apiRegisterUser, type LoginResponse } from "../api/auth";
 import { getToken, setToken, setUnauthorizedHandler } from "../api/client";
+import { fetchUserProfile, fetchAdminProfile } from "../api/profile";
 import { dummyCurrentUser, isDummyMode } from "../data/dummyRouter";
 
 const USER_KEY = "agentdna.user";
 
 export interface AuthUser {
   did: string;
+  name?: string;
   email: string;
   org_id: string;
   api_key: string;
@@ -155,6 +157,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState(res.token);
   }, []);
 
+  // After any login, fetch the profile in the background to populate name.
+  const fetchAndPatchName = useCallback((isAdmin: boolean) => {
+    const fetcher = isAdmin ? fetchAdminProfile : fetchUserProfile;
+    fetcher()
+      .then((p) => {
+        if (p.name) {
+          setUser((prev) => {
+            if (!prev) return prev;
+            const next = { ...prev, name: p.name };
+            writeStoredUser(next);
+            return next;
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const login = useCallback(async (email: string, _password: string) => {
     setLoading(true);
     try {
@@ -168,10 +187,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       applyAuthResponse(await apiLogin(email, _password));
+      fetchAndPatchName(false);
     } finally {
       setLoading(false);
     }
-  }, [applyAuthResponse]);
+  }, [applyAuthResponse, fetchAndPatchName]);
 
   // applyJwt: used when the backend returns a raw JWT string (admin login/register auto-login)
   const applyJwt = useCallback((jwt: string) => {
@@ -196,12 +216,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTokenState("dummy.jwt.token");
         return;
       }
-      // adminLogin returns a raw JWT string
       applyJwt(await apiAdminLogin(username, password));
+      fetchAndPatchName(true);
     } finally {
       setLoading(false);
     }
-  }, [applyJwt]);
+  }, [applyJwt, fetchAndPatchName]);
 
   const registerAdmin = useCallback(async (username: string, email: string, password: string, org: string, otp = "") => {
     setLoading(true);
@@ -220,10 +240,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { did } = await apiAdminRegister({ username, email, orgID: org, password, otp });
       await registerAdminMiddleware(did, org);
       applyJwt(await apiAdminLogin(username, password));
+      fetchAndPatchName(true);
     } finally {
       setLoading(false);
     }
-  }, [applyJwt]);
+  }, [applyJwt, fetchAndPatchName]);
 
   const registerUser = useCallback(async (name: string, email: string, password: string, orgId: string, otp = "") => {
     setLoading(true);
@@ -241,10 +262,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       await apiRegisterUser({ name: name || undefined, email, password, orgID: orgId, otp });
       applyAuthResponse(await apiLogin(email, password));
+      fetchAndPatchName(false);
     } finally {
       setLoading(false);
     }
-  }, [applyAuthResponse]);
+  }, [applyAuthResponse, fetchAndPatchName]);
 
   const patchUser = useCallback((patch: Partial<AuthUser>) => {
     setUser((prev) => {

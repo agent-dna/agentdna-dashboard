@@ -117,12 +117,18 @@ export function ProfilePage() {
     setProfileLoading(true);
     if (user?.is_admin) {
       fetchAdminProfile()
-        .then(setAdminProfile)
+        .then((p) => {
+          setAdminProfile(p);
+          if (p.name) patchUser({ name: p.name });
+        })
         .catch(() => setAdminProfile(null))
         .finally(() => setProfileLoading(false));
     } else {
       fetchUserProfile()
-        .then(setProfile)
+        .then((p) => {
+          setProfile(p);
+          if (p.name) patchUser({ name: p.name });
+        })
         .catch(() => setProfile(null))
         .finally(() => setProfileLoading(false));
     }
