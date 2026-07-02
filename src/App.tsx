@@ -84,7 +84,7 @@ export function App() {
         </nav>
         <div className="sb-foot">
           <div className="who">
-            {(user?.email || "Guest").split("@")[0]}
+            {user ? (user.is_admin ? user.email : user.email.split("@")[0]) : "Guest"}
             <div className="sub">{user?.org_id || ""}</div>
           </div>
         </div>

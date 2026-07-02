@@ -524,7 +524,6 @@ export function ProfilePage() {
               icon: "helix" as const,
               title: "Install the SDK",
               desc: "Install the AgentDNA SDK in your project and initialise it with your API key and organisation ID.",
-              code: "npm install @agentdna/sdk",
             },
             {
               step: "03",
@@ -532,7 +531,7 @@ export function ProfilePage() {
               title: "Wrap your agent",
               desc: "Wrap your agent's inference calls with the AgentDNA middleware to start capturing interactions and intents automatically.",
             },
-          ].map(({ step, icon, title, desc, code }) => (
+          ].map(({ step, icon, title, desc }) => (
             <div
               key={step}
               style={{
@@ -565,21 +564,6 @@ export function ProfilePage() {
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg)" }}>{title}</div>
               <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.55 }}>{desc}</div>
-              {code && (
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 12.5,
-                    background: "var(--bg-2, var(--bg))",
-                    border: "1px solid var(--line-strong)",
-                    borderRadius: 6,
-                    padding: "8px 12px",
-                    color: "var(--fg)",
-                  }}
-                >
-                  {code}
-                </div>
-              )}
             </div>
           ))}
         </div>
