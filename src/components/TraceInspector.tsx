@@ -57,15 +57,15 @@ const GC = "rgba(15,32,70,0.18)";
 
 function GuideCell({ kind }: { kind: "line" | "blank" | "tee" | "elbow" }) {
   return (
-    <div style={{ position: "relative", width: 20, flex: "none", alignSelf: "stretch" }}>
+    <div style={{ position: "relative", width: 12, flex: "none", alignSelf: "stretch" }}>
       {(kind === "line" || kind === "tee") && (
-        <div style={{ position: "absolute", left: 9, top: 0, bottom: 0, borderLeft: `1.5px solid ${GC}` }} />
+        <div style={{ position: "absolute", left: 5, top: 0, bottom: 0, borderLeft: `1.5px solid ${GC}` }} />
       )}
       {kind === "elbow" && (
-        <div style={{ position: "absolute", left: 9, top: 0, height: "50%", borderLeft: `1.5px solid ${GC}` }} />
+        <div style={{ position: "absolute", left: 5, top: 0, height: "50%", borderLeft: `1.5px solid ${GC}` }} />
       )}
       {(kind === "tee" || kind === "elbow") && (
-        <div style={{ position: "absolute", left: 9, top: "50%", width: 11, borderTop: `1.5px solid ${GC}` }} />
+        <div style={{ position: "absolute", left: 5, top: "50%", width: 7, borderTop: `1.5px solid ${GC}` }} />
       )}
     </div>
   );
@@ -161,11 +161,12 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
     >
       <div
         style={{
-          width: "90vw", height: "90vh", maxWidth: 1440,
+          width: "min(96vw, 1200px)",
+          maxHeight: "90vh",
           background: "#FFFFFF",
           border: "1px solid rgba(15,32,70,0.14)",
           borderRadius: 18,
-          boxShadow: "0 40px 100px rgba(6,18,40,0.42)",
+          boxShadow: "0 24px 64px rgba(6,18,40,0.36)",
           display: "flex", flexDirection: "column", overflow: "hidden",
         }}
         onMouseDown={(e) => e.stopPropagation()}
@@ -228,12 +229,13 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
         </div>
 
         {/* ── BODY ── */}
-        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
 
           {/* LEFT TREE */}
           <div style={{
-            width: "35%", minWidth: 320, borderRight: "1px solid rgba(15,32,70,0.08)",
+            width: 360, flexShrink: 0, flexGrow: 0, borderRight: "1px solid rgba(15,32,70,0.08)",
             display: "flex", flexDirection: "column", background: "#FCFDFF",
+            overflow: "hidden",
           }}>
             <div style={{
               flex: "none", display: "flex", alignItems: "center",
@@ -316,12 +318,12 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
           </div>
 
           {/* RIGHT DETAIL */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "28px 30px 36px", background: "#F7F9FD" }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "20px 22px 24px", background: "#F7F9FD" }}>
 
             {/* span name + type bar */}
             <div style={{
-              display: "flex", alignItems: "center", gap: 12, marginBottom: 28,
-              paddingBottom: 20, borderBottom: "1px solid rgba(15,32,70,0.08)",
+              display: "flex", alignItems: "center", gap: 12, marginBottom: 14,
+              paddingBottom: 14, borderBottom: "1px solid rgba(15,32,70,0.08)",
             }}>
               <span style={{
                 fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 20,
@@ -335,7 +337,7 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
             </div>
 
             {/* fields grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "22px 32px", marginBottom: 28 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px", marginBottom: 16 }}>
 
               {/* FROM */}
               <Field label="From">
@@ -433,7 +435,7 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
                 border: "1px solid rgba(255,255,255,0.07)",
-                maxHeight: 380,
+                maxHeight: 340,
                 overflowY: "auto",
               }}>
                 {sel.input || "—"}
