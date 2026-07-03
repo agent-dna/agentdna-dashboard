@@ -12,7 +12,7 @@
  */
 
 import type { Intent, Interaction } from "../../types";
-import type { IntentBlock, IntentDiagram, DiagramInteraction } from "../../data/api";
+import type { IntentBlock, IntentDiagram } from "../../data/api";
 import type { useResolveName } from "../../context/DirectoryContext";
 
 export type FlowNodeKind = "human" | "agent" | "tool";
@@ -430,22 +430,32 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
 // ---- Diagram-based full flow builder (uses /intent-diagram flat interactions) ----
 
 export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Flow {
-  const { basicInfo, interactions } = diagram;
+  const { interactions } = diagram;
 
-  // Sort by epoch ascending so calls nest correctly.
-  const sorted = [...interactions].sort((a, b) => a.epoch - b.epoch);
+  // Sort by the trailing sequence number in interactionID (e.g. "uuid-3" → 3).
+  const sorted = [...interactions].sort((a, b) => {
+    const aNum = parseInt(a.interactionID.split("-").pop() ?? "0", 10);
+    const bNum = parseInt(b.interactionID.split("-").pop() ?? "0", 10);
+    return aNum - bNum;
+  });
+
+  // Pre-pass: detect tool DIDs — interactions where from is empty are tool responses;
+  // the to of the immediately preceding interaction is that tool's DID.
+  const toolDids = new Set<string>();
+  for (let i = 1; i < sorted.length; i++) {
+    if (!sorted[i].from && sorted[i - 1]?.to) {
+      toolDids.add(sorted[i - 1].to);
+    }
+  }
 
   // ── Nodes ──────────────────────────────────────────────────────────────────
   const nodesById = new Map<string, FlowNode>();
-  const idForDid = (did: string): string => `nd_${sanitize(did)}`;
 
-  const kindForType = (type: DiagramInteraction["type"]): FlowNodeKind =>
-    type === "tool_call" ? "tool" : "agent";
-  const labelForType = (type: DiagramInteraction["type"]): string =>
-    type === "tool_call" ? "App" : "Agent";
+  const nodeId = (did: string, name: string): string =>
+    did ? `nd_${sanitize(did)}` : `nd_tool_${sanitize(name)}`;
 
   const ensureNode = (did: string, name: string, kind: FlowNodeKind, label: string): FlowNode => {
-    const id = idForDid(did);
+    const id = nodeId(did, name);
     if (!nodesById.has(id)) {
       nodesById.set(id, { id, kind, name: name || shortDid(did), label, x: 0, y: 0 });
     }
@@ -453,11 +463,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
   };
 
   // The initiator is always human.
-  const humanNode = ensureNode(basicInfo.initiatorDID, basicInfo.initiatorName, "human", "User");
-
-  // ── Steps + span bookkeeping ────────────────────────────────────────────────
-  const rawSteps: Omit<FlowStep, "spanId">[] = [];
-  const stepSpan = new Map<string, string>(); // "fromId>toId" → spanId
+  const humanNode = ensureNode(diagram.initiatorDID, diagram.initiatorName, "human", "User");
 
   // ── Trace spans ────────────────────────────────────────────────────────────
   const allSpans: TraceSpan[] = [];
@@ -467,24 +473,16 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     return sp;
   };
 
-  const halted = basicInfo.threatDetected || sorted.some((ix) => ix.threat);
+  const halted = diagram.threatDetected || sorted.some((ix) => ix.threat);
 
-  const rootSpan = mkSpan({
-    id: `sp_${sanitize(intent.id)}_root`,
-    name: `Intent · ${intent.id.slice(-8)}`,
-    kind: "chain",
-    label: "TRACE",
-    status: halted ? "blocked" : "ok",
-    tokensIn: 0, tokensOut: 0, cost: 0,
-    input: `Execute intent: ${intent.id}`,
-    output: halted ? "Intent halted: policy violation detected." : "Intent finished successfully.",
-    model: null,
-    epoch: new Date(basicInfo.startedAt).getTime() / 1000 | 0,
-    parentId: null,
-    metadata: { intentId: intent.id, flowType: basicInfo.flowType, status: basicInfo.status },
-  });
+  // Epoch from the flow's first interaction timestamp.
+  const epochBase = diagram.firstInteractionAt
+    ? Math.floor(new Date(diagram.firstInteractionAt).getTime() / 1000)
+    : Math.floor(new Date(diagram.startedAt).getTime() / 1000);
 
-  // Human span sits directly under root.
+  // Human span is the root of the trace tree — no wrapping chain span.
+  // Its input is the first message sent (what the human triggered).
+  const firstMsg = sorted.find((ix) => ix.from === diagram.initiatorDID)?.message || intent.name || "";
   const humanSpan = mkSpan({
     id: `sp_${sanitize(intent.id)}_human`,
     name: humanNode.name,
@@ -492,34 +490,51 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     label: "User",
     status: "ok",
     tokensIn: 0, tokensOut: 0, cost: 0,
-    input: intent.name || `Intent ${intent.id.slice(-8)}`,
+    input: firstMsg,
     output: halted ? "Intent completed with violations." : "Intent completed successfully.",
     model: null,
-    epoch: new Date(basicInfo.startedAt).getTime() / 1000 | 0,
-    parentId: rootSpan.id,
-    metadata: { did: basicInfo.initiatorDID, role: "initiator" },
+    epoch: epochBase,
+    parentId: null,
+    metadata: { did: diagram.initiatorDID, role: "initiator" },
   });
-  rootSpan.children.push(humanSpan);
 
-  // Stack-based nesting: each entry is { did, span }.
+  // Stack-based nesting. Seed with the human as root.
   const stack: Array<{ did: string; span: TraceSpan }> = [
-    { did: "__root__", span: rootSpan },
-    { did: basicInfo.initiatorDID, span: humanSpan },
+    { did: diagram.initiatorDID, span: humanSpan },
   ];
   const spanSeq = new Map<string, number>();
 
+  // ── Steps + span bookkeeping ────────────────────────────────────────────────
+  const rawSteps: Omit<FlowStep, "spanId">[] = [];
+  const stepSpan = new Map<string, string>(); // "fromId>toId" → spanId
+
+  // Only process outbound interactions (each unique sender's first appearance).
+  // Interactions where from is empty (tool responses) or where from was already
+  // seen are responses going back up the call chain — skip for tree building.
+  const seenFromDids = new Set<string>();
+
   for (const ix of sorted) {
-    const fromDid = ix.initiator;
+    const fromDid = ix.from;
     const toDid = ix.to;
-    const isTool = ix.type === "tool_call";
+
+    // Skip tool responses (empty from) and return-path interactions.
+    if (!fromDid || seenFromDids.has(fromDid)) continue;
+    seenFromDids.add(fromDid);
+
+    const isTool = toolDids.has(toDid);
     const isBlocked = ix.threat;
 
-    const fromNode = ensureNode(fromDid, ix.initiatorName, "agent", "Agent");
-    const toNode = ensureNode(toDid, ix.toName, kindForType(ix.type), labelForType(ix.type));
+    const fromNode = ensureNode(
+      fromDid,
+      ix.fromName,
+      fromDid === diagram.initiatorDID ? "human" : "agent",
+      fromDid === diagram.initiatorDID ? "User" : "Agent",
+    );
+    const toNode = ensureNode(toDid, ix.toName, isTool ? "tool" : "agent", isTool ? "App" : "Agent");
     if (isBlocked) toNode.threat = true;
 
-    const fromNodeId = idForDid(fromDid);
-    const toNodeId = idForDid(toDid);
+    const fromNodeId = nodeId(fromDid, ix.fromName);
+    const toNodeId = nodeId(toDid, ix.toName);
 
     rawSteps.push({
       from: fromNodeId,
@@ -536,7 +551,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
       latency: 0,
     });
 
-    // Pop stack back to the frame matching the current initiator.
+    // Pop stack back to the frame matching the current sender.
     while (stack.length > 1 && stack[stack.length - 1].did !== fromDid) {
       stack.pop();
     }
@@ -544,23 +559,23 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
     const seq = (spanSeq.get(toDid) || 0) + 1;
     spanSeq.set(toDid, seq);
-    const spanId = `sp_${sanitize(intent.id)}_${sanitize(toDid)}_${seq}`;
+    const spanId = `sp_${sanitize(intent.id)}_${sanitize(toDid || ix.toName)}_${seq}`;
 
     const span = mkSpan({
       id: spanId,
       name: toNode.name,
       kind: isTool ? "tool" : "agent",
-      label: isTool ? "Tool" : "Agent",
+      label: isTool ? "App" : "Agent",
       status: isBlocked ? "blocked" : "ok",
       tokensIn: 0, tokensOut: 0, cost: 0,
       input: ix.message || "",
       output: "",
       model: null,
-      epoch: ix.epoch,
       parentId: parent.id,
       metadata: {
         interactionID: ix.interactionID,
-        type: ix.type,
+        from: ix.fromName,
+        to: ix.toName,
         fromDid,
         toDid,
       },
@@ -577,7 +592,6 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
   // ── Assemble nodes / edges ─────────────────────────────────────────────────
   const used = new Set<string>();
   for (const s of rawSteps) { used.add(s.from); used.add(s.to); }
-  // Always include the human node even if they only initiated (no inbound step).
   used.add(humanNode.id);
 
   const nodes = Array.from(nodesById.values()).filter((n) => used.has(n.id));
@@ -589,7 +603,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     if (!seenEdges.has(key)) { seenEdges.add(key); edges.push([s.from, s.to]); }
   }
 
-  // Orchestrator = agent with most outbound steps.
+  // Orchestrator = non-human agent with most outbound steps.
   const callCounts = new Map<string, number>();
   for (const s of rawSteps) callCounts.set(s.from, (callCounts.get(s.from) || 0) + 1);
   let orchId: string | null = null, maxC = 0;
@@ -609,15 +623,15 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
   const steps: FlowStep[] = rawSteps.map((s) => ({
     ...s,
-    spanId: stepSpan.get(`${s.from}>${s.to}`) || rootSpan.id,
+    spanId: stepSpan.get(`${s.from}>${s.to}`) || humanSpan.id,
   }));
 
   const flowTrace: FlowTrace = {
-    trace: rootSpan,
+    trace: humanSpan,
     spanById,
     traceId: `tr_${sanitize(intent.id).slice(-8)}`,
     sessionId: `sess_${sanitize(intent.id).slice(-6)}`,
-    userId: basicInfo.initiatorName || intent.initiator?.name || "operator",
+    userId: diagram.initiatorName || intent.initiator?.name || "operator",
     env: "prod",
     totalTokensIn: 0,
     totalTokensOut: 0,

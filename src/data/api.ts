@@ -621,45 +621,45 @@ export async function fetchIntentBlockData(intentId: string): Promise<IntentBloc
   }
 }
 
-export interface DiagramBasicInfo {
-  intentID: string;
-  initiatorDID: string;
-  initiatorName: string;
-  flowType: string;
-  status: string;
-  threatDetected: boolean;
-  chainDepth: number;
-  interactionsCount: number;
-  agentsCount: number;
-  toolsCount: number;
-  startedAt: string;
-}
-
 export interface DiagramInteraction {
   interactionID: string;
-  initiator: string;       // DID
-  initiatorName: string;
-  to: string;              // DID
+  from: string;        // DID of sender (empty string for tool responses)
+  fromName: string;
+  to: string;          // DID of recipient
   toName: string;
-  type: "delegate" | "execute" | "tool_call" | "response" | "trigger";
+  direction: string;
   message: string;
-  intentID: string;
   threat: boolean;
-  epoch: number;
 }
 
 export interface IntentDiagram {
-  basicInfo: DiagramBasicInfo;
+  intentID: string;
+  initiatorDID: string;
+  initiatorName: string;
+  executor?: string;
+  flowType: string;
+  status: string;
+  threatDetected: boolean;
+  chainDepth?: number;
+  interactionsCount: number;
+  agentsCount?: number;
+  toolsCount?: number;
+  startedAt: string;
+  firstInteractionAt?: string;
+  lastInteractionAt?: string;
+  runtimeSeconds?: number;
   interactions: DiagramInteraction[];
 }
 
 export async function fetchIntentDiagram(id: string): Promise<IntentDiagram | null> {
   try {
-    const res = await apiRequest<{ status: boolean; data: IntentDiagram }>("/intent-diagram", {
-      query: { intentID: id },
-    });
-    console.log("[intent-diagram] raw response", res);
-    return (res as unknown as { status: boolean; data: IntentDiagram }).data ?? null;
+    const res = await apiRequest<unknown>("/intent-diagram", { query: { intentID: id } });
+    // API returns the IntentDiagram directly (flat, not wrapped in { data })
+    const flat = res as IntentDiagram;
+    if (flat && flat.intentID) return flat;
+    // Fallback: check for legacy { data } wrapper
+    const wrapped = (res as { data?: IntentDiagram }).data;
+    return wrapped ?? null;
   } catch (e) {
     console.warn("[intent-diagram] failed", e);
     return null;
