@@ -446,38 +446,13 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
   const halted = basicInfo.threatDetected || sorted.some((ix) => ix.threat);
 
-  // Human span is the root of the trace tree (no wrapping chain span).
-  // Its input is the trigger message the human sent.
-  const triggerIx = sorted.find((ix) => ix.type === "trigger");
-  const triggerMsg = triggerIx?.message || intent.name || "";
-  const humanSpan = mkSpan({
-    id: `sp_${sanitize(intent.id)}_human`,
-    name: humanNode.name,
-    kind: "human",
-    label: "User",
-    status: "ok",
-    input: triggerMsg,
-    output: halted ? "Intent completed with violations." : "Intent completed successfully.",
-    model: null,
-    epoch: triggerIx?.epoch,
-    parentId: null,
-    // Store from/to so the detail panel can show the real direction for the root span.
-    metadata: {
-      did: basicInfo.initiatorDID,
-      role: "initiator",
-      from: basicInfo.initiatorName,
-      to: triggerIx?.toName || "",
-    },
-  });
-
   // Stack-based nesting for outbound. spanForDid maps DID → its outbound span
   // so response interactions can be nested under the sender's span.
-  const stack: Array<{ did: string; span: TraceSpan }> = [
-    { did: basicInfo.initiatorDID, span: humanSpan },
-  ];
+  // Stack starts empty; the first outbound interaction becomes the tree root.
+  let rootSpan: TraceSpan | null = null;
+  const stack: Array<{ did: string; span: TraceSpan }> = [];
   const spanSeq = new Map<string, number>();
   const spanForDid = new Map<string, TraceSpan>();
-  spanForDid.set(basicInfo.initiatorDID, humanSpan);
 
   // ── Steps + span bookkeeping ────────────────────────────────────────────────
   // rawSteps includes ALL interactions so the hop count equals interactionsCount.
@@ -541,7 +516,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     while (stack.length > 1 && stack[stack.length - 1].did !== fromDid) {
       stack.pop();
     }
-    const parent = stack[stack.length - 1].span;
+    const parent = stack.length > 0 ? stack[stack.length - 1].span : null;
 
     const seq = (spanSeq.get(toDid) || 0) + 1;
     spanSeq.set(toDid, seq);
@@ -557,7 +532,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
       output: "",
       model: null,
       epoch: ix.epoch || undefined,
-      parentId: parent.id,
+      parentId: parent ? parent.id : null,
       metadata: {
         interactionID: ix.interactionID,
         from: ix.initiatorName,
@@ -567,7 +542,11 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
       },
     });
 
-    parent.children.push(span);
+    if (parent) {
+      parent.children.push(span);
+    } else {
+      rootSpan = span; // first outbound span is the tree root
+    }
     stepSpan.set(`${fromNodeId}>${toNodeId}`, spanId);
     spanForDid.set(toDid, span);
 
@@ -591,7 +570,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     const fromNodeId = idForDid(fromDid);
     const toNodeId = idForDid(toDid);
 
-    const senderSpan = spanForDid.get(fromDid) ?? humanSpan;
+    const senderSpan = spanForDid.get(fromDid) ?? rootSpan!;
 
     const seq = (spanSeq.get(toDid) || 0) + 1;
     spanSeq.set(toDid, seq);
@@ -655,11 +634,11 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
   const steps: FlowStep[] = rawSteps.map((s) => ({
     ...s,
-    spanId: stepSpan.get(`${s.from}>${s.to}`) || humanSpan.id,
+    spanId: stepSpan.get(`${s.from}>${s.to}`) || rootSpan!.id,
   }));
 
   const flowTrace: FlowTrace = {
-    trace: humanSpan,
+    trace: rootSpan!,
     spanById,
     traceId: `tr_${sanitize(intent.id).slice(-8)}`,
     sessionId: `sess_${sanitize(intent.id).slice(-6)}`,
