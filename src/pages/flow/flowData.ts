@@ -448,7 +448,8 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
   // Human span is the root of the trace tree (no wrapping chain span).
   // Its input is the trigger message the human sent.
-  const triggerMsg = sorted.find((ix) => ix.type === "trigger")?.message || intent.name || "";
+  const triggerIx = sorted.find((ix) => ix.type === "trigger");
+  const triggerMsg = triggerIx?.message || intent.name || "";
   const humanSpan = mkSpan({
     id: `sp_${sanitize(intent.id)}_human`,
     name: humanNode.name,
@@ -458,9 +459,15 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     input: triggerMsg,
     output: halted ? "Intent completed with violations." : "Intent completed successfully.",
     model: null,
-    epoch: sorted.find((ix) => ix.type === "trigger")?.epoch,
+    epoch: triggerIx?.epoch,
     parentId: null,
-    metadata: { did: basicInfo.initiatorDID, role: "initiator" },
+    // Store from/to so the detail panel can show the real direction for the root span.
+    metadata: {
+      did: basicInfo.initiatorDID,
+      role: "initiator",
+      from: basicInfo.initiatorName,
+      to: triggerIx?.toName || "",
+    },
   });
 
   // Stack-based nesting. Seed with the human as root.
@@ -470,17 +477,20 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
   const spanSeq = new Map<string, number>();
 
   // ── Steps + span bookkeeping ────────────────────────────────────────────────
+  // rawSteps includes ALL interactions (outbound + response) so the hop count
+  // matches interactionsCount. Only outbound interactions build the trace tree.
   const rawSteps: Omit<FlowStep, "spanId">[] = [];
   const stepSpan = new Map<string, string>(); // "fromId>toId" → spanId
 
-  // Skip response interactions — only outbound calls build the tree.
   for (const ix of sorted) {
-    if (ix.type === "response") continue;
-
     const fromDid = ix.initiator;
     const toDid = ix.to;
+    const isResponse = ix.type === "response";
     const isTool = ix.type === "tool_call";
     const isBlocked = ix.threat;
+
+    const toKind: FlowNodeKind = toDid === basicInfo.initiatorDID ? "human" : (isTool ? "tool" : "agent");
+    const toLabel = toDid === basicInfo.initiatorDID ? "User" : (isTool ? "App" : "Agent");
 
     const fromNode = ensureNode(
       fromDid,
@@ -488,19 +498,26 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
       fromDid === basicInfo.initiatorDID ? "human" : "agent",
       fromDid === basicInfo.initiatorDID ? "User" : "Agent",
     );
-    const toNode = ensureNode(toDid, ix.toName, isTool ? "tool" : "agent", isTool ? "App" : "Agent");
+    const toNode = ensureNode(toDid, ix.toName, toKind, toLabel);
     if (isBlocked) toNode.threat = true;
 
     const fromNodeId = idForDid(fromDid);
     const toNodeId = idForDid(toDid);
 
+    // All interactions contribute to the step rail (hop count = interactionsCount).
     rawSteps.push({
       from: fromNodeId,
       to: toNodeId,
-      dir: "request",
-      title: isTool ? `Invoke ${toNode.name}` : `Delegate · ${toNode.name}`,
+      dir: isResponse ? "response" : "request",
+      title: isResponse
+        ? `Response · ${fromNode.name}`
+        : isTool
+        ? `Invoke ${toNode.name}`
+        : `Delegate · ${toNode.name}`,
       summary: isBlocked
         ? `Scope check FAILED — ${fromNode.name} → ${toNode.name} was blocked.`
+        : isResponse
+        ? `${fromNode.name} returned result to ${toNode.name}.`
         : isTool
         ? `${fromNode.name} invoked ${toNode.name}. Capability token verified.`
         : `${fromNode.name} delegated work to ${toNode.name}. Checks passed.`,
@@ -508,6 +525,9 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
       checks: { identity: true, trust: true, scope: !isBlocked },
       latency: 0,
     });
+
+    // Trace tree: only outbound interactions (trigger, delegate, tool_call, execute).
+    if (isResponse) continue;
 
     // Pop stack back to the frame matching the current sender.
     while (stack.length > 1 && stack[stack.length - 1].did !== fromDid) {

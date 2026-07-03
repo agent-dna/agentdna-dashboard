@@ -290,46 +290,63 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
             {/* fields grid */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px", marginBottom: 16 }}>
 
-              {/* FROM */}
-              <Field label="From">
-                {parentSpan ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{
-                      width: 8, height: 8, borderRadius: "50%", flex: "none",
-                      background: KIND_COLOR[spanKind(parentSpan)] || "#5F73A0",
-                      display: "inline-block",
-                    }} />
-                    <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, fontWeight: 600, color: "#0A2240" }}>
-                      {parentSpan.name}
-                    </span>
-                    <span style={{
-                      fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, color: "#8595B5",
-                      background: "#F1F5FB", padding: "2px 6px", borderRadius: 5,
-                      textTransform: "uppercase", letterSpacing: "0.06em",
-                    }}>{parentSpan.label}</span>
-                  </div>
-                ) : (
-                  <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, color: "#8595B5" }}>— root —</span>
-                )}
-              </Field>
+              {/* FROM — prefer metadata.from (set by diagram builder), fall back to parent span */}
+              {(() => {
+                const fromName = typeof sel.metadata?.from === "string" && sel.metadata.from
+                  ? sel.metadata.from
+                  : parentSpan?.name ?? null;
+                const fromColor = parentSpan ? (KIND_COLOR[spanKind(parentSpan)] || "#5F73A0") : "#0A2240";
+                const fromLabel = parentSpan?.label ?? "";
+                return (
+                  <Field label="From">
+                    {fromName ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{
+                          width: 8, height: 8, borderRadius: "50%", flex: "none",
+                          background: fromColor, display: "inline-block",
+                        }} />
+                        <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, fontWeight: 600, color: "#0A2240" }}>
+                          {fromName}
+                        </span>
+                        {fromLabel && (
+                          <span style={{
+                            fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, color: "#8595B5",
+                            background: "#F1F5FB", padding: "2px 6px", borderRadius: 5,
+                            textTransform: "uppercase", letterSpacing: "0.06em",
+                          }}>{fromLabel}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, color: "#8595B5" }}>—</span>
+                    )}
+                  </Field>
+                );
+              })()}
 
-              {/* TO */}
-              <Field label="To">
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{
-                    width: 8, height: 8, borderRadius: "50%", flex: "none",
-                    background: sColor, display: "inline-block",
-                  }} />
-                  <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, fontWeight: 600, color: "#0A2240" }}>
-                    {sel.name}
-                  </span>
-                  <span style={{
-                    fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, color: "#8595B5",
-                    background: "#F1F5FB", padding: "2px 6px", borderRadius: 5,
-                    textTransform: "uppercase", letterSpacing: "0.06em",
-                  }}>{sel.label}</span>
-                </div>
-              </Field>
+              {/* TO — prefer metadata.to (set by diagram builder), fall back to span name */}
+              {(() => {
+                const toName = typeof sel.metadata?.to === "string" && sel.metadata.to
+                  ? sel.metadata.to
+                  : sel.name;
+                return (
+                  <Field label="To">
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{
+                        width: 8, height: 8, borderRadius: "50%", flex: "none",
+                        background: sColor, display: "inline-block",
+                      }} />
+                      <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, fontWeight: 600, color: "#0A2240" }}>
+                        {toName}
+                      </span>
+                      <span style={{
+                        fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, color: "#8595B5",
+                        background: "#F1F5FB", padding: "2px 6px", borderRadius: 5,
+                        textTransform: "uppercase", letterSpacing: "0.06em",
+                      }}>{sel.label}</span>
+                    </div>
+                  </Field>
+                );
+              })()}
 
               {/* EPOCH */}
               <Field label="Epoch">
