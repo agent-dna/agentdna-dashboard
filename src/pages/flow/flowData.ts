@@ -12,7 +12,7 @@
  */
 
 import type { Intent, Interaction } from "../../types";
-import type { ApiDiagramNode, IntentBlock } from "../../data/api";
+import type { IntentBlock, IntentDiagram, DiagramInteraction } from "../../data/api";
 import type { useResolveName } from "../../context/DirectoryContext";
 
 export type FlowNodeKind = "human" | "agent" | "tool";
@@ -56,6 +56,7 @@ export interface TraceSpan {
   input: string;
   output: string;
   model: string | null;
+  epoch?: number;
   metadata: Record<string, unknown>;
   parentId: string | null;
   children: TraceSpan[];
@@ -426,20 +427,39 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
   };
 }
 
-// ---- Diagram-based trace builder (uses /intent-diagram tree directly) ----
+// ---- Diagram-based full flow builder (uses /intent-diagram flat interactions) ----
 
-type ResolveNameFn = ReturnType<typeof useResolveName>;
+export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Flow {
+  const { basicInfo, interactions } = diagram;
 
-function diagramHasThreat(node: ApiDiagramNode): boolean {
-  if (node.threat) return true;
-  return node.children.some(diagramHasThreat);
-}
+  // Sort by epoch ascending so calls nest correctly.
+  const sorted = [...interactions].sort((a, b) => a.epoch - b.epoch);
 
-export function buildTraceFromDiagram(
-  intent: Intent,
-  diagram: ApiDiagramNode,
-  resolve: ResolveNameFn,
-): FlowTrace {
+  // ── Nodes ──────────────────────────────────────────────────────────────────
+  const nodesById = new Map<string, FlowNode>();
+  const idForDid = (did: string): string => `nd_${sanitize(did)}`;
+
+  const kindForType = (type: DiagramInteraction["type"]): FlowNodeKind =>
+    type === "tool_call" ? "tool" : "agent";
+  const labelForType = (type: DiagramInteraction["type"]): string =>
+    type === "tool_call" ? "App" : "Agent";
+
+  const ensureNode = (did: string, name: string, kind: FlowNodeKind, label: string): FlowNode => {
+    const id = idForDid(did);
+    if (!nodesById.has(id)) {
+      nodesById.set(id, { id, kind, name: name || shortDid(did), label, x: 0, y: 0 });
+    }
+    return nodesById.get(id)!;
+  };
+
+  // The initiator is always human.
+  const humanNode = ensureNode(basicInfo.initiatorDID, basicInfo.initiatorName, "human", "User");
+
+  // ── Steps + span bookkeeping ────────────────────────────────────────────────
+  const rawSteps: Omit<FlowStep, "spanId">[] = [];
+  const stepSpan = new Map<string, string>(); // "fromId>toId" → spanId
+
+  // ── Trace spans ────────────────────────────────────────────────────────────
   const allSpans: TraceSpan[] = [];
   const mkSpan = (s: Omit<TraceSpan, "children">): TraceSpan => {
     const sp: TraceSpan = { ...s, children: [] };
@@ -447,84 +467,172 @@ export function buildTraceFromDiagram(
     return sp;
   };
 
-  const halted = diagramHasThreat(diagram);
-  const traceStatus: TraceSpan["status"] = halted ? "blocked" : "ok";
+  const halted = basicInfo.threatDetected || sorted.some((ix) => ix.threat);
 
   const rootSpan = mkSpan({
     id: `sp_${sanitize(intent.id)}_root`,
     name: `Intent · ${intent.id.slice(-8)}`,
     kind: "chain",
     label: "TRACE",
-    status: traceStatus,
+    status: halted ? "blocked" : "ok",
     tokensIn: 0, tokensOut: 0, cost: 0,
     input: `Execute intent: ${intent.id}`,
-    output: halted
-      ? "Intent halted: policy violation detected."
-      : "Intent finished successfully.",
+    output: halted ? "Intent halted: policy violation detected." : "Intent finished successfully.",
     model: null,
+    epoch: new Date(basicInfo.startedAt).getTime() / 1000 | 0,
     parentId: null,
-    metadata: { intentId: intent.id, status: halted ? "halted" : "finished" },
+    metadata: { intentId: intent.id, flowType: basicInfo.flowType, status: basicInfo.status },
   });
 
-  const walk = (node: ApiDiagramNode, parentSpan: TraceSpan) => {
-    const isRoot = !node.interactionType;
-    const isTool = node.interactionType === "tool_call";
-    const resolved = resolve(node.did);
-    const kind: TraceSpan["kind"] = isRoot ? "human" : isTool ? "tool" : "agent";
-    const label = isRoot ? "User" : isTool ? "Tool" : "Agent";
-    const nodeId = node.interactionID ? sanitize(node.interactionID) : sanitize(node.did);
-    const spanId = `sp_${sanitize(intent.id)}_${nodeId}`;
+  // Human span sits directly under root.
+  const humanSpan = mkSpan({
+    id: `sp_${sanitize(intent.id)}_human`,
+    name: humanNode.name,
+    kind: "human",
+    label: "User",
+    status: "ok",
+    tokensIn: 0, tokensOut: 0, cost: 0,
+    input: intent.name || `Intent ${intent.id.slice(-8)}`,
+    output: halted ? "Intent completed with violations." : "Intent completed successfully.",
+    model: null,
+    epoch: new Date(basicInfo.startedAt).getTime() / 1000 | 0,
+    parentId: rootSpan.id,
+    metadata: { did: basicInfo.initiatorDID, role: "initiator" },
+  });
+  rootSpan.children.push(humanSpan);
+
+  // Stack-based nesting: each entry is { did, span }.
+  const stack: Array<{ did: string; span: TraceSpan }> = [
+    { did: "__root__", span: rootSpan },
+    { did: basicInfo.initiatorDID, span: humanSpan },
+  ];
+  const spanSeq = new Map<string, number>();
+
+  for (const ix of sorted) {
+    const fromDid = ix.initiator;
+    const toDid = ix.to;
+    const isTool = ix.type === "tool_call";
+    const isBlocked = ix.threat;
+
+    const fromNode = ensureNode(fromDid, ix.initiatorName, "agent", "Agent");
+    const toNode = ensureNode(toDid, ix.toName, kindForType(ix.type), labelForType(ix.type));
+    if (isBlocked) toNode.threat = true;
+
+    const fromNodeId = idForDid(fromDid);
+    const toNodeId = idForDid(toDid);
+
+    rawSteps.push({
+      from: fromNodeId,
+      to: toNodeId,
+      dir: "request",
+      title: isTool ? `Invoke ${toNode.name}` : `Delegate · ${toNode.name}`,
+      summary: isBlocked
+        ? `Scope check FAILED — ${fromNode.name} → ${toNode.name} was blocked.`
+        : isTool
+        ? `${fromNode.name} invoked ${toNode.name}. Capability token verified.`
+        : `${fromNode.name} delegated work to ${toNode.name}. Checks passed.`,
+      verdict: isBlocked ? "blocked" : "allowed",
+      checks: { identity: true, trust: true, scope: !isBlocked },
+      latency: 0,
+    });
+
+    // Pop stack back to the frame matching the current initiator.
+    while (stack.length > 1 && stack[stack.length - 1].did !== fromDid) {
+      stack.pop();
+    }
+    const parent = stack[stack.length - 1].span;
+
+    const seq = (spanSeq.get(toDid) || 0) + 1;
+    spanSeq.set(toDid, seq);
+    const spanId = `sp_${sanitize(intent.id)}_${sanitize(toDid)}_${seq}`;
 
     const span = mkSpan({
       id: spanId,
-      name: node.name || resolved.name || node.did.slice(-8),
-      kind,
-      label,
-      status: node.threat ? "blocked" : "ok",
+      name: toNode.name,
+      kind: isTool ? "tool" : "agent",
+      label: isTool ? "Tool" : "Agent",
+      status: isBlocked ? "blocked" : "ok",
       tokensIn: 0, tokensOut: 0, cost: 0,
-      input: isTool
-        ? `{\n  "tool": "${node.name}",\n  "caller": "${parentSpan.name}"\n}`
-        : isRoot
-        ? intent.name || `Intent ${intent.id.slice(-8)}`
-        : `Delegated task for intent "${intent.name}".\nVerify identity, check scope, execute subtask.`,
-      output: node.threat
-        ? (isTool
-          ? `{\n  "ok": false,\n  "error": "scope_denied"\n}`
-          : "Blocked by policy.")
-        : (isTool
-          ? `{\n  "ok": true\n}`
-          : "Subtask completed. Result returned to caller."),
-      model: isTool || isRoot ? null : "agent/reason-v2",
-      parentId: parentSpan.id,
+      input: ix.message || "",
+      output: "",
+      model: null,
+      epoch: ix.epoch,
+      parentId: parent.id,
       metadata: {
-        did: node.did,
-        ...(node.interactionID ? { interactionID: node.interactionID } : {}),
-        ...(node.interactionType ? { interactionType: node.interactionType } : {}),
+        interactionID: ix.interactionID,
+        type: ix.type,
+        fromDid,
+        toDid,
       },
     });
 
-    parentSpan.children.push(span);
+    parent.children.push(span);
+    stepSpan.set(`${fromNodeId}>${toNodeId}`, spanId);
 
-    for (const child of node.children) {
-      walk(child, span);
+    if (!isTool) {
+      stack.push({ did: toDid, span });
     }
-  };
+  }
 
-  walk(diagram, rootSpan);
+  // ── Assemble nodes / edges ─────────────────────────────────────────────────
+  const used = new Set<string>();
+  for (const s of rawSteps) { used.add(s.from); used.add(s.to); }
+  // Always include the human node even if they only initiated (no inbound step).
+  used.add(humanNode.id);
+
+  const nodes = Array.from(nodesById.values()).filter((n) => used.has(n.id));
+
+  const seenEdges = new Set<string>();
+  const edges: [string, string][] = [];
+  for (const s of rawSteps) {
+    const key = `${s.from}>${s.to}`;
+    if (!seenEdges.has(key)) { seenEdges.add(key); edges.push([s.from, s.to]); }
+  }
+
+  // Orchestrator = agent with most outbound steps.
+  const callCounts = new Map<string, number>();
+  for (const s of rawSteps) callCounts.set(s.from, (callCounts.get(s.from) || 0) + 1);
+  let orchId: string | null = null, maxC = 0;
+  for (const [id, c] of callCounts) {
+    const n = nodesById.get(id);
+    if (n && n.kind !== "human" && c > maxC) { orchId = id; maxC = c; }
+  }
+  if (orchId) {
+    const orch = nodesById.get(orchId);
+    if (orch) orch.label = "Orchestrator";
+  }
+
+  tierLayout(nodes, orchId, rawSteps as FlowStep[]);
 
   const spanById: Record<string, TraceSpan> = {};
   for (const s of allSpans) spanById[s.id] = s;
 
-  return {
+  const steps: FlowStep[] = rawSteps.map((s) => ({
+    ...s,
+    spanId: stepSpan.get(`${s.from}>${s.to}`) || rootSpan.id,
+  }));
+
+  const flowTrace: FlowTrace = {
     trace: rootSpan,
     spanById,
     traceId: `tr_${sanitize(intent.id).slice(-8)}`,
     sessionId: `sess_${sanitize(intent.id).slice(-6)}`,
-    userId: diagram.name || intent.initiator?.name || "operator",
+    userId: basicInfo.initiatorName || intent.initiator?.name || "operator",
     env: "prod",
     totalTokensIn: 0,
     totalTokensOut: 0,
     totalCost: 0,
+  };
+
+  return {
+    intentId: intent.id,
+    intent,
+    nodes,
+    nodeById: Object.fromEntries(nodes.map((n) => [n.id, n])),
+    edges,
+    steps,
+    status: halted ? "halted" : "completed",
+    trace: flowTrace,
   };
 }
 

@@ -621,19 +621,36 @@ export async function fetchIntentBlockData(intentId: string): Promise<IntentBloc
   }
 }
 
-export interface ApiDiagramNode {
-  did: string;
-  name: string;
-  interactionID?: string;
-  interactionType?: "delegate" | "execute" | "tool_call" | "response" | "trigger";
-  direction?: "outbound" | "inbound";
+export interface DiagramBasicInfo {
+  intentID: string;
+  initiatorDID: string;
+  initiatorName: string;
+  flowType: string;
+  status: string;
+  threatDetected: boolean;
+  chainDepth: number;
+  interactionsCount: number;
+  agentsCount: number;
+  toolsCount: number;
+  startedAt: string;
+}
+
+export interface DiagramInteraction {
+  interactionID: string;
+  initiator: string;       // DID
+  initiatorName: string;
+  to: string;              // DID
+  toName: string;
+  type: "delegate" | "execute" | "tool_call" | "response" | "trigger";
+  message: string;
+  intentID: string;
   threat: boolean;
-  children: ApiDiagramNode[];
+  epoch: number;
 }
 
 export interface IntentDiagram {
-  intentID: string;
-  diagram: ApiDiagramNode;
+  basicInfo: DiagramBasicInfo;
+  interactions: DiagramInteraction[];
 }
 
 export async function fetchIntentDiagram(id: string): Promise<IntentDiagram | null> {
@@ -641,7 +658,7 @@ export async function fetchIntentDiagram(id: string): Promise<IntentDiagram | nu
     const res = await apiRequest<{ status: boolean; data: IntentDiagram }>("/intent-diagram", {
       query: { intentID: id },
     });
-    return (res as unknown as { status: boolean; data: IntentDiagram }).data ?? (res as unknown as IntentDiagram);
+    return (res as unknown as { status: boolean; data: IntentDiagram }).data ?? null;
   } catch (e) {
     console.warn(`[GET /intent-diagram?intentID=${id}] failed`, e);
     return null;

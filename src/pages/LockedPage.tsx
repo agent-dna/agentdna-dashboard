@@ -29,7 +29,7 @@ interface LocationState { from?: { pathname?: string } }
 export function LandingPage() {
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { user, login, loginAdmin, registerAdmin, registerUser } = useAuth();
+  const { user, login, loginAdmin, registerUser } = useAuth();
 
   const [screen, setScreen]         = useState<Screen>("auth");
   const [mode, setMode]             = useState<Mode>("signin");
@@ -75,10 +75,9 @@ export function LandingPage() {
     return <Navigate to={to} replace />;
   }
 
-  const isRegister      = mode === "register";
-  const isAdminLogin    = role === "admin" && mode === "signin";
-  const isUserRegister  = role === "user"  && isRegister;
-  const isAdminRegister = role === "admin" && isRegister;
+  const isRegister     = mode === "register" && role === "user";
+  const isAdminLogin   = role === "admin";
+  const isUserRegister = isRegister;
 
   const resetOtp = () => { setOtp(""); setOtpSent(false); setOtpError(null); setCountdown(0); };
   const switchMode = (m: Mode) => { setMode(m); setError(null); setEmail(""); setUsername(""); setPassword(""); setConfirm(""); resetOtp(); };
@@ -146,10 +145,9 @@ export function LandingPage() {
     if (isRegister && !otp.trim()) { setError("Enter the OTP sent to your email."); return; }
     setSubmitting(true);
     try {
-      if (isAdminRegister)     await registerAdmin(username.trim(), email.trim(), password, USER_ORG_ID, otp.trim());
-      else if (isUserRegister) await registerUser(username.trim(), email.trim(), password, USER_ORG_ID, otp.trim());
-      else if (isAdminLogin)   await loginAdmin(username.trim(), password);
-      else                     await login(email.trim(), password);
+      if (isUserRegister)     await registerUser(username.trim(), email.trim(), password, USER_ORG_ID, otp.trim());
+      else if (isAdminLogin)  await loginAdmin(username.trim(), password);
+      else                    await login(email.trim(), password);
       const to = (location.state as LocationState | null)?.from?.pathname || "/dashboard";
       navigate(to, { replace: true });
     } catch (err) {
@@ -159,7 +157,7 @@ export function LandingPage() {
     }
   };
 
-  const heading  = isAdminRegister ? "Create admin account" : isUserRegister ? "Create your account" : role === "admin" ? "Admin sign in" : "Welcome back";
+  const heading  = isUserRegister ? "Create your account" : role === "admin" ? "Admin sign in" : "Welcome back";
   const btnLabel = submitting ? (isRegister ? "Creating…" : "Signing in…") : (isRegister ? "Create account →" : "Sign in →");
 
   return (
@@ -233,7 +231,7 @@ export function LandingPage() {
         {/* logo left · tabs right */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <img src={logo} alt="AgentDNA" style={{ height:38, width:"auto" }} />
-          {screen === "auth" && (
+          {screen === "auth" && role === "user" && (
             <div style={tabs}>
               <div className={mode === "signin"   ? "agd-ton" : "agd-toff"} onClick={() => switchMode("signin")}   style={tab}>Sign in</div>
               <div className={mode === "register" ? "agd-ton" : "agd-toff"} onClick={() => switchMode("register")} style={tab}>Register</div>
