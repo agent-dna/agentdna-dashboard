@@ -12,7 +12,7 @@ import { useTweaks } from "../context/TweaksContext";
 import { useInteractionColumns } from "./InteractionsPage";
 
 export function HomePage() {
-  const [series, setSeries] = useState<"24h" | "7d">("24h");
+  const series = "7d";
   const { tweaks } = useTweaks();
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
@@ -32,10 +32,7 @@ export function HomePage() {
   const threats = alertsState.data;
   const data = seriesState.data;
 
-  const labels =
-    series === "24h"
-      ? Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`)
-      : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const cols = useInteractionColumns((k, e) => openDrawer(k, e));
 

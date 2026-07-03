@@ -363,7 +363,19 @@ export async function fetchSeries(range: "24h" | "7d"): Promise<TimeSeries> {
   if (isDummyMode()) {
     return dummySeries(range);
   }
-  return { total: [], safe: [], threats: [] };
+  try {
+    const res = await apiRequest<{ safe: number[]; threats: number[] }>(
+      "/interactions/series",
+      { query: { range } },
+    );
+    if (!res) return { total: [], safe: [], threats: [] };
+    const safe = res.safe ?? [];
+    const threats = res.threats ?? [];
+    const total = safe.map((v, i) => v + (threats[i] ?? 0));
+    return { total, safe, threats };
+  } catch {
+    return { total: [], safe: [], threats: [] };
+  }
 }
 
 interface DummyInteractionForSeries {

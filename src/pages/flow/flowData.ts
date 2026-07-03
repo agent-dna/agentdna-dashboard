@@ -524,7 +524,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
     const span = mkSpan({
       id: spanId,
-      name: toNode.name,
+      name: ix.initiatorName || fromNode.name,
       kind: isTool ? "tool" : "agent",
       label: isTool ? "App" : "Agent",
       status: isBlocked ? "blocked" : "ok",
@@ -565,7 +565,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     const toKind: FlowNodeKind = toDid === basicInfo.initiatorDID ? "human" : "agent";
     const toLabel = toDid === basicInfo.initiatorDID ? "User" : "Agent";
 
-    const toNode = ensureNode(toDid, ix.toName, toKind, toLabel);
+    ensureNode(toDid, ix.toName, toKind, toLabel);
 
     const fromNodeId = idForDid(fromDid);
     const toNodeId = idForDid(toDid);
@@ -578,7 +578,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
     const responseSpan = mkSpan({
       id: spanId,
-      name: toNode.name,
+      name: ix.initiatorName,
       kind: toKind,
       label: toLabel,
       status: isBlocked ? "blocked" : "ok",
