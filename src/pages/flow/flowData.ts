@@ -470,17 +470,23 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     },
   });
 
-  // Stack-based nesting. Seed with the human as root.
+  // Stack-based nesting for outbound. spanForDid maps DID → its outbound span
+  // so response interactions can be nested under the sender's span.
   const stack: Array<{ did: string; span: TraceSpan }> = [
     { did: basicInfo.initiatorDID, span: humanSpan },
   ];
   const spanSeq = new Map<string, number>();
+  const spanForDid = new Map<string, TraceSpan>();
+  spanForDid.set(basicInfo.initiatorDID, humanSpan);
 
   // ── Steps + span bookkeeping ────────────────────────────────────────────────
-  // rawSteps includes ALL interactions (outbound + response) so the hop count
-  // matches interactionsCount. Only outbound interactions build the trace tree.
+  // rawSteps includes ALL interactions so the hop count equals interactionsCount.
   const rawSteps: Omit<FlowStep, "spanId">[] = [];
   const stepSpan = new Map<string, string>(); // "fromId>toId" → spanId
+
+  // Responses are collected and processed after all outbound spans are built so
+  // spanForDid is fully populated before we look up the sender's span.
+  const pendingResponses: typeof sorted = [];
 
   for (const ix of sorted) {
     const fromDid = ix.initiator;
@@ -526,10 +532,12 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
       latency: 0,
     });
 
-    // Trace tree: only outbound interactions (trigger, delegate, tool_call, execute).
-    if (isResponse) continue;
+    if (isResponse) {
+      pendingResponses.push(ix);
+      continue;
+    }
 
-    // Pop stack back to the frame matching the current sender.
+    // Outbound: pop stack back to the frame matching the current sender.
     while (stack.length > 1 && stack[stack.length - 1].did !== fromDid) {
       stack.pop();
     }
@@ -561,10 +569,56 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
     parent.children.push(span);
     stepSpan.set(`${fromNodeId}>${toNodeId}`, spanId);
+    spanForDid.set(toDid, span);
 
     if (!isTool) {
       stack.push({ did: toDid, span });
     }
+  }
+
+  // Response interactions: nest each response span under the outbound span of
+  // the sender. This gives chainDepth total spans across the whole tree.
+  for (const ix of pendingResponses) {
+    const fromDid = ix.initiator;
+    const toDid = ix.to;
+    const isBlocked = ix.threat;
+
+    const toKind: FlowNodeKind = toDid === basicInfo.initiatorDID ? "human" : "agent";
+    const toLabel = toDid === basicInfo.initiatorDID ? "User" : "Agent";
+
+    const toNode = ensureNode(toDid, ix.toName, toKind, toLabel);
+
+    const fromNodeId = idForDid(fromDid);
+    const toNodeId = idForDid(toDid);
+
+    const senderSpan = spanForDid.get(fromDid) ?? humanSpan;
+
+    const seq = (spanSeq.get(toDid) || 0) + 1;
+    spanSeq.set(toDid, seq);
+    const spanId = `sp_${sanitize(intent.id)}_resp_${sanitize(toDid || ix.toName)}_${seq}`;
+
+    const responseSpan = mkSpan({
+      id: spanId,
+      name: toNode.name,
+      kind: toKind,
+      label: toLabel,
+      status: isBlocked ? "blocked" : "ok",
+      input: ix.message || "",
+      output: "",
+      model: null,
+      epoch: ix.epoch || undefined,
+      parentId: senderSpan.id,
+      metadata: {
+        interactionID: ix.interactionID,
+        from: ix.initiatorName,
+        to: ix.toName,
+        fromDid,
+        toDid,
+      },
+    });
+
+    senderSpan.children.push(responseSpan);
+    stepSpan.set(`${fromNodeId}>${toNodeId}`, spanId);
   }
 
   // ── Assemble nodes / edges ─────────────────────────────────────────────────
