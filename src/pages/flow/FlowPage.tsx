@@ -56,24 +56,16 @@ export function FlowPage() {
     // Diagram endpoint takes priority — it has real messages, epochs, and threat flags.
     if (diagram) {
       const f = buildFlowFromDiagram(intent, diagram);
-      // If block data also arrived, overlay the richer trace from blocks.
       if (blocks && blocks.length > 0) {
         f.trace = buildTraceFromBlocks(intent, blocks);
-        console.log("[FlowPage] trace overlaid from blocks", { intentId: intent.id, blocks, trace: f.trace });
       }
-      console.log("[FlowPage] flow built from diagram", { intentId: intent.id, diagram, flow: f });
       return f;
     }
-
     // Fallback: build from interactions list.
     const base = buildFlowFromIntent({ intent, interactions, resolve });
     if (blocks && blocks.length > 0) {
       base.trace = buildTraceFromBlocks(intent, blocks);
-      console.log("[FlowPage] trace built from blocks", { intentId: intent.id, blockCount: blocks.length, trace: base.trace });
-    } else {
-      console.log("[FlowPage] no diagram or blocks — using interactions fallback", { intentId: intent.id, interactions });
     }
-    console.log("[FlowPage] full flow object", base);
     return base;
   }, [intent, interactions, blocks, diagram, resolve]);
 

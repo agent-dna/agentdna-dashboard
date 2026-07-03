@@ -658,9 +658,10 @@ export async function fetchIntentDiagram(id: string): Promise<IntentDiagram | nu
     const res = await apiRequest<{ status: boolean; data: IntentDiagram }>("/intent-diagram", {
       query: { intentID: id },
     });
+    console.log("[intent-diagram] raw response", res);
     return (res as unknown as { status: boolean; data: IntentDiagram }).data ?? null;
   } catch (e) {
-    console.warn(`[GET /intent-diagram?intentID=${id}] failed`, e);
+    console.warn("[intent-diagram] failed", e);
     return null;
   }
 }

@@ -102,19 +102,6 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
   useEffect(() => {
     setSelId(openSpanId || trace.trace.id);
     setCollapsed({});
-    console.log("[TraceInspector] opened", {
-      traceId: trace.traceId,
-      sessionId: trace.sessionId,
-      userId: trace.userId,
-      env: trace.env,
-      totalTokensIn: trace.totalTokensIn,
-      totalTokensOut: trace.totalTokensOut,
-      totalCost: trace.totalCost,
-      spanCount: Object.keys(trace.spanById).length,
-      rootSpan: trace.trace,
-      allSpans: trace.spanById,
-      openSpanId,
-    });
   }, [trace]);
 
   useEffect(() => {
@@ -126,18 +113,21 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
   const rows = useMemo(() => flattenSpans(trace.trace, collapsed), [trace, collapsed]);
   const sel = trace.spanById[selId] || trace.trace;
   const parentSpan = sel.parentId ? trace.spanById[sel.parentId] : null;
-  const spanCount = Object.keys(trace.spanById).length;
-  const anyBlocked = Object.values(trace.spanById).some((s) => s.status === "blocked");
   const sKind = spanKind(sel);
   const sColor = KIND_COLOR[sKind] || "#5F73A0";
   const isBlocked = sel.status === "blocked";
 
-  // Epoch: prefer span.epoch, fall back to metadata.epoch, then "—"
-  const epoch: string = sel.epoch != null
-    ? String(sel.epoch)
-    : typeof sel.metadata?.epoch === "number" || typeof sel.metadata?.epoch === "string"
-      ? String(sel.metadata.epoch)
-      : "—";
+  // Epoch: prefer span.epoch, fall back to metadata.epoch, format as readable date
+  const epochRaw: number | null = sel.epoch != null
+    ? sel.epoch
+    : typeof sel.metadata?.epoch === "number"
+      ? sel.metadata.epoch as number
+      : typeof sel.metadata?.epoch === "string" && !isNaN(Number(sel.metadata.epoch))
+        ? Number(sel.metadata.epoch)
+        : null;
+  const epoch: string = epochRaw != null
+    ? new Date(epochRaw * 1000).toLocaleString()
+    : "—";
 
   const toggle = useCallback((id: string) => {
     setCollapsed((c) => ({ ...c, [id]: !c[id] }));
@@ -174,56 +164,17 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
 
         {/* ── HEADER ── */}
         <div style={{
-          flex: "none", display: "flex", alignItems: "center", gap: 16,
-          padding: "15px 22px", borderBottom: "1px solid rgba(15,32,70,0.08)",
+          flex: "none", display: "flex", alignItems: "center", justifyContent: "flex-end",
+          padding: "6px 10px", borderBottom: "1px solid rgba(15,32,70,0.07)",
           background: "#FFFFFF",
         }}>
-          <div style={{
-            width: 32, height: 32, flex: "none",
-            background: "#0A2240",
-            clipPath: "polygon(25% 4%,75% 4%,100% 50%,75% 96%,25% 96%,0% 50%)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <div style={{ width: 11, height: 11, borderRadius: "50%", border: "2.5px solid #2563EB" }} />
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-            <span style={{
-              fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 17,
-              letterSpacing: "-0.01em", color: "#0A2240",
-            }}>{trace.trace.name}</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11.5, color: "#5F73A0" }}>
-                trace_id: {trace.traceId}
-              </span>
-              <span style={{ width: 3, height: 3, borderRadius: "50%", background: "#8595B5" }} />
-              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11.5, color: "#5F73A0" }}>
-                {spanCount} spans
-              </span>
-            </div>
-          </div>
-
-          <span style={{ flex: 1 }} />
-
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 8,
-            padding: "7px 14px", borderRadius: 999,
-            fontFamily: "'JetBrains Mono',monospace", fontSize: 11.5, fontWeight: 700, letterSpacing: "0.08em",
-            color: anyBlocked ? "#DC2626" : "#059669",
-            background: anyBlocked ? "rgba(220,38,38,0.08)" : "rgba(5,150,105,0.08)",
-            border: `1px solid ${anyBlocked ? "rgba(220,38,38,0.28)" : "rgba(5,150,105,0.28)"}`,
-          }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: anyBlocked ? "#DC2626" : "#059669" }} />
-            {anyBlocked ? "HALTED" : "OK"}
-          </div>
-
           <button
             onClick={onClose}
             style={{
-              flex: "none", width: 34, height: 34, borderRadius: 9,
+              width: 18, height: 18, borderRadius: 5,
               border: "1px solid rgba(15,32,70,0.12)", background: "none",
               display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: "#5F73A0", fontSize: 16,
+              cursor: "pointer", color: "#0A2240", fontSize: 9, lineHeight: 1,
             }}
           >✕</button>
         </div>
@@ -443,6 +394,14 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
             </div>
           </div>
         </div>
+
+        {/* ── FOOTER ── */}
+        <div style={{
+          flex: "none",
+          padding: "7px 10px",
+          borderTop: "1px solid rgba(15,32,70,0.07)",
+          background: "#FFFFFF",
+        }} />
       </div>
     </div>,
     document.body
