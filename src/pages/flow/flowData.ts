@@ -50,9 +50,6 @@ export interface TraceSpan {
   kind: "chain" | "human" | "agent" | "tool";
   label: string;
   status: "ok" | "blocked";
-  tokensIn: number;
-  tokensOut: number;
-  cost: number;
   input: string;
   output: string;
   model: string | null;
@@ -430,32 +427,17 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
 // ---- Diagram-based full flow builder (uses /intent-diagram flat interactions) ----
 
 export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Flow {
-  const { interactions } = diagram;
+  const { basicInfo, interactions } = diagram;
 
-  // Sort by the trailing sequence number in interactionID (e.g. "uuid-3" → 3).
-  const sorted = [...interactions].sort((a, b) => {
-    const aNum = parseInt(a.interactionID.split("-").pop() ?? "0", 10);
-    const bNum = parseInt(b.interactionID.split("-").pop() ?? "0", 10);
-    return aNum - bNum;
-  });
-
-  // Pre-pass: detect tool DIDs — interactions where from is empty are tool responses;
-  // the to of the immediately preceding interaction is that tool's DID.
-  const toolDids = new Set<string>();
-  for (let i = 1; i < sorted.length; i++) {
-    if (!sorted[i].from && sorted[i - 1]?.to) {
-      toolDids.add(sorted[i - 1].to);
-    }
-  }
+  // Sort by epoch ascending so the call chain nests correctly.
+  const sorted = [...interactions].sort((a, b) => a.epoch - b.epoch);
 
   // ── Nodes ──────────────────────────────────────────────────────────────────
   const nodesById = new Map<string, FlowNode>();
-
-  const nodeId = (did: string, name: string): string =>
-    did ? `nd_${sanitize(did)}` : `nd_tool_${sanitize(name)}`;
+  const idForDid = (did: string): string => `nd_${sanitize(did)}`;
 
   const ensureNode = (did: string, name: string, kind: FlowNodeKind, label: string): FlowNode => {
-    const id = nodeId(did, name);
+    const id = idForDid(did);
     if (!nodesById.has(id)) {
       nodesById.set(id, { id, kind, name: name || shortDid(did), label, x: 0, y: 0 });
     }
@@ -463,7 +445,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
   };
 
   // The initiator is always human.
-  const humanNode = ensureNode(diagram.initiatorDID, diagram.initiatorName, "human", "User");
+  const humanNode = ensureNode(basicInfo.initiatorDID, basicInfo.initiatorName, "human", "User");
 
   // ── Trace spans ────────────────────────────────────────────────────────────
   const allSpans: TraceSpan[] = [];
@@ -473,34 +455,28 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     return sp;
   };
 
-  const halted = diagram.threatDetected || sorted.some((ix) => ix.threat);
+  const halted = basicInfo.threatDetected || sorted.some((ix) => ix.threat);
 
-  // Epoch from the flow's first interaction timestamp.
-  const epochBase = diagram.firstInteractionAt
-    ? Math.floor(new Date(diagram.firstInteractionAt).getTime() / 1000)
-    : Math.floor(new Date(diagram.startedAt).getTime() / 1000);
-
-  // Human span is the root of the trace tree — no wrapping chain span.
-  // Its input is the first message sent (what the human triggered).
-  const firstMsg = sorted.find((ix) => ix.from === diagram.initiatorDID)?.message || intent.name || "";
+  // Human span is the root of the trace tree (no wrapping chain span).
+  // Its input is the trigger message the human sent.
+  const triggerMsg = sorted.find((ix) => ix.type === "trigger")?.message || intent.name || "";
   const humanSpan = mkSpan({
     id: `sp_${sanitize(intent.id)}_human`,
     name: humanNode.name,
     kind: "human",
     label: "User",
     status: "ok",
-    tokensIn: 0, tokensOut: 0, cost: 0,
-    input: firstMsg,
+    input: triggerMsg,
     output: halted ? "Intent completed with violations." : "Intent completed successfully.",
     model: null,
-    epoch: epochBase,
+    epoch: sorted.find((ix) => ix.type === "trigger")?.epoch,
     parentId: null,
-    metadata: { did: diagram.initiatorDID, role: "initiator" },
+    metadata: { did: basicInfo.initiatorDID, role: "initiator" },
   });
 
   // Stack-based nesting. Seed with the human as root.
   const stack: Array<{ did: string; span: TraceSpan }> = [
-    { did: diagram.initiatorDID, span: humanSpan },
+    { did: basicInfo.initiatorDID, span: humanSpan },
   ];
   const spanSeq = new Map<string, number>();
 
@@ -508,33 +484,26 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
   const rawSteps: Omit<FlowStep, "spanId">[] = [];
   const stepSpan = new Map<string, string>(); // "fromId>toId" → spanId
 
-  // Only process outbound interactions (each unique sender's first appearance).
-  // Interactions where from is empty (tool responses) or where from was already
-  // seen are responses going back up the call chain — skip for tree building.
-  const seenFromDids = new Set<string>();
-
+  // Skip response interactions — only outbound calls build the tree.
   for (const ix of sorted) {
-    const fromDid = ix.from;
+    if (ix.type === "response") continue;
+
+    const fromDid = ix.initiator;
     const toDid = ix.to;
-
-    // Skip tool responses (empty from) and return-path interactions.
-    if (!fromDid || seenFromDids.has(fromDid)) continue;
-    seenFromDids.add(fromDid);
-
-    const isTool = toolDids.has(toDid);
+    const isTool = ix.type === "tool_call";
     const isBlocked = ix.threat;
 
     const fromNode = ensureNode(
       fromDid,
-      ix.fromName,
-      fromDid === diagram.initiatorDID ? "human" : "agent",
-      fromDid === diagram.initiatorDID ? "User" : "Agent",
+      ix.initiatorName,
+      fromDid === basicInfo.initiatorDID ? "human" : "agent",
+      fromDid === basicInfo.initiatorDID ? "User" : "Agent",
     );
     const toNode = ensureNode(toDid, ix.toName, isTool ? "tool" : "agent", isTool ? "App" : "Agent");
     if (isBlocked) toNode.threat = true;
 
-    const fromNodeId = nodeId(fromDid, ix.fromName);
-    const toNodeId = nodeId(toDid, ix.toName);
+    const fromNodeId = idForDid(fromDid);
+    const toNodeId = idForDid(toDid);
 
     rawSteps.push({
       from: fromNodeId,
@@ -559,7 +528,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
     const seq = (spanSeq.get(toDid) || 0) + 1;
     spanSeq.set(toDid, seq);
-    const spanId = `sp_${sanitize(intent.id)}_${sanitize(toDid || ix.toName)}_${seq}`;
+    const spanId = `sp_${sanitize(intent.id)}_${sanitize(toDid)}_${seq}`;
 
     const span = mkSpan({
       id: spanId,
@@ -567,14 +536,14 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
       kind: isTool ? "tool" : "agent",
       label: isTool ? "App" : "Agent",
       status: isBlocked ? "blocked" : "ok",
-      tokensIn: 0, tokensOut: 0, cost: 0,
       input: ix.message || "",
       output: "",
       model: null,
+      epoch: ix.epoch || undefined,
       parentId: parent.id,
       metadata: {
         interactionID: ix.interactionID,
-        from: ix.fromName,
+        from: ix.initiatorName,
         to: ix.toName,
         fromDid,
         toDid,
@@ -631,7 +600,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     spanById,
     traceId: `tr_${sanitize(intent.id).slice(-8)}`,
     sessionId: `sess_${sanitize(intent.id).slice(-6)}`,
-    userId: diagram.initiatorName || intent.initiator?.name || "operator",
+    userId: basicInfo.initiatorName || intent.initiator?.name || "operator",
     env: "prod",
     totalTokensIn: 0,
     totalTokensOut: 0,

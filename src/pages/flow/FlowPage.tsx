@@ -53,13 +53,10 @@ export function FlowPage() {
   const flow: Flow | null = useMemo(() => {
     if (!intent) return null;
 
-    // Diagram endpoint takes priority — it has real messages, epochs, and threat flags.
+    // Diagram endpoint takes priority — it has real messages and correct tree structure.
+    // Do NOT override its trace with blocks; blocks use fake placeholder messages.
     if (diagram) {
-      const f = buildFlowFromDiagram(intent, diagram);
-      if (blocks && blocks.length > 0) {
-        f.trace = buildTraceFromBlocks(intent, blocks);
-      }
-      return f;
+      return buildFlowFromDiagram(intent, diagram);
     }
     // Fallback: build from interactions list.
     const base = buildFlowFromIntent({ intent, interactions, resolve });
