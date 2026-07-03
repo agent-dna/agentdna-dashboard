@@ -284,7 +284,6 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     kind: "chain",
     label: "TRACE",
     status: traceStatus,
-    tokensIn: 0, tokensOut: 0, cost: 0,
     input: `Execute intent: ${intent.id}`,
     output: halted
       ? "Intent halted: policy violation detected. No side-effects committed."
@@ -321,7 +320,6 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       kind: "human",
       label: "User",
       status: "ok",
-      tokensIn: 0, tokensOut: 0, cost: 0,
       input: intent.name || `Intent ${intent.id.slice(-8)}`,
       output: halted ? "Intent completed with policy violation." : "Intent completed successfully.",
       model: null,
@@ -359,20 +357,11 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       id: spanId,
       name: toNode?.name || ix.target.name || shortDid(toDid),
       kind: isTool ? "tool" : "agent",
-      label: toNode?.label || (isTool ? "Tool" : "Agent"),
+      label: toNode?.label || (isTool ? "App" : "Agent"),
       status: isBlocked ? "blocked" : "ok",
-      tokensIn: 0, tokensOut: 0, cost: 0,
-      input: isTool
-        ? `{\n  "tool": "${toNode?.name || ix.target.name}",\n  "scope": "${toNode?.label || "unknown"}",\n  "caller": "${fromNode?.name || fromDid}",\n  "timeout_ms": 3000\n}`
-        : `Delegated task for intent "${intent.name}".\nVerify identity, check scope, execute subtask.`,
-      output: isBlocked
-        ? (isTool
-          ? `{\n  "ok": false,\n  "error": "scope_denied",\n  "message": "capability not granted to caller"\n}`
-          : "Attempted action outside granted scope. Blocked by policy.")
-        : (isTool
-          ? `{\n  "ok": true,\n  "elapsed_ms": ${Math.max(20, ix.runtime || 120)}\n}`
-          : "Subtask completed. Result returned to caller."),
-      model: isTool ? null : "agent/reason-v2",
+      input: "",
+      output: "",
+      model: null,
       parentId: parent.id,
       metadata: isTool
         ? { provider: "service", scope: toNode?.label || "unknown", caller: fromNode?.name || fromDid, intentId: intent.id }
@@ -644,8 +633,7 @@ export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): Flo
     kind: "chain",
     label: "TRACE",
     status: traceStatus,
-    tokensIn: 0, tokensOut: 0, cost: 0,
-    input: `Execute intent: ${intent.id}`,
+        input: `Execute intent: ${intent.id}`,
     output: halted ? "Intent halted: policy violation detected." : "Intent finished successfully.",
     model: null,
     parentId: null,
@@ -674,8 +662,7 @@ export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): Flo
         kind: isHuman ? "human" : "agent",
         label: isHuman ? "User" : block.block_type === "delegate" ? "Orchestrator" : "Agent",
         status: block.threat_detected ? "blocked" : "ok",
-        tokensIn: 0, tokensOut: 0, cost: 0,
-        input: block.message || "",
+                input: block.message || "",
         output: "",  // filled in when the matching inbound block arrives
         model: isHuman ? null : "agent/reason-v2",
         parentId: parent.id,
@@ -709,8 +696,7 @@ export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): Flo
             kind: "tool",
             label: "Tool",
             status: block.threat_detected ? "blocked" : "ok",
-            tokensIn: 0, tokensOut: 0, cost: 0,
-            input: block.message || "",
+                        input: block.message || "",
             output: block.response || "",
             model: null,
             parentId: frame.span.id,

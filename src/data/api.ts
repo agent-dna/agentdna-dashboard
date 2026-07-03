@@ -655,11 +655,9 @@ export interface IntentDiagram {
 
 export async function fetchIntentDiagram(id: string): Promise<IntentDiagram | null> {
   try {
-    const res = await apiRequest<{ status: boolean; message: string; data: IntentDiagram }>(
-      "/intent-diagram",
-      { query: { intentID: id } },
-    );
-    return (res as unknown as { status: boolean; data: IntentDiagram }).data ?? null;
+    // apiRequest already unwraps { status, data } and returns data directly.
+    const res = await apiRequest<IntentDiagram>("/intent-diagram", { query: { intentID: id } });
+    return res ?? null;
   } catch (e) {
     console.warn("[intent-diagram] failed", e);
     return null;
