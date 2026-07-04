@@ -252,7 +252,7 @@ export function FlowPage() {
           trace={flow.trace}
           openSpanId={inspectSpanId}
           onClose={() => setInspectSpanId(null)}
-          rawData={flow.rawDiagram}
+          rawData={blocks}
         />
       )}
     </div>
