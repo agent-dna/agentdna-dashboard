@@ -627,11 +627,11 @@ export interface IntentBlock {
 
 export async function fetchIntentBlockData(intentId: string): Promise<IntentBlock[] | null> {
   try {
-    const res = await apiRequest<{ status: boolean; data: IntentBlock[] }>("/intent-block-data", {
+    // apiRequest already unwraps { status, data } and returns the inner data directly.
+    const res = await apiRequest<IntentBlock[]>("/intent-block-data", {
       query: { intent_id: intentId },
     });
-    const d = res as unknown as { status: boolean; data: IntentBlock[] };
-    return d.data ?? null;
+    return Array.isArray(res) ? res : null;
   } catch (e) {
     console.warn(`[GET /intent-block-data?intent_id=${intentId}] failed`, e);
     return null;
