@@ -120,4 +120,4 @@ export const useIntentDiagram = (id: string) =>
   useAsync<api.IntentDiagram | null>(() => api.fetchIntentDiagram(id), null, [id]);
 
 export const useIntentBlockData = (id: string) =>
-  useAsync<api.IntentBlock[] | null>(() => api.fetchIntentBlockData(id), null, [id]);
+  useAsync<api.IntentBlock | null>(() => api.fetchIntentBlockData(id), null, [id]);

@@ -612,8 +612,8 @@ export interface IntentBlock {
   block_index: number;
   agent_did: string;
   agent_name: string;
-  direction: "outbound" | "inbound";
-  block_type: "intent" | "delegate" | "execute" | "response" | "verify";
+  direction: string;
+  block_type: "trigger" | "delegate" | "tool_call" | "execute" | "response" | "verify" | string;
   message: string;
   response: string;
   delegate_to: string;
@@ -623,15 +623,28 @@ export interface IntentBlock {
   threat_detected: boolean;
   trust_issues: string[];
   signature: string;
+  created_at: string;
+  parent_block: IntentBlock | null;
 }
 
-export async function fetchIntentBlockData(intentId: string): Promise<IntentBlock[] | null> {
+/** Walk the parent_block chain and return blocks ordered oldest → newest. */
+export function flattenIntentBlocks(root: IntentBlock): IntentBlock[] {
+  const chain: IntentBlock[] = [];
+  let cur: IntentBlock | null = root;
+  while (cur) {
+    chain.push(cur);
+    cur = cur.parent_block;
+  }
+  return chain.reverse();
+}
+
+export async function fetchIntentBlockData(intentId: string): Promise<IntentBlock | null> {
   try {
-    // apiRequest already unwraps { status, data } and returns the inner data directly.
-    const res = await apiRequest<IntentBlock[]>("/intent-block-data", {
+    // apiRequest already unwraps { status, data } and returns the inner object directly.
+    const res = await apiRequest<IntentBlock>("/intent-block-data", {
       query: { intent_id: intentId },
     });
-    return Array.isArray(res) ? res : null;
+    return res ?? null;
   } catch (e) {
     console.warn(`[GET /intent-block-data?intent_id=${intentId}] failed`, e);
     return null;

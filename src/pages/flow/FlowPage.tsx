@@ -7,6 +7,7 @@ import { useResolveName } from "../../context/DirectoryContext";
 import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { FlowCanvas } from "./FlowCanvas";
 import { buildFlowFromIntent, buildFlowFromDiagram, buildTraceFromBlocks, type Flow } from "./flowData";
+import { flattenIntentBlocks } from "../../data/api";
 
 const STEP_MS = 2400;
 const STORAGE_KEY_INTENT = "flow.intent";
@@ -60,8 +61,9 @@ export function FlowPage() {
     }
     // Fallback: build from interactions list.
     const base = buildFlowFromIntent({ intent, interactions, resolve });
-    if (blocks && blocks.length > 0) {
-      base.trace = buildTraceFromBlocks(intent, blocks);
+    if (blocks) {
+      const flat = flattenIntentBlocks(blocks);
+      if (flat.length > 0) base.trace = buildTraceFromBlocks(intent, flat);
     }
     return base;
   }, [intent, interactions, blocks, diagram, resolve]);
