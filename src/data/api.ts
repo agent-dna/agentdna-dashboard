@@ -507,6 +507,7 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     status: r.status,
     threatDetected: r.threatDetected,
     provenanceRecordID: r.interactions[0]?.provenanceRecordID ?? "",
+
   });
 }
 
@@ -621,6 +622,7 @@ export interface IntentBlock {
   cbac_decision: string;
   threat_detected: boolean;
   trust_issues: string[];
+  signature: string;
 }
 
 export async function fetchIntentBlockData(intentId: string): Promise<IntentBlock[] | null> {

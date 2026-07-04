@@ -203,9 +203,10 @@ interface TraceInspectorProps {
   trace: FlowTrace;
   openSpanId?: string;
   onClose: () => void;
+  rawData?: unknown;
 }
 
-export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorProps) {
+export function TraceInspector({ trace, openSpanId, onClose, rawData }: TraceInspectorProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selId, setSelId] = useState(openSpanId || trace.trace.id);
   const [tab, setTab] = useState<"simple" | "json">("simple");
@@ -254,7 +255,7 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
   };
 
   const copyJson = () => {
-    try { navigator.clipboard.writeText(JSON.stringify(trace.trace, null, 2)); } catch {}
+    try { navigator.clipboard.writeText(JSON.stringify(rawData ?? trace.trace, null, 2)); } catch {}
     setCopiedJson(true);
     setTimeout(() => setCopiedJson(false), 1500);
   };
@@ -543,7 +544,7 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
                     border: "1px solid rgba(255,255,255,0.07)", overflowY: "auto",
                     fontFamily: "'JetBrains Mono',monospace", fontSize: 13, lineHeight: 1.65,
                   }}>
-                    <JsonNode value={trace.trace} defaultOpen={true} />
+                    <JsonNode value={rawData ?? trace.trace} defaultOpen={true} />
                   </div>
                 </div>
               )}

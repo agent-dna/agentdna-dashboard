@@ -82,6 +82,8 @@ export interface Flow {
   steps: FlowStep[];
   status: "halted" | "completed";
   trace: FlowTrace;
+  /** Raw /intent-diagram response — shown as-is in the JSON tab. */
+  rawDiagram?: unknown;
 }
 
 /* ------- tier layout ------- */
@@ -659,6 +661,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     steps,
     status: halted ? "halted" : "completed",
     trace: flowTrace,
+    rawDiagram: diagram,
   };
 }
 
@@ -727,6 +730,7 @@ export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): Flo
           ...(block.delegate_to ? { delegateTo: block.delegate_to } : {}),
           ...(block.received_from ? { receivedFrom: block.received_from } : {}),
         },
+        signature: block.signature || undefined,
       });
 
       parent.children.push(span);
