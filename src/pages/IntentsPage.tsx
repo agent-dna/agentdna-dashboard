@@ -5,7 +5,7 @@ import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { ScoreBar } from "../components/ScoreBar";
 import { useIntentsPaged } from "../data/hooks";
-import { useIntentLabel } from "../context/IntentNumbersContext";
+
 import { fmtRuntime, timeAgo } from "../lib/format";
 import type { Intent } from "../types";
 
@@ -38,7 +38,7 @@ export function IntentsPage() {
   const totalPages = paged.totalPages || 1;
   const total = paged.total || intents.length;
   const navigate = useNavigate();
-  const intentLabel = useIntentLabel();
+
 
   let rows = intents;
   if (filter === "threats") rows = rows.filter((r) => r.threats > 0);
@@ -54,8 +54,8 @@ export function IntentsPage() {
       label: "Intent",
       sortFn: (a, b) => a.id.localeCompare(b.id),
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
-          {intentLabel(r.id)}
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)", wordBreak: "break-all" }}>
+          {r.id}
         </span>
       ),
     },
