@@ -506,6 +506,7 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     endedAt: r.endedAt,
     status: r.status,
     threatDetected: r.threatDetected,
+    provenanceRecordID: r.interactions[0]?.provenanceRecordID ?? "",
   });
 }
 

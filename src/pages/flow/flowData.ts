@@ -57,6 +57,7 @@ export interface TraceSpan {
   metadata: Record<string, unknown>;
   parentId: string | null;
   children: TraceSpan[];
+  signature?: string;
 }
 
 export interface FlowTrace {

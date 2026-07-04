@@ -190,7 +190,7 @@ export function IntentDetailPage() {
                     onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
                     onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
                   >
-                    View on explorer ↗
+                    View on Proenance Layer ↗
                   </a>
                 ) : (
                   <span style={{
@@ -198,7 +198,7 @@ export function IntentDetailPage() {
                     fontFamily: "var(--font-mono)", fontSize: 11.5,
                     color: "var(--fg-faint)", fontWeight: 600,
                   }}>
-                    Pending provenance…
+                    Saved on Provenance Layer
                   </span>
                 )}
               </div>
