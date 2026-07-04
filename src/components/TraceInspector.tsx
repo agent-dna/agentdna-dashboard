@@ -23,6 +23,118 @@ function hex2rgba(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+// ─── Collapsible JSON tree ────────────────────────────────────────────────────
+
+const INDENT = 10;
+const GUIDE_COLOR = "rgba(100,116,139,0.28)";
+
+function JsonChildren({ children, closing }: { children: React.ReactNode; closing: string }) {
+  return (
+    <div style={{ paddingLeft: INDENT, borderLeft: `1.5px solid ${GUIDE_COLOR}`, marginLeft: 4 }}>
+      {children}
+      <div style={{ lineHeight: "22px", color: "#C9D6EE" }}>{closing}</div>
+    </div>
+  );
+}
+
+function JsonNode({ label, value, depth = 0, defaultOpen = true }: {
+  label?: string;
+  value: unknown;
+  depth?: number;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  const labelEl = label !== undefined ? (
+    <span style={{ color: "#7DD3FC", marginRight: 4 }}>&quot;{label}&quot;:</span>
+  ) : null;
+
+  if (value === null) {
+    return (
+      <div style={{ lineHeight: "22px" }}>
+        {labelEl}<span style={{ color: "#94A3B8" }}>null</span>
+      </div>
+    );
+  }
+
+  if (typeof value === "boolean") {
+    return (
+      <div style={{ lineHeight: "22px" }}>
+        {labelEl}<span style={{ color: "#FB923C" }}>{String(value)}</span>
+      </div>
+    );
+  }
+
+  if (typeof value === "number") {
+    return (
+      <div style={{ lineHeight: "22px" }}>
+        {labelEl}<span style={{ color: "#86EFAC" }}>{value}</span>
+      </div>
+    );
+  }
+
+  if (typeof value === "string") {
+    return (
+      <div style={{ lineHeight: "22px", wordBreak: "break-word" }}>
+        {labelEl}<span style={{ color: "#FCD34D" }}>&quot;{value}&quot;</span>
+      </div>
+    );
+  }
+
+  if (Array.isArray(value)) {
+    const empty = value.length === 0;
+    return (
+      <div>
+        <div
+          style={{ lineHeight: "22px", cursor: empty ? "default" : "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 4 }}
+          onClick={() => !empty && setOpen((o) => !o)}
+        >
+          <span style={{ fontSize: 8, color: "#64748B", display: "inline-block", width: 10, opacity: empty ? 0 : 1, transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform .12s" }}>▶</span>
+          {labelEl}
+          <span style={{ color: "#C9D6EE" }}>[</span>
+          {(!open || empty) && <span style={{ color: "#64748B", fontSize: 11 }}>{empty ? "" : `${value.length} items`}</span>}
+          {(!open || empty) && <span style={{ color: "#C9D6EE" }}>]</span>}
+        </div>
+        {open && !empty && (
+          <JsonChildren closing="]">
+            {value.map((item, i) => (
+              <JsonNode key={i} value={item} depth={depth + 1} defaultOpen={depth < 1} />
+            ))}
+          </JsonChildren>
+        )}
+      </div>
+    );
+  }
+
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    const empty = entries.length === 0;
+    return (
+      <div>
+        <div
+          style={{ lineHeight: "22px", cursor: empty ? "default" : "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 4 }}
+          onClick={() => !empty && setOpen((o) => !o)}
+        >
+          <span style={{ fontSize: 8, color: "#64748B", display: "inline-block", width: 10, opacity: empty ? 0 : 1, transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform .12s" }}>▶</span>
+          {labelEl}
+          <span style={{ color: "#C9D6EE" }}>{"{"}</span>
+          {(!open || empty) && <span style={{ color: "#64748B", fontSize: 11 }}>{empty ? "" : `${entries.length} keys`}</span>}
+          {(!open || empty) && <span style={{ color: "#C9D6EE" }}>{"}"}</span>}
+        </div>
+        {open && !empty && (
+          <JsonChildren closing="}">
+            {entries.map(([k, v]) => (
+              <JsonNode key={k} label={k} value={v} depth={depth + 1} defaultOpen={depth < 1} />
+            ))}
+          </JsonChildren>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ─── Tree flattening ──────────────────────────────────────────────────────────
 
 interface FlatRow {
@@ -96,7 +208,9 @@ interface TraceInspectorProps {
 export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selId, setSelId] = useState(openSpanId || trace.trace.id);
+  const [tab, setTab] = useState<"simple" | "json">("simple");
   const [copiedMsg, setCopiedMsg] = useState(false);
+  const [copiedJson, setCopiedJson] = useState(false);
 
   useEffect(() => { if (openSpanId) setSelId(openSpanId); }, [openSpanId]);
   useEffect(() => {
@@ -139,6 +253,12 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
     setTimeout(() => setCopiedMsg(false), 1500);
   };
 
+  const copyJson = () => {
+    try { navigator.clipboard.writeText(JSON.stringify(trace.trace, null, 2)); } catch {}
+    setCopiedJson(true);
+    setTimeout(() => setCopiedJson(false), 1500);
+  };
+
   return createPortal(
     <div
       style={{
@@ -151,8 +271,8 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
     >
       <div
         style={{
-          width: "min(96vw, 1200px)",
-          maxHeight: "90vh",
+          width: "min(96vw, 1440px)",
+          maxHeight: "92vh",
           background: "#FFFFFF",
           border: "1px solid rgba(15,32,70,0.14)",
           borderRadius: 18,
@@ -182,11 +302,12 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
         {/* ── BODY ── */}
         <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
 
-          {/* LEFT TREE */}
+          {/* LEFT TREE — hidden when JSON tab is active */}
           <div style={{
-            width: 360, flexShrink: 0, flexGrow: 0, borderRight: "1px solid rgba(15,32,70,0.08)",
-            display: "flex", flexDirection: "column", background: "#FCFDFF",
-            overflow: "hidden",
+            width: tab === "json" ? 0 : 360, flexShrink: 0, flexGrow: 0,
+            borderRight: tab === "json" ? "none" : "1px solid rgba(15,32,70,0.08)",
+            display: tab === "json" ? "none" : "flex", flexDirection: "column",
+            background: "#FCFDFF", overflow: "hidden",
           }}>
             <div style={{
               flex: "none", display: "flex", alignItems: "center",
@@ -269,145 +390,164 @@ export function TraceInspector({ trace, openSpanId, onClose }: TraceInspectorPro
           </div>
 
           {/* RIGHT DETAIL */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "20px 22px 24px", background: "#F7F9FD" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, background: "#F7F9FD" }}>
 
-            {/* span name + type bar */}
+            {/* Tab bar + span name */}
             <div style={{
-              display: "flex", alignItems: "center", gap: 12, marginBottom: 14,
-              paddingBottom: 14, borderBottom: "1px solid rgba(15,32,70,0.08)",
+              flex: "none", padding: "14px 22px 0",
+              borderBottom: "1px solid rgba(15,32,70,0.08)", background: "#FFFFFF",
             }}>
-              <span style={{
-                fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 20,
-                letterSpacing: "-0.01em", color: "#0A2240",
-              }}>{sel.name}</span>
-              <span style={{
-                fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: "0.08em",
-                textTransform: "uppercase", color: "#FFFFFF",
-                background: sColor, padding: "3px 9px", borderRadius: 6,
-              }}>{sel.label}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                <span style={{
+                  fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18,
+                  letterSpacing: "-0.01em", color: "#0A2240",
+                }}>{sel.name}</span>
+                <span style={{
+                  fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: "0.08em",
+                  textTransform: "uppercase", color: "#FFFFFF",
+                  background: sColor, padding: "3px 9px", borderRadius: 6,
+                }}>{sel.label}</span>
+              </div>
+              <div style={{ display: "flex", gap: 2 }}>
+                {(["simple", "json"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTab(t)}
+                    style={{
+                      padding: "6px 16px", fontSize: 12.5, fontWeight: 600,
+                      fontFamily: "'Inter',sans-serif", cursor: "pointer",
+                      border: "none", background: "none",
+                      color: tab === t ? "#2563EB" : "#8595B5",
+                      borderBottom: tab === t ? "2px solid #2563EB" : "2px solid transparent",
+                      textTransform: "capitalize", letterSpacing: "0.01em",
+                    }}
+                  >{t}</button>
+                ))}
+              </div>
             </div>
 
-            {/* fields grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px", marginBottom: 16 }}>
+            {/* Panel body */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px 22px 24px" }}>
 
-              {/* FROM — prefer metadata.from (set by diagram builder), fall back to parent span */}
-              {(() => {
-                const fromName = typeof sel.metadata?.from === "string" && sel.metadata.from
-                  ? sel.metadata.from
-                  : parentSpan?.name ?? null;
-                const fromColor = parentSpan ? (KIND_COLOR[spanKind(parentSpan)] || "#5F73A0") : "#0A2240";
-                const fromLabel = parentSpan?.label ?? "";
-                return (
-                  <Field label="From">
-                    {fromName ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{
-                          width: 8, height: 8, borderRadius: "50%", flex: "none",
-                          background: fromColor, display: "inline-block",
-                        }} />
-                        <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, fontWeight: 600, color: "#0A2240" }}>
-                          {fromName}
-                        </span>
-                        {fromLabel && (
+              {tab === "simple" && (<>
+                {/* fields grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px", marginBottom: 16 }}>
+
+                  {(() => {
+                    const fromName = typeof sel.metadata?.from === "string" && sel.metadata.from
+                      ? sel.metadata.from : parentSpan?.name ?? null;
+                    const fromColor = parentSpan ? (KIND_COLOR[spanKind(parentSpan)] || "#5F73A0") : "#0A2240";
+                    const fromLabel = parentSpan?.label ?? "";
+                    return (
+                      <Field label="From">
+                        {fromName ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", flex: "none", background: fromColor, display: "inline-block" }} />
+                            <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, fontWeight: 600, color: "#0A2240" }}>{fromName}</span>
+                            {fromLabel && (
+                              <span style={{
+                                fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, color: "#8595B5",
+                                background: "#F1F5FB", padding: "2px 6px", borderRadius: 5,
+                                textTransform: "uppercase", letterSpacing: "0.06em",
+                              }}>{fromLabel}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, color: "#8595B5" }}>—</span>
+                        )}
+                      </Field>
+                    );
+                  })()}
+
+                  {(() => {
+                    const toName = typeof sel.metadata?.to === "string" && sel.metadata.to ? sel.metadata.to : sel.name;
+                    return (
+                      <Field label="To">
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", flex: "none", background: sColor, display: "inline-block" }} />
+                          <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, fontWeight: 600, color: "#0A2240" }}>{toName}</span>
                           <span style={{
                             fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, color: "#8595B5",
                             background: "#F1F5FB", padding: "2px 6px", borderRadius: 5,
                             textTransform: "uppercase", letterSpacing: "0.06em",
-                          }}>{fromLabel}</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, color: "#8595B5" }}>—</span>
-                    )}
-                  </Field>
-                );
-              })()}
+                          }}>{sel.label}</span>
+                        </div>
+                      </Field>
+                    );
+                  })()}
 
-              {/* TO — prefer metadata.to (set by diagram builder), fall back to span name */}
-              {(() => {
-                const toName = typeof sel.metadata?.to === "string" && sel.metadata.to
-                  ? sel.metadata.to
-                  : sel.name;
-                return (
-                  <Field label="To">
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{
-                        width: 8, height: 8, borderRadius: "50%", flex: "none",
-                        background: sColor, display: "inline-block",
-                      }} />
-                      <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, fontWeight: 600, color: "#0A2240" }}>
-                        {toName}
-                      </span>
-                      <span style={{
-                        fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, color: "#8595B5",
-                        background: "#F1F5FB", padding: "2px 6px", borderRadius: 5,
-                        textTransform: "uppercase", letterSpacing: "0.06em",
-                      }}>{sel.label}</span>
+                  <Field label="Epoch">
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, color: epoch === "—" ? "#8595B5" : "#0A2240" }}>
+                      {epoch}
+                    </span>
+                  </Field>
+
+                  <Field label="Threat">
+                    <div style={{
+                      display: "inline-flex", alignItems: "center", gap: 8,
+                      padding: "6px 14px", borderRadius: 999,
+                      fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em",
+                      color: isBlocked ? "#DC2626" : "#059669",
+                      background: isBlocked ? "rgba(220,38,38,0.09)" : "rgba(5,150,105,0.09)",
+                      border: `1px solid ${isBlocked ? "rgba(220,38,38,0.28)" : "rgba(5,150,105,0.28)"}`,
+                    }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: isBlocked ? "#DC2626" : "#059669", display: "inline-block" }} />
+                      {isBlocked ? "YES" : "NO"}
                     </div>
                   </Field>
-                );
-              })()}
-
-              {/* EPOCH */}
-              <Field label="Epoch">
-                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, color: epoch === "—" ? "#8595B5" : "#0A2240" }}>
-                  {epoch}
-                </span>
-              </Field>
-
-              {/* THREAT */}
-              <Field label="Threat">
-                <div style={{
-                  display: "inline-flex", alignItems: "center", gap: 8,
-                  padding: "6px 14px", borderRadius: 999,
-                  fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em",
-                  color: isBlocked ? "#DC2626" : "#059669",
-                  background: isBlocked ? "rgba(220,38,38,0.09)" : "rgba(5,150,105,0.09)",
-                  border: `1px solid ${isBlocked ? "rgba(220,38,38,0.28)" : "rgba(5,150,105,0.28)"}`,
-                }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: isBlocked ? "#DC2626" : "#059669", display: "inline-block" }} />
-                  {isBlocked ? "YES" : "NO"}
                 </div>
-              </Field>
-            </div>
 
-            {/* MESSAGE */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{
-                  fontFamily: "'JetBrains Mono',monospace", fontSize: 10, fontWeight: 600,
-                  letterSpacing: "0.14em", textTransform: "uppercase", color: "#8595B5",
-                }}>Message</span>
-                <button
-                  onClick={copyMsg}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600,
-                    color: copiedMsg ? "#059669" : "#2563EB",
-                    cursor: "pointer", padding: "4px 10px", borderRadius: 7,
-                    background: "none", border: "none",
-                  }}
-                >
-                  {copiedMsg ? "✓ Copied" : "Copy"}
-                </button>
-              </div>
-              <pre style={{
-                margin: 0,
-                background: "#0B1B36",
-                color: "#C9D6EE",
-                padding: "16px 18px",
-                borderRadius: 12,
-                fontFamily: "'JetBrains Mono',monospace",
-                fontSize: 13,
-                lineHeight: 1.65,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                border: "1px solid rgba(255,255,255,0.07)",
-                maxHeight: 340,
-                overflowY: "auto",
-              }}>
-                {sel.input || "—"}
-              </pre>
+                {/* MESSAGE */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{
+                      fontFamily: "'JetBrains Mono',monospace", fontSize: 10, fontWeight: 600,
+                      letterSpacing: "0.14em", textTransform: "uppercase", color: "#8595B5",
+                    }}>Message</span>
+                    <button onClick={copyMsg} style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600,
+                      color: copiedMsg ? "#059669" : "#2563EB",
+                      cursor: "pointer", padding: "4px 10px", borderRadius: 7,
+                      background: "none", border: "none",
+                    }}>{copiedMsg ? "✓ Copied" : "Copy"}</button>
+                  </div>
+                  <pre style={{
+                    margin: 0, background: "#0B1B36", color: "#C9D6EE",
+                    padding: "16px 18px", borderRadius: 12,
+                    fontFamily: "'JetBrains Mono',monospace", fontSize: 13, lineHeight: 1.65,
+                    whiteSpace: "pre-wrap", wordBreak: "break-word",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                    maxHeight: 340, overflowY: "auto",
+                  }}>{sel.input || "—"}</pre>
+                </div>
+              </>)}
+
+              {tab === "json" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{
+                      fontFamily: "'JetBrains Mono',monospace", fontSize: 10, fontWeight: 600,
+                      letterSpacing: "0.14em", textTransform: "uppercase", color: "#8595B5",
+                    }}>Span data</span>
+                    <button onClick={copyJson} style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600,
+                      color: copiedJson ? "#059669" : "#2563EB",
+                      cursor: "pointer", padding: "4px 10px", borderRadius: 7,
+                      background: "none", border: "none",
+                    }}>{copiedJson ? "✓ Copied" : "Copy"}</button>
+                  </div>
+                  <div style={{
+                    background: "#0B1B36", borderRadius: 12, padding: "16px 18px",
+                    border: "1px solid rgba(255,255,255,0.07)", overflowY: "auto",
+                    fontFamily: "'JetBrains Mono',monospace", fontSize: 13, lineHeight: 1.65,
+                  }}>
+                    <JsonNode value={trace.trace} defaultOpen={true} />
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
         </div>

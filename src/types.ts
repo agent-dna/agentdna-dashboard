@@ -41,6 +41,7 @@ export interface Intent {
   threats: number;
   score: number;
   status: Status;
+  provenanceRecordID: string;
 }
 
 export type EntityRef = Pick<Agent | Tool, "id" | "name">;

@@ -171,26 +171,36 @@ export function IntentDetailPage() {
                 >
                   {intent.initiator.name || "—"}
                 </div>
-                <a
-                  href={`https://testnetexplorer.rubix.net/transaction-explorer?tx=${intent.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    marginTop: 6,
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11.5,
-                    color: "var(--accent)",
-                    textDecoration: "none",
-                    fontWeight: 600,
-                  }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
-                >
-                  View on explorer ↗
-                </a>
+                {intent.provenanceRecordID ? (
+                  <a
+                    href={`https://testnetexplorer.rubix.net/transaction-explorer?tx=${intent.provenanceRecordID}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      marginTop: 6,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11.5,
+                      color: "var(--accent)",
+                      textDecoration: "none",
+                      fontWeight: 600,
+                    }}
+                    onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
+                  >
+                    View on explorer ↗
+                  </a>
+                ) : (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6,
+                    fontFamily: "var(--font-mono)", fontSize: 11.5,
+                    color: "var(--fg-faint)", fontWeight: 600,
+                  }}>
+                    Pending provenance…
+                  </span>
+                )}
               </div>
               <InfoStat label="Runtime" value={fmtRuntime(intent.runtime)} mono />
               <InfoStat label="Started" value={timeAgo(intent.started)} />

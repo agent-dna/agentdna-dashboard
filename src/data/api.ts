@@ -276,6 +276,7 @@ interface ApiIntent {
   agentsCount?: number;
   /** Distinct tools touched by this intent. */
   toolsCount?: number;
+  provenanceRecordID?: string;
 }
 
 interface PagedIntents {
@@ -323,6 +324,7 @@ function mapIntent(i: ApiIntent): Intent {
     threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
     score: 0,
     status: i.threatDetected ? "threat" : "safe",
+    provenanceRecordID: i.provenanceRecordID ?? "",
   };
 }
 
