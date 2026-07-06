@@ -188,7 +188,7 @@ export function IntentDetailPage() {
                     onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
                     onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
                   >
-                    View on Proenance Layer ↗
+                    View on Provenance Layer ↗
                   </a>
                 ) : (
                   <span style={{

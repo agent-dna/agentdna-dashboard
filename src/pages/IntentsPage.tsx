@@ -7,6 +7,7 @@ import { ScoreBar } from "../components/ScoreBar";
 import { useIntentsPaged } from "../data/hooks";
 
 import { fmtRuntime, timeAgo } from "../lib/format";
+import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { Intent } from "../types";
 
 function Pagination({
@@ -54,9 +55,7 @@ export function IntentsPage() {
       label: "Intent",
       sortFn: (a, b) => a.id.localeCompare(b.id),
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)", wordBreak: "break-all" }}>
-          {r.id}
-        </span>
+        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {
