@@ -6,7 +6,7 @@ import { IdCell } from "../components/EntityCell";
 import { useInteractionsPaged } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
 import { useResolveName } from "../context/DirectoryContext";
-import { useIntentLabel } from "../context/IntentNumbersContext";
+import { IntentIdChip } from "../context/IntentNumbersContext";
 import { timeAgo } from "../lib/format";
 import type { Interaction } from "../types";
 
@@ -26,7 +26,6 @@ export function useInteractionColumns(
   openDrawer: (kind: "interaction", e: Interaction) => void,
 ): DataTableColumn<Interaction>[] {
   const resolve = useResolveName();
-  const intentLabel = useIntentLabel();
   return [
     {
       key: "id",
@@ -60,9 +59,7 @@ export function useInteractionColumns(
       key: "intent",
       label: "Intent",
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--accent)", fontWeight: 600 }}>
-          {intentLabel(r.intent.id)}
-        </span>
+        <IntentIdChip id={r.intent.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--accent)", fontWeight: 600 }} />
       ),
     },
     {

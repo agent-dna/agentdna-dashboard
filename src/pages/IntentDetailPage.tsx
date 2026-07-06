@@ -14,7 +14,7 @@ import { useDrawer } from "../context/DrawerContext";
 import { fmtRuntime, timeAgo } from "../lib/format";
 import { useInteractionColumns } from "./InteractionsPage";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
-import { useIntentLabel } from "../context/IntentNumbersContext";
+import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { IntentParticipant, Tool } from "../types";
 
 type Tab = "interactions" | "participants" | "logs";
@@ -34,8 +34,6 @@ export function IntentDetailPage() {
   const { data: participants } = useIntentParticipants(intentId);
   const { data: logs } = useLogs("intent", intentId);
   const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
-  const intentLabel = useIntentLabel();
-
   if (loading) {
     return (
       <div className="page">
@@ -51,7 +49,7 @@ export function IntentDetailPage() {
       <div className="page">
         <div className="stub">
           <h2>Intent not found</h2>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, marginTop: 6 }}>{intentLabel(intentId)}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, marginTop: 6 }}><IntentIdChip id={intentId} /></div>
           <button className="btn" style={{ marginTop: 16 }} onClick={() => navigate("/intents")}>
             <Icon name="arrowRight" size={14} style={{ transform: "rotate(180deg)" }} /> Back to intents
           </button>
@@ -132,7 +130,7 @@ export function IntentDetailPage() {
           <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> Intents
         </button>
         <span style={{ color: "var(--fg-faint)" }}>/</span>
-        <span style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600 }}>{intentLabel(intent.id)}</span>
+        <IntentIdChip id={intent.id} style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600 }} />
       </div>
 
       {/* Hero info card */}

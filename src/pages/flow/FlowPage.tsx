@@ -4,7 +4,7 @@ import { Icon } from "../../components/Icon";
 import { TraceInspector } from "../../components/TraceInspector";
 import { useIntent, useIntentBlockData, useIntentDiagram, useIntentInteractions, useIntentsPaged } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
-import { useIntentLabel } from "../../context/IntentNumbersContext";
+import { IntentIdChip } from "../../context/IntentNumbersContext";
 import { FlowCanvas } from "./FlowCanvas";
 import { buildFlowFromIntent, buildFlowFromDiagram, buildTraceFromBlocks, type Flow } from "./flowData";
 import { flattenIntentBlocks } from "../../data/api";
@@ -17,8 +17,6 @@ export function FlowPage() {
   const { intentId: paramId } = useParams<{ intentId: string }>();
   const navigate = useNavigate();
   const resolve = useResolveName();
-  const intentLabel = useIntentLabel();
-
   const [intentsPage, setIntentsPage] = useState(1);
   const intentsState = useIntentsPaged(intentsPage);
   const intents = intentsState.data.items;
@@ -163,7 +161,7 @@ export function FlowPage() {
                       className={`fi-row ${i.id === activeId ? "sel" : ""}`}
                       onClick={() => onPickIntent(i.id)}
                     >
-                      <span className="fi-hs">{intentLabel(i.id)}</span>
+                      <span className="fi-hs"><IntentIdChip id={i.id} /></span>
                       <span className="fi-hops">{hops} {hops === 1 ? "hop" : "hops"}</span>
                     </button>
                   );
