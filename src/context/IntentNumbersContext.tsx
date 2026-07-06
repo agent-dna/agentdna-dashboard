@@ -59,15 +59,11 @@ export function useIntentNumber(id: string | undefined | null): number | null {
   return ctx.map.get(id) ?? null;
 }
 
-/** Format an intent ID as "I-N", or fall back to a short hash if not yet numbered. */
+/** Return the raw intent ID as received from the backend. */
 export function useIntentLabel(): (id: string | undefined | null) => string {
-  const ctx = useContext(Ctx);
   return (id) => {
     if (!id) return "—";
-    const n = ctx?.map.get(id);
-    if (n != null) return `I-${n}`;
-    // Fallback while the full list is still loading.
-    return `I-${shortHash(id)}`;
+    return id;
   };
 }
 

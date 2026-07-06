@@ -107,7 +107,14 @@ function JsonNode({ label, value, depth = 0, defaultOpen = true }: {
   }
 
   if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>);
+    const allEntries = Object.entries(value as Record<string, unknown>);
+    const entries = allEntries.filter(([, v]) => {
+      if (v === null || v === undefined) return false;
+      if (typeof v === "string" && v.trim() === "") return false;
+      if (Array.isArray(v) && v.length === 0) return false;
+      if (typeof v === "object" && !Array.isArray(v) && Object.keys(v as object).length === 0) return false;
+      return true;
+    });
     const empty = entries.length === 0;
     return (
       <div>
