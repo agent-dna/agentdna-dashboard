@@ -205,12 +205,8 @@ interface PagedTools {
 
 function mapTool(t: ApiTool): Tool {
   const provider = (t.toolName || "").split(".")[0] || "";
-  const nameSuffix = `_${t.toolName}`;
-  const did = (t.toolDID || "").endsWith(nameSuffix)
-    ? t.toolDID.slice(0, -nameSuffix.length)
-    : t.toolDID;
   return {
-    id: did,
+    id: t.toolDID,
     name: t.toolName,
     score: t.score,
     created: 0,
