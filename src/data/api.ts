@@ -513,16 +513,17 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
   const initiatorDID = (r.initiatorDID ?? "").trim().toLowerCase();
   const agentDids = new Set<string>();
   const toolDids = new Set<string>();
+  const isAgentId = (id: string) => id.trim().toLowerCase().startsWith("bafy");
   for (const ix of allInteractions) {
-    const isTool = ix.blockType === "tool_call";
     const fromId = ix.initiator.id.trim().toLowerCase();
     const toId = ix.target.id.trim().toLowerCase();
-    // Count the caller as an agent (unless it's the human intent initiator).
-    if (fromId && fromId !== initiatorDID) agentDids.add(ix.initiator.id);
-    // Count the target as tool or agent based on block type.
+    if (fromId && fromId !== initiatorDID) {
+      if (isAgentId(fromId)) agentDids.add(ix.initiator.id);
+      else toolDids.add(ix.initiator.id);
+    }
     if (toId && toId !== initiatorDID) {
-      if (isTool) toolDids.add(ix.target.id);
-      else agentDids.add(ix.target.id);
+      if (isAgentId(toId)) agentDids.add(ix.target.id);
+      else toolDids.add(ix.target.id);
     }
   }
 

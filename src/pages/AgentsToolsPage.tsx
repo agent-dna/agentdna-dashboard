@@ -43,14 +43,14 @@ export function AgentsToolsPage() {
     {
       key: "name",
       label: "Agent",
-      width: "16%",
+      width: "18%",
       sortFn: (a, b) => a.name.localeCompare(b.name),
       render: (r) => <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>,
     },
     {
       key: "id",
       label: "Agent ID",
-      width: "14%",
+      width: "12%",
       sortFn: (a, b) => a.id.localeCompare(b.id),
       render: (r) => <IdCell id={r.id} truncate truncateLength={10} />,
     },
