@@ -305,7 +305,6 @@ export function AgentsToolsPage() {
           accent="var(--accent-3)"
           accent2="var(--accent)"
           onRowClick={(r) => openDrawer("tool", r)}
-          showBar={false}
         />
       </div>
 
@@ -493,9 +492,9 @@ function TopList<T extends TopListItem>({
                 <div
                   style={{
                     fontSize: 13.5,
-                    fontWeight: 700,
+                    fontWeight: 600,
                     color: "var(--fg)",
-                    marginBottom: 2,
+                    marginBottom: showBar ? 6 : 2,
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",

@@ -571,9 +571,17 @@ export async function fetchIntentInteractionsPaged(
 }
 
 export async function fetchIntentParticipants(id: string): Promise<IntentParticipant[]> {
-  const intentInfo = await fetchIntentInfo(id);
+  const [intentInfo, firstPage] = await Promise.all([
+    fetchIntentInfo(id),
+    fetchIntentInteractionsPaged(id, 1),
+  ]);
   const initiatorDID = (intentInfo?.initiatorDID ?? "").trim().toLowerCase();
-  const interactions = (intentInfo?.interactions || []).map(mapInteraction);
+  const allInteractions = [...firstPage.interactions];
+  for (let p = 2; p <= firstPage.totalPages; p++) {
+    const page = await fetchIntentInteractionsPaged(id, p);
+    allInteractions.push(...page.interactions);
+  }
+  const interactions = allInteractions;
   const map = new Map<string, IntentParticipant>();
   for (const r of interactions) {
     const sides: { ref: { id: string; name: string }; type: "agent" | "tool" }[] = [

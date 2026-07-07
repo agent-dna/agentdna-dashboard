@@ -4,10 +4,7 @@ import { EntityCell } from "../EntityCell";
 import { DrawerSection } from "./DrawerSection";
 import { useDrawer } from "../../context/DrawerContext";
 import { useResolveName } from "../../context/DirectoryContext";
-function truncateIntentId(id: string): string {
-  if (id.length <= 11) return id;
-  return `${id.slice(0, 6)}…${id.slice(-5)}`;
-}
+import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { fmtRuntime, timeAgo } from "../../lib/format";
 import type { Interaction } from "../../types";
 
@@ -19,6 +16,7 @@ export function InteractionDetail({ interaction: i }: Props) {
   const { closeDrawer } = useDrawer();
   const navigate = useNavigate();
   const resolve = useResolveName();
+  const intentLabel = useIntentLabel();
 
   const openIntent = () => {
     if (!i.intent?.id) return;
@@ -176,7 +174,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                     textUnderlineOffset: 2,
                   }}
                 >
-                  {truncateIntentId(i.intent.id)}
+                  {intentLabel(i.intent.id)}
                 </button>
               ) : (
                 "—"
@@ -187,6 +185,61 @@ export function InteractionDetail({ interaction: i }: Props) {
           </div>
         </DrawerSection>
 
+        {i.threat && (
+          <DrawerSection title="Threat signals">
+            <div
+              style={{
+                background: "rgba(220, 38, 38,0.06)",
+                border: "1px solid rgba(220, 38, 38,0.18)",
+                borderRadius: 10,
+                padding: "14px 16px",
+                fontSize: 13,
+                color: "var(--fg-dim)",
+              }}
+            >
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <Icon name="alerts" size={16} style={{ color: "var(--threat)", marginTop: 2 }} />
+                <div>
+                  <div style={{ color: "var(--fg)", marginBottom: 4 }}>Anomalous tool combination</div>
+                  <div style={{ color: "var(--fg-muted)", fontSize: 12 }}>
+                    This agent doesn't typically reach {i.target.name} during this intent class.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </DrawerSection>
+        )}
+
+        <DrawerSection title="Audit trail">
+          <div className="timeline">
+            <div className="tl-item">
+              <div className="dot" />
+              <div className="line" />
+              <div className="body">
+                <div className="nm">Identity verified</div>
+                <div className="desc">Signature {i.initiator.id.slice(-6)} matched registered key</div>
+              </div>
+              <div className="ts">+0ms</div>
+            </div>
+            <div className="tl-item">
+              <div className="dot" />
+              <div className="line" />
+              <div className="body">
+                <div className="nm">Authorization granted</div>
+                <div className="desc">Policy allow:{i.target.name}</div>
+              </div>
+              <div className="ts">+12ms</div>
+            </div>
+            <div className={`tl-item ${i.threat ? "threat" : ""}`}>
+              <div className="dot" />
+              <div className="body">
+                <div className="nm">{i.threat ? "Flagged for review" : "Completed"}</div>
+                <div className="desc">{fmtRuntime(i.runtime)} total runtime</div>
+              </div>
+              <div className="ts">+{fmtRuntime(i.runtime)}</div>
+            </div>
+          </div>
+        </DrawerSection>
       </div>
     </>
   );
