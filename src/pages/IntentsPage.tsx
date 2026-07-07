@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { ScoreBar } from "../components/ScoreBar";
 import { useIntentsPaged } from "../data/hooks";
-import { useIntentLabel } from "../context/IntentNumbersContext";
+
 import { fmtRuntime, timeAgo } from "../lib/format";
+import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { Intent } from "../types";
 
 function Pagination({
@@ -38,7 +38,7 @@ export function IntentsPage() {
   const totalPages = paged.totalPages || 1;
   const total = paged.total || intents.length;
   const navigate = useNavigate();
-  const intentLabel = useIntentLabel();
+
 
   let rows = intents;
   if (filter === "threats") rows = rows.filter((r) => r.threats > 0);
@@ -54,9 +54,7 @@ export function IntentsPage() {
       label: "Intent",
       sortFn: (a, b) => a.id.localeCompare(b.id),
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
-          {intentLabel(r.id)}
-        </span>
+        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {
@@ -112,20 +110,6 @@ export function IntentsPage() {
       ),
     },
     {
-      key: "score",
-      label: "Reliability",
-      align: "right",
-      sortFn: (a, b) => a.score - b.score,
-      render: (r) => {
-        const ix = r.interactionsCount;
-        if (ix <= 0) {
-          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
-        }
-        const pct = Math.max(0, Math.round((((ix - r.threats) / ix) * 100) * 100) / 100);
-        return <ScoreBar value={pct} />;
-      },
-    },
-    {
       key: "time",
       label: "Time",
       align: "right",
@@ -173,7 +157,7 @@ export function IntentsPage() {
       </div>
 
       <div className="metrics">
-        <MetricTile label="Total Intent" value={intents.length} icon="intents" sparkColor="#2563EB" spark={[]} />
+        <MetricTile label="Total Intent" value={total} icon="intents" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Agents Engaged" value={totalAgents} icon="agents" sparkColor="#0EA5E9" spark={[]} />
         <MetricTile label="Apps Engaged" value={totalTools} icon="box" sparkColor="#0A2240" spark={[]} />
         <MetricTile label="Threats Flagged" value={totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />

@@ -12,7 +12,7 @@
  */
 
 import type { Intent, Interaction } from "../../types";
-import type { ApiDiagramNode, IntentBlock } from "../../data/api";
+import type { IntentBlock, IntentDiagram } from "../../data/api";
 import type { useResolveName } from "../../context/DirectoryContext";
 
 export type FlowNodeKind = "human" | "agent" | "tool";
@@ -50,15 +50,14 @@ export interface TraceSpan {
   kind: "chain" | "human" | "agent" | "tool";
   label: string;
   status: "ok" | "blocked";
-  tokensIn: number;
-  tokensOut: number;
-  cost: number;
   input: string;
   output: string;
   model: string | null;
+  epoch?: number;
   metadata: Record<string, unknown>;
   parentId: string | null;
   children: TraceSpan[];
+  signature?: string;
 }
 
 export interface FlowTrace {
@@ -83,6 +82,8 @@ export interface Flow {
   steps: FlowStep[];
   status: "halted" | "completed";
   trace: FlowTrace;
+  /** Raw /intent-diagram response — shown as-is in the JSON tab. */
+  rawDiagram?: unknown;
 }
 
 /* ------- tier layout ------- */
@@ -286,7 +287,6 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     kind: "chain",
     label: "TRACE",
     status: traceStatus,
-    tokensIn: 0, tokensOut: 0, cost: 0,
     input: `Execute intent: ${intent.id}`,
     output: halted
       ? "Intent halted: policy violation detected. No side-effects committed."
@@ -323,7 +323,6 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       kind: "human",
       label: "User",
       status: "ok",
-      tokensIn: 0, tokensOut: 0, cost: 0,
       input: intent.name || `Intent ${intent.id.slice(-8)}`,
       output: halted ? "Intent completed with policy violation." : "Intent completed successfully.",
       model: null,
@@ -361,20 +360,11 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       id: spanId,
       name: toNode?.name || ix.target.name || shortDid(toDid),
       kind: isTool ? "tool" : "agent",
-      label: toNode?.label || (isTool ? "Tool" : "Agent"),
+      label: toNode?.label || (isTool ? "App" : "Agent"),
       status: isBlocked ? "blocked" : "ok",
-      tokensIn: 0, tokensOut: 0, cost: 0,
-      input: isTool
-        ? `{\n  "tool": "${toNode?.name || ix.target.name}",\n  "scope": "${toNode?.label || "unknown"}",\n  "caller": "${fromNode?.name || fromDid}",\n  "timeout_ms": 3000\n}`
-        : `Delegated task for intent "${intent.name}".\nVerify identity, check scope, execute subtask.`,
-      output: isBlocked
-        ? (isTool
-          ? `{\n  "ok": false,\n  "error": "scope_denied",\n  "message": "capability not granted to caller"\n}`
-          : "Attempted action outside granted scope. Blocked by policy.")
-        : (isTool
-          ? `{\n  "ok": true,\n  "elapsed_ms": ${Math.max(20, ix.runtime || 120)}\n}`
-          : "Subtask completed. Result returned to caller."),
-      model: isTool ? null : "agent/reason-v2",
+      input: "",
+      output: "",
+      model: null,
       parentId: parent.id,
       metadata: isTool
         ? { provider: "service", scope: toNode?.label || "unknown", caller: fromNode?.name || fromDid, intentId: intent.id }
@@ -426,20 +416,30 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
   };
 }
 
-// ---- Diagram-based trace builder (uses /intent-diagram tree directly) ----
+// ---- Diagram-based full flow builder (uses /intent-diagram flat interactions) ----
 
-type ResolveNameFn = ReturnType<typeof useResolveName>;
+export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Flow {
+  const { basicInfo, interactions } = diagram;
 
-function diagramHasThreat(node: ApiDiagramNode): boolean {
-  if (node.threat) return true;
-  return node.children.some(diagramHasThreat);
-}
+  // Sort by epoch ascending so the call chain nests correctly.
+  const sorted = [...interactions].sort((a, b) => a.epoch - b.epoch);
 
-export function buildTraceFromDiagram(
-  intent: Intent,
-  diagram: ApiDiagramNode,
-  resolve: ResolveNameFn,
-): FlowTrace {
+  // ── Nodes ──────────────────────────────────────────────────────────────────
+  const nodesById = new Map<string, FlowNode>();
+  const idForDid = (did: string): string => `nd_${sanitize(did)}`;
+
+  const ensureNode = (did: string, name: string, kind: FlowNodeKind, label: string): FlowNode => {
+    const id = idForDid(did);
+    if (!nodesById.has(id)) {
+      nodesById.set(id, { id, kind, name: name || shortDid(did), label, x: 0, y: 0 });
+    }
+    return nodesById.get(id)!;
+  };
+
+  // The initiator is always human.
+  const humanNode = ensureNode(basicInfo.initiatorDID, basicInfo.initiatorName, "human", "User");
+
+  // ── Trace spans ────────────────────────────────────────────────────────────
   const allSpans: TraceSpan[] = [];
   const mkSpan = (s: Omit<TraceSpan, "children">): TraceSpan => {
     const sp: TraceSpan = { ...s, children: [] };
@@ -447,84 +447,221 @@ export function buildTraceFromDiagram(
     return sp;
   };
 
-  const halted = diagramHasThreat(diagram);
-  const traceStatus: TraceSpan["status"] = halted ? "blocked" : "ok";
+  const halted = basicInfo.threatDetected || sorted.some((ix) => ix.threat);
 
-  const rootSpan = mkSpan({
-    id: `sp_${sanitize(intent.id)}_root`,
-    name: `Intent · ${intent.id.slice(-8)}`,
-    kind: "chain",
-    label: "TRACE",
-    status: traceStatus,
-    tokensIn: 0, tokensOut: 0, cost: 0,
-    input: `Execute intent: ${intent.id}`,
-    output: halted
-      ? "Intent halted: policy violation detected."
-      : "Intent finished successfully.",
-    model: null,
-    parentId: null,
-    metadata: { intentId: intent.id, status: halted ? "halted" : "finished" },
-  });
+  // Stack-based nesting for outbound. spanForDid maps DID → its outbound span
+  // so response interactions can be nested under the sender's span.
+  // Stack starts empty; the first outbound interaction becomes the tree root.
+  let rootSpan: TraceSpan | null = null;
+  const stack: Array<{ did: string; span: TraceSpan }> = [];
+  const spanSeq = new Map<string, number>();
+  const spanForDid = new Map<string, TraceSpan>();
 
-  const walk = (node: ApiDiagramNode, parentSpan: TraceSpan) => {
-    const isRoot = !node.interactionType;
-    const isTool = node.interactionType === "tool_call";
-    const resolved = resolve(node.did);
-    const kind: TraceSpan["kind"] = isRoot ? "human" : isTool ? "tool" : "agent";
-    const label = isRoot ? "User" : isTool ? "Tool" : "Agent";
-    const nodeId = node.interactionID ? sanitize(node.interactionID) : sanitize(node.did);
-    const spanId = `sp_${sanitize(intent.id)}_${nodeId}`;
+  // ── Steps + span bookkeeping ────────────────────────────────────────────────
+  // rawSteps includes ALL interactions so the hop count equals interactionsCount.
+  const rawSteps: Omit<FlowStep, "spanId">[] = [];
+  const stepSpan = new Map<string, string>(); // "fromId>toId" → spanId
+
+  // Responses are collected and processed after all outbound spans are built so
+  // spanForDid is fully populated before we look up the sender's span.
+  const pendingResponses: typeof sorted = [];
+
+  for (const ix of sorted) {
+    const fromDid = ix.initiator;
+    const toDid = ix.to;
+    const isResponse = ix.type === "response";
+    const isTool = ix.type === "tool_call";
+    const isBlocked = ix.threat;
+
+    const toKind: FlowNodeKind = toDid === basicInfo.initiatorDID ? "human" : (isTool ? "tool" : "agent");
+    const toLabel = toDid === basicInfo.initiatorDID ? "User" : (isTool ? "App" : "Agent");
+
+    const fromNode = ensureNode(
+      fromDid,
+      ix.initiatorName,
+      fromDid === basicInfo.initiatorDID ? "human" : "agent",
+      fromDid === basicInfo.initiatorDID ? "User" : "Agent",
+    );
+    const toNode = ensureNode(toDid, ix.toName, toKind, toLabel);
+    if (isBlocked) toNode.threat = true;
+
+    const fromNodeId = idForDid(fromDid);
+    const toNodeId = idForDid(toDid);
+
+    // All interactions contribute to the step rail (hop count = interactionsCount).
+    rawSteps.push({
+      from: fromNodeId,
+      to: toNodeId,
+      dir: isResponse ? "response" : "request",
+      title: isResponse
+        ? `Response · ${fromNode.name}`
+        : isTool
+        ? `Invoke ${toNode.name}`
+        : `Delegate · ${toNode.name}`,
+      summary: isBlocked
+        ? `Scope check FAILED — ${fromNode.name} → ${toNode.name} was blocked.`
+        : isResponse
+        ? `${fromNode.name} returned result to ${toNode.name}.`
+        : isTool
+        ? `${fromNode.name} invoked ${toNode.name}. Capability token verified.`
+        : `${fromNode.name} delegated work to ${toNode.name}. Checks passed.`,
+      verdict: isBlocked ? "blocked" : "allowed",
+      checks: { identity: true, trust: true, scope: !isBlocked },
+      latency: 0,
+    });
+
+    if (isResponse) {
+      pendingResponses.push(ix);
+      continue;
+    }
+
+    // Outbound: pop stack back to the frame matching the current sender.
+    while (stack.length > 1 && stack[stack.length - 1].did !== fromDid) {
+      stack.pop();
+    }
+    const parent = stack.length > 0 ? stack[stack.length - 1].span : null;
+
+    const seq = (spanSeq.get(toDid) || 0) + 1;
+    spanSeq.set(toDid, seq);
+    const spanId = `sp_${sanitize(intent.id)}_${sanitize(toDid)}_${seq}`;
 
     const span = mkSpan({
       id: spanId,
-      name: node.name || resolved.name || node.did.slice(-8),
-      kind,
-      label,
-      status: node.threat ? "blocked" : "ok",
-      tokensIn: 0, tokensOut: 0, cost: 0,
-      input: isTool
-        ? `{\n  "tool": "${node.name}",\n  "caller": "${parentSpan.name}"\n}`
-        : isRoot
-        ? intent.name || `Intent ${intent.id.slice(-8)}`
-        : `Delegated task for intent "${intent.name}".\nVerify identity, check scope, execute subtask.`,
-      output: node.threat
-        ? (isTool
-          ? `{\n  "ok": false,\n  "error": "scope_denied"\n}`
-          : "Blocked by policy.")
-        : (isTool
-          ? `{\n  "ok": true\n}`
-          : "Subtask completed. Result returned to caller."),
-      model: isTool || isRoot ? null : "agent/reason-v2",
-      parentId: parentSpan.id,
+      name: ix.initiatorName || fromNode.name,
+      kind: isTool ? "tool" : "agent",
+      label: isTool ? "App" : "Agent",
+      status: isBlocked ? "blocked" : "ok",
+      input: ix.message || "",
+      output: "",
+      model: null,
+      epoch: ix.epoch || undefined,
+      parentId: parent ? parent.id : null,
       metadata: {
-        did: node.did,
-        ...(node.interactionID ? { interactionID: node.interactionID } : {}),
-        ...(node.interactionType ? { interactionType: node.interactionType } : {}),
+        interactionID: ix.interactionID,
+        from: ix.initiatorName,
+        to: ix.toName,
+        fromDid,
+        toDid,
       },
     });
 
-    parentSpan.children.push(span);
-
-    for (const child of node.children) {
-      walk(child, span);
+    if (parent) {
+      parent.children.push(span);
+    } else {
+      rootSpan = span; // first outbound span is the tree root
     }
-  };
+    stepSpan.set(`${fromNodeId}>${toNodeId}`, spanId);
+    spanForDid.set(toDid, span);
 
-  walk(diagram, rootSpan);
+    if (!isTool) {
+      stack.push({ did: toDid, span });
+    }
+  }
+
+  // Response interactions: nest each response span under the outbound span of
+  // the sender. This gives chainDepth total spans across the whole tree.
+  for (const ix of pendingResponses) {
+    const fromDid = ix.initiator;
+    const toDid = ix.to;
+    const isBlocked = ix.threat;
+
+    const toKind: FlowNodeKind = toDid === basicInfo.initiatorDID ? "human" : "agent";
+    const toLabel = toDid === basicInfo.initiatorDID ? "User" : "Agent";
+
+    ensureNode(toDid, ix.toName, toKind, toLabel);
+
+    const fromNodeId = idForDid(fromDid);
+    const toNodeId = idForDid(toDid);
+
+    const senderSpan = spanForDid.get(fromDid) ?? rootSpan!;
+
+    const seq = (spanSeq.get(toDid) || 0) + 1;
+    spanSeq.set(toDid, seq);
+    const spanId = `sp_${sanitize(intent.id)}_resp_${sanitize(toDid || ix.toName)}_${seq}`;
+
+    const responseSpan = mkSpan({
+      id: spanId,
+      name: ix.initiatorName,
+      kind: toKind,
+      label: toLabel,
+      status: isBlocked ? "blocked" : "ok",
+      input: ix.message || "",
+      output: "",
+      model: null,
+      epoch: ix.epoch || undefined,
+      parentId: senderSpan.id,
+      metadata: {
+        interactionID: ix.interactionID,
+        from: ix.initiatorName,
+        to: ix.toName,
+        fromDid,
+        toDid,
+      },
+    });
+
+    senderSpan.children.push(responseSpan);
+    stepSpan.set(`${fromNodeId}>${toNodeId}`, spanId);
+  }
+
+  // ── Assemble nodes / edges ─────────────────────────────────────────────────
+  const used = new Set<string>();
+  for (const s of rawSteps) { used.add(s.from); used.add(s.to); }
+  used.add(humanNode.id);
+
+  const nodes = Array.from(nodesById.values()).filter((n) => used.has(n.id));
+
+  const seenEdges = new Set<string>();
+  const edges: [string, string][] = [];
+  for (const s of rawSteps) {
+    const key = `${s.from}>${s.to}`;
+    if (!seenEdges.has(key)) { seenEdges.add(key); edges.push([s.from, s.to]); }
+  }
+
+  // Orchestrator = non-human agent with most outbound steps.
+  const callCounts = new Map<string, number>();
+  for (const s of rawSteps) callCounts.set(s.from, (callCounts.get(s.from) || 0) + 1);
+  let orchId: string | null = null, maxC = 0;
+  for (const [id, c] of callCounts) {
+    const n = nodesById.get(id);
+    if (n && n.kind !== "human" && c > maxC) { orchId = id; maxC = c; }
+  }
+  if (orchId) {
+    const orch = nodesById.get(orchId);
+    if (orch) orch.label = "Orchestrator";
+  }
+
+  tierLayout(nodes, orchId, rawSteps as FlowStep[]);
 
   const spanById: Record<string, TraceSpan> = {};
   for (const s of allSpans) spanById[s.id] = s;
 
-  return {
-    trace: rootSpan,
+  const steps: FlowStep[] = rawSteps.map((s) => ({
+    ...s,
+    spanId: stepSpan.get(`${s.from}>${s.to}`) || rootSpan!.id,
+  }));
+
+  const flowTrace: FlowTrace = {
+    trace: rootSpan!,
     spanById,
     traceId: `tr_${sanitize(intent.id).slice(-8)}`,
     sessionId: `sess_${sanitize(intent.id).slice(-6)}`,
-    userId: diagram.name || intent.initiator?.name || "operator",
+    userId: basicInfo.initiatorName || intent.initiator?.name || "operator",
     env: "prod",
     totalTokensIn: 0,
     totalTokensOut: 0,
     totalCost: 0,
+  };
+
+  return {
+    intentId: intent.id,
+    intent,
+    nodes,
+    nodeById: Object.fromEntries(nodes.map((n) => [n.id, n])),
+    edges,
+    steps,
+    status: halted ? "halted" : "completed",
+    trace: flowTrace,
+    rawDiagram: diagram,
   };
 }
 
@@ -553,8 +690,7 @@ export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): Flo
     kind: "chain",
     label: "TRACE",
     status: traceStatus,
-    tokensIn: 0, tokensOut: 0, cost: 0,
-    input: `Execute intent: ${intent.id}`,
+        input: `Execute intent: ${intent.id}`,
     output: halted ? "Intent halted: policy violation detected." : "Intent finished successfully.",
     model: null,
     parentId: null,
@@ -583,8 +719,7 @@ export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): Flo
         kind: isHuman ? "human" : "agent",
         label: isHuman ? "User" : block.block_type === "delegate" ? "Orchestrator" : "Agent",
         status: block.threat_detected ? "blocked" : "ok",
-        tokensIn: 0, tokensOut: 0, cost: 0,
-        input: block.message || "",
+                input: block.message || "",
         output: "",  // filled in when the matching inbound block arrives
         model: isHuman ? null : "agent/reason-v2",
         parentId: parent.id,
@@ -595,6 +730,7 @@ export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): Flo
           ...(block.delegate_to ? { delegateTo: block.delegate_to } : {}),
           ...(block.received_from ? { receivedFrom: block.received_from } : {}),
         },
+        signature: block.signature || undefined,
       });
 
       parent.children.push(span);
@@ -618,8 +754,7 @@ export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): Flo
             kind: "tool",
             label: "Tool",
             status: block.threat_detected ? "blocked" : "ok",
-            tokensIn: 0, tokensOut: 0, cost: 0,
-            input: block.message || "",
+                        input: block.message || "",
             output: block.response || "",
             model: null,
             parentId: frame.span.id,

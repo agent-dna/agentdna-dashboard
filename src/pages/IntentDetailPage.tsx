@@ -7,17 +7,16 @@ import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
-import { LogsTable } from "../components/LogsTable";
-import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useLogs } from "../data/hooks";
+import { useIntent, useIntentInteractionsPaged, useIntentParticipants } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
-import { fmtRuntime, timeAgo } from "../lib/format";
+import { timeAgo } from "../lib/format";
 import { useInteractionColumns } from "./InteractionsPage";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
-import { useIntentLabel } from "../context/IntentNumbersContext";
+import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { IntentParticipant, Tool } from "../types";
 
-type Tab = "interactions" | "participants" | "logs";
+type Tab = "interactions" | "participants";
 
 export function IntentDetailPage() {
   const { intentId = "" } = useParams<{ intentId: string }>();
@@ -32,10 +31,7 @@ export function IntentDetailPage() {
   const interactionsTotal = interactionsPaged.total;
   const interactionsTotalPages = interactionsPaged.totalPages;
   const { data: participants } = useIntentParticipants(intentId);
-  const { data: logs } = useLogs("intent", intentId);
   const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
-  const intentLabel = useIntentLabel();
-
   if (loading) {
     return (
       <div className="page">
@@ -51,7 +47,7 @@ export function IntentDetailPage() {
       <div className="page">
         <div className="stub">
           <h2>Intent not found</h2>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, marginTop: 6 }}>{intentLabel(intentId)}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, marginTop: 6 }}><IntentIdChip id={intentId} /></div>
           <button className="btn" style={{ marginTop: 16 }} onClick={() => navigate("/intents")}>
             <Icon name="arrowRight" size={14} style={{ transform: "rotate(180deg)" }} /> Back to intents
           </button>
@@ -132,7 +128,7 @@ export function IntentDetailPage() {
           <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> Intents
         </button>
         <span style={{ color: "var(--fg-faint)" }}>/</span>
-        <span style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600 }}>{intentLabel(intent.id)}</span>
+        <IntentIdChip id={intent.id} style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600 }} />
       </div>
 
       {/* Hero info card */}
@@ -171,8 +167,38 @@ export function IntentDetailPage() {
                 >
                   {intent.initiator.name || "—"}
                 </div>
+                {intent.provenanceRecordID ? (
+                  <a
+                    href={`https://testnetexplorer.rubix.net/transaction-explorer?tx=${intent.provenanceRecordID}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      marginTop: 6,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11.5,
+                      color: "var(--accent)",
+                      textDecoration: "none",
+                      fontWeight: 600,
+                    }}
+                    onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
+                  >
+                    View on Provenance Layer ↗
+                  </a>
+                ) : (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6,
+                    fontFamily: "var(--font-mono)", fontSize: 11.5,
+                    color: "var(--fg-faint)", fontWeight: 600,
+                  }}>
+                    Saved on Provenance Layer
+                  </span>
+                )}
               </div>
-              <InfoStat label="Runtime" value={fmtRuntime(intent.runtime)} mono />
+              <InfoStat label="Intent ID" value={<IntentIdChip id={intent.id} />} />
               <InfoStat label="Started" value={timeAgo(intent.started)} />
               <InfoStat
                 label="Threat detected"
@@ -218,7 +244,6 @@ export function IntentDetailPage() {
           tabs={[
             { key: "interactions", label: "Interactions", count: interactionsTotal },
             { key: "participants", label: "Agents & Apps", count: participantRows.length },
-            { key: "logs", label: "Logs", count: logs.length },
           ]}
         />
 
@@ -245,7 +270,6 @@ export function IntentDetailPage() {
           />
         )}
 
-        {tab === "logs" && <LogsTable logs={logs} />}
       </div>
     </div>
   );

@@ -36,7 +36,7 @@ export function DataTable<R extends { id?: string }>({
 
   return (
     <div className="table-wrap">
-      <table className="dt">
+      <table className="dt" style={{ width: "100%", tableLayout: "fixed" }}>
         <thead>
           <tr>
             {columns.map((c) => (

@@ -276,6 +276,7 @@ interface ApiIntent {
   agentsCount?: number;
   /** Distinct tools touched by this intent. */
   toolsCount?: number;
+  provenanceRecordID?: string;
 }
 
 interface PagedIntents {
@@ -323,6 +324,7 @@ function mapIntent(i: ApiIntent): Intent {
     threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
     score: 0,
     status: i.threatDetected ? "threat" : "safe",
+    provenanceRecordID: i.provenanceRecordID ?? "",
   };
 }
 
@@ -363,7 +365,19 @@ export async function fetchSeries(range: "24h" | "7d"): Promise<TimeSeries> {
   if (isDummyMode()) {
     return dummySeries(range);
   }
-  return { total: [], safe: [], threats: [] };
+  try {
+    const res = await apiRequest<{ safe: number[]; threats: number[] }>(
+      "/interactions/series",
+      { query: { range } },
+    );
+    if (!res) return { total: [], safe: [], threats: [] };
+    const safe = res.safe ?? [];
+    const threats = res.threats ?? [];
+    const total = safe.map((v, i) => v + (threats[i] ?? 0));
+    return { total, safe, threats };
+  } catch {
+    return { total: [], safe: [], threats: [] };
+  }
 }
 
 interface DummyInteractionForSeries {
@@ -468,6 +482,7 @@ interface ApiIntentInfo {
   endedAt?: string;
   status: string;
   threatDetected: boolean;
+  provenanceRecordID?: string;
   interactions?: ApiInteraction[];
 }
 
@@ -482,8 +497,36 @@ async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null> {
 }
 
 export async function fetchIntent(id: string): Promise<Intent | null> {
-  const r = await fetchIntentInfo(id);
+  const [r, firstPage] = await Promise.all([
+    fetchIntentInfo(id),
+    fetchIntentInteractionsPaged(id, 1),
+  ]);
   if (!r) return null;
+
+  // Collect all interactions across pages to derive participant counts.
+  const allInteractions = [...firstPage.interactions];
+  for (let p = 2; p <= firstPage.totalPages; p++) {
+    const page = await fetchIntentInteractionsPaged(id, p);
+    allInteractions.push(...page.interactions);
+  }
+
+  const initiatorDID = (r.initiatorDID ?? "").trim().toLowerCase();
+  const agentDids = new Set<string>();
+  const toolDids = new Set<string>();
+  const isAgentId = (id: string) => id.trim().toLowerCase().startsWith("bafy");
+  for (const ix of allInteractions) {
+    const fromId = ix.initiator.id.trim().toLowerCase();
+    const toId = ix.target.id.trim().toLowerCase();
+    if (fromId && fromId !== initiatorDID) {
+      if (isAgentId(fromId)) agentDids.add(ix.initiator.id);
+      else toolDids.add(ix.initiator.id);
+    }
+    if (toId && toId !== initiatorDID) {
+      if (isAgentId(toId)) agentDids.add(ix.target.id);
+      else toolDids.add(ix.target.id);
+    }
+  }
+
   return mapIntent({
     intentID: r.intentID,
     initiatorDID: r.initiatorDID,
@@ -492,6 +535,10 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     endedAt: r.endedAt,
     status: r.status,
     threatDetected: r.threatDetected,
+    agentsCount: agentDids.size,
+    toolsCount: toolDids.size,
+    interactionsCount: firstPage.total,
+    provenanceRecordID: r.provenanceRecordID ?? "",
   });
 }
 
@@ -555,9 +602,17 @@ export async function fetchIntentInteractionsPaged(
 }
 
 export async function fetchIntentParticipants(id: string): Promise<IntentParticipant[]> {
-  const intentInfo = await fetchIntentInfo(id);
+  const [intentInfo, firstPage] = await Promise.all([
+    fetchIntentInfo(id),
+    fetchIntentInteractionsPaged(id, 1),
+  ]);
   const initiatorDID = (intentInfo?.initiatorDID ?? "").trim().toLowerCase();
-  const interactions = (intentInfo?.interactions || []).map(mapInteraction);
+  const allInteractions = [...firstPage.interactions];
+  for (let p = 2; p <= firstPage.totalPages; p++) {
+    const page = await fetchIntentInteractionsPaged(id, p);
+    allInteractions.push(...page.interactions);
+  }
+  const interactions = allInteractions;
   const map = new Map<string, IntentParticipant>();
   for (const r of interactions) {
     const sides: { ref: { id: string; name: string }; type: "agent" | "tool" }[] = [
@@ -596,8 +651,8 @@ export interface IntentBlock {
   block_index: number;
   agent_did: string;
   agent_name: string;
-  direction: "outbound" | "inbound";
-  block_type: "intent" | "delegate" | "execute" | "response" | "verify";
+  direction: string;
+  block_type: "trigger" | "delegate" | "tool_call" | "execute" | "response" | "verify" | string;
   message: string;
   response: string;
   delegate_to: string;
@@ -606,44 +661,74 @@ export interface IntentBlock {
   cbac_decision: string;
   threat_detected: boolean;
   trust_issues: string[];
+  signature: string;
+  created_at: string;
+  parent_block: IntentBlock | null;
 }
 
-export async function fetchIntentBlockData(intentId: string): Promise<IntentBlock[] | null> {
+/** Walk the parent_block chain and return blocks ordered oldest → newest. */
+export function flattenIntentBlocks(root: IntentBlock): IntentBlock[] {
+  const chain: IntentBlock[] = [];
+  let cur: IntentBlock | null = root;
+  while (cur) {
+    chain.push(cur);
+    cur = cur.parent_block;
+  }
+  return chain.reverse();
+}
+
+export async function fetchIntentBlockData(intentId: string): Promise<IntentBlock | null> {
   try {
-    const res = await apiRequest<{ status: boolean; data: IntentBlock[] }>("/intent-block-data", {
+    // apiRequest already unwraps { status, data } and returns the inner object directly.
+    const res = await apiRequest<IntentBlock>("/intent-block-data", {
       query: { intent_id: intentId },
     });
-    const d = res as unknown as { status: boolean; data: IntentBlock[] };
-    return d.data ?? null;
+    return res ?? null;
   } catch (e) {
     console.warn(`[GET /intent-block-data?intent_id=${intentId}] failed`, e);
     return null;
   }
 }
 
-export interface ApiDiagramNode {
-  did: string;
-  name: string;
-  interactionID?: string;
-  interactionType?: "delegate" | "execute" | "tool_call" | "response" | "trigger";
-  direction?: "outbound" | "inbound";
+export interface DiagramBasicInfo {
+  intentID: string;
+  initiatorDID: string;
+  initiatorName: string;
+  flowType: string;
+  status: string;
+  threatDetected: boolean;
+  chainDepth: number;
+  interactionsCount: number;
+  agentsCount: number;
+  toolsCount: number;
+  startedAt: string;
+}
+
+export interface DiagramInteraction {
+  interactionID: string;
+  initiator: string;    // DID of sender
+  initiatorName: string;
+  to: string;           // DID of recipient
+  toName: string;
+  type: "trigger" | "delegate" | "tool_call" | "response" | "execute";
+  message: string;
+  intentID: string;
   threat: boolean;
-  children: ApiDiagramNode[];
+  epoch: number;
 }
 
 export interface IntentDiagram {
-  intentID: string;
-  diagram: ApiDiagramNode;
+  basicInfo: DiagramBasicInfo;
+  interactions: DiagramInteraction[];
 }
 
 export async function fetchIntentDiagram(id: string): Promise<IntentDiagram | null> {
   try {
-    const res = await apiRequest<{ status: boolean; data: IntentDiagram }>("/intent-diagram", {
-      query: { intentID: id },
-    });
-    return (res as unknown as { status: boolean; data: IntentDiagram }).data ?? (res as unknown as IntentDiagram);
+    // apiRequest already unwraps { status, data } and returns data directly.
+    const res = await apiRequest<IntentDiagram>("/intent-diagram", { query: { intentID: id } });
+    return res ?? null;
   } catch (e) {
-    console.warn(`[GET /intent-diagram?intentID=${id}] failed`, e);
+    console.warn("[intent-diagram] failed", e);
     return null;
   }
 }

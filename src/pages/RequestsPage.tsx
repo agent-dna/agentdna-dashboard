@@ -224,7 +224,6 @@ export function RequestsPage() {
       key: "actions",
       label: "",
       align: "right",
-      width: 220,
       render: (r) => {
         const isCreator = r.creatorDID === user?.did;
         // Admin can edit any pending creation request; non-admins only their own.

@@ -47,8 +47,9 @@ export function IdCell({ id, truncate = false, truncateLength = 8 }: IdCellProps
     return <span className="cell-id" style={{ color: "var(--fg-faint)" }}>—</span>;
   }
   const parts = safe.split("_");
-  const prefix = parts[0];
-  const hash = parts.slice(1).join("_") || prefix;
+  const hasPrefix = parts.length > 1;
+  const prefix = hasPrefix ? parts[0] : null;
+  const hash = hasPrefix ? parts.slice(1).join("_") : safe;
   const displayHash = truncate ? truncateId(hash, truncateLength) : hash;
 
   const onCopy = (e: MouseEvent<HTMLButtonElement>) => {
@@ -69,7 +70,7 @@ export function IdCell({ id, truncate = false, truncateLength = 8 }: IdCellProps
 
   return (
     <span className="cell-id" title={truncate ? safe : undefined}>
-      {!truncate && <span className="pre">{prefix}_</span>}
+      {!truncate && prefix !== null && <span className="pre">{prefix}_</span>}
       {displayHash}
       <button
         type="button"

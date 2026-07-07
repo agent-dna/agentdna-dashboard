@@ -12,7 +12,7 @@ import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { useAgent, useAgentInteractions, useAgentIntents, useAgentPolicyHistory } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
-import { useIntentLabel } from "../context/IntentNumbersContext";
+import { IntentIdChip } from "../context/IntentNumbersContext";
 import { isDummyMode } from "../data/dummyRouter";
 import { fmtRuntime, initials, timeAgo } from "../lib/format";
 import { useInteractionColumns } from "./InteractionsPage";
@@ -43,8 +43,6 @@ export function AgentDetailPage() {
   const { data: intents } = useAgentIntents(agentId);
   const { data: history } = useAgentPolicyHistory(agentId);
   const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
-  const intentLabel = useIntentLabel();
-
   const openHistoryRevision = (entry: PolicyHistoryEntry) => {
     setHistoryOpen(entry);
     setHistoryPolicy(null);
@@ -96,9 +94,7 @@ export function AgentDetailPage() {
       key: "id",
       label: "Intent",
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
-          {intentLabel(r.id)}
-        </span>
+        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {

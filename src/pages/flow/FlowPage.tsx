@@ -4,9 +4,10 @@ import { Icon } from "../../components/Icon";
 import { TraceInspector } from "../../components/TraceInspector";
 import { useIntent, useIntentBlockData, useIntentDiagram, useIntentInteractions, useIntentsPaged } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
-import { useIntentLabel } from "../../context/IntentNumbersContext";
+import { IntentIdChip } from "../../context/IntentNumbersContext";
 import { FlowCanvas } from "./FlowCanvas";
-import { buildFlowFromIntent, buildTraceFromBlocks, buildTraceFromDiagram, type Flow } from "./flowData";
+import { buildFlowFromIntent, buildFlowFromDiagram, buildTraceFromBlocks, type Flow } from "./flowData";
+import { flattenIntentBlocks } from "../../data/api";
 
 const STEP_MS = 2400;
 const STORAGE_KEY_INTENT = "flow.intent";
@@ -16,8 +17,6 @@ export function FlowPage() {
   const { intentId: paramId } = useParams<{ intentId: string }>();
   const navigate = useNavigate();
   const resolve = useResolveName();
-  const intentLabel = useIntentLabel();
-
   const [intentsPage, setIntentsPage] = useState(1);
   const intentsState = useIntentsPaged(intentsPage);
   const intents = intentsState.data.items;
@@ -52,11 +51,17 @@ export function FlowPage() {
 
   const flow: Flow | null = useMemo(() => {
     if (!intent) return null;
+
+    // Diagram endpoint takes priority — it has real messages and correct tree structure.
+    // Do NOT override its trace with blocks; blocks use fake placeholder messages.
+    if (diagram) {
+      return buildFlowFromDiagram(intent, diagram);
+    }
+    // Fallback: build from interactions list.
     const base = buildFlowFromIntent({ intent, interactions, resolve });
-    if (blocks && blocks.length > 0) {
-      base.trace = buildTraceFromBlocks(intent, blocks);
-    } else if (diagram) {
-      base.trace = buildTraceFromDiagram(intent, diagram.diagram, resolve);
+    if (blocks) {
+      const flat = flattenIntentBlocks(blocks);
+      if (flat.length > 0) base.trace = buildTraceFromBlocks(intent, flat);
     }
     return base;
   }, [intent, interactions, blocks, diagram, resolve]);
@@ -156,7 +161,7 @@ export function FlowPage() {
                       className={`fi-row ${i.id === activeId ? "sel" : ""}`}
                       onClick={() => onPickIntent(i.id)}
                     >
-                      <span className="fi-hs">{intentLabel(i.id)}</span>
+                      <span className="fi-hs"><IntentIdChip id={i.id} /></span>
                       <span className="fi-hops">{hops} {hops === 1 ? "hop" : "hops"}</span>
                     </button>
                   );
@@ -247,6 +252,7 @@ export function FlowPage() {
           trace={flow.trace}
           openSpanId={inspectSpanId}
           onClose={() => setInspectSpanId(null)}
+          rawData={blocks}
         />
       )}
     </div>

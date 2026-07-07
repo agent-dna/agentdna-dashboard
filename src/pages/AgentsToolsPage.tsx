@@ -43,12 +43,14 @@ export function AgentsToolsPage() {
     {
       key: "name",
       label: "Agent",
+      width: "18%",
       sortFn: (a, b) => a.name.localeCompare(b.name),
-      render: (r) => <EntityCell name={r.name} paletteIx={r.name.charCodeAt(0)} />,
+      render: (r) => <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>,
     },
     {
       key: "id",
       label: "Agent ID",
+      width: "12%",
       sortFn: (a, b) => a.id.localeCompare(b.id),
       render: (r) => <IdCell id={r.id} truncate truncateLength={10} />,
     },
@@ -98,29 +100,10 @@ export function AgentsToolsPage() {
     },
     {
       key: "connected",
-      label: "Apps used",
+      label: "Apps Interacted",
       align: "right",
       sortFn: (a, b) => a.connected - b.connected,
       render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.connected}</span>,
-    },
-    {
-      key: "actions",
-      label: "",
-      align: "right",
-      width: 60,
-      render: (r) => (
-        <div className="row-actions">
-          <button
-            className="btn-mini"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/agents/${r.id}`);
-            }}
-          >
-            View
-          </button>
-        </div>
-      ),
     },
   ];
 

@@ -8,12 +8,12 @@ import { DataTable } from "../components/DataTable";
 import { useHomeMetrics, useInteractionsPaged, useAlerts, useSeries } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
-import { useTweaks } from "../context/TweaksContext";
+
 import { useInteractionColumns } from "./InteractionsPage";
 
 export function HomePage() {
-  const [series, setSeries] = useState<"24h" | "7d">("24h");
-  const { tweaks } = useTweaks();
+  const series = "7d";
+
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
 
@@ -32,10 +32,7 @@ export function HomePage() {
   const threats = alertsState.data;
   const data = seriesState.data;
 
-  const labels =
-    series === "24h"
-      ? Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`)
-      : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const cols = useInteractionColumns((k, e) => openDrawer(k, e));
 
@@ -168,36 +165,26 @@ export function HomePage() {
           <div className="card-head">
             <div>
               <h3>Interactions over time</h3>
-              <div className="sub">Safe vs threat-classified runs · {series === "24h" ? "Hourly" : "Daily"}</div>
-            </div>
-            <div className="actions">
-              <div className="seg">
-                <button className={series === "24h" ? "active" : ""} onClick={() => setSeries("24h")}>
-                  24h
-                </button>
-                <button className={series === "7d" ? "active" : ""} onClick={() => setSeries("7d")}>
-                  7d
-                </button>
-              </div>
+              <div className="sub">Safe vs threat-classified runs · Last 7 days</div>
             </div>
           </div>
           <div className="chart-legend">
             <span className="it">
-              <span className="sw" style={{ background: "#2563EB" }} /> Safe
+              <span className="sw" style={{ background: "#2563EB" }} /> Interactions
             </span>
             <span className="it">
-              <span className="sw" style={{ background: "#DC2626" }} /> Threat-flagged
+              <span className="sw" style={{ background: "#DC2626" }} /> Threats
             </span>
           </div>
           <div className="chart-wrap">
             <Chart
               labels={labels}
-              style={tweaks.chartStyle}
+              style="bar"
               height={272}
               formatY={(v) => (typeof v === "number" && v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)}
               series={[
-                { key: "safe", label: "Safe", color: "#2563EB", data: data.safe },
-                { key: "threat", label: "Threat", color: "#DC2626", data: data.threats },
+                { key: "interactions", label: "Interactions", color: "#2563EB", data: data.total },
+                { key: "threats", label: "Threats", color: "#DC2626", data: data.threats },
               ]}
             />
           </div>
