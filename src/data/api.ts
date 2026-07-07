@@ -482,6 +482,7 @@ interface ApiIntentInfo {
   endedAt?: string;
   status: string;
   threatDetected: boolean;
+  provenanceRecordID?: string;
   interactions?: ApiInteraction[];
 }
 
@@ -513,13 +514,15 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
   const agentDids = new Set<string>();
   const toolDids = new Set<string>();
   for (const ix of allInteractions) {
-    for (const { ref, type } of [
-      { ref: ix.initiator, type: ix.targetType === "tool" ? "agent" : "agent" },
-      { ref: ix.target, type: ix.targetType },
-    ] as { ref: { id: string }; type: string }[]) {
-      if (ref.id.trim().toLowerCase() === initiatorDID) continue;
-      if (type === "tool") toolDids.add(ref.id);
-      else agentDids.add(ref.id);
+    const isTool = ix.blockType === "tool_call";
+    const fromId = ix.initiator.id.trim().toLowerCase();
+    const toId = ix.target.id.trim().toLowerCase();
+    // Count the caller as an agent (unless it's the human intent initiator).
+    if (fromId && fromId !== initiatorDID) agentDids.add(ix.initiator.id);
+    // Count the target as tool or agent based on block type.
+    if (toId && toId !== initiatorDID) {
+      if (isTool) toolDids.add(ix.target.id);
+      else agentDids.add(ix.target.id);
     }
   }
 
@@ -534,7 +537,7 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     agentsCount: agentDids.size,
     toolsCount: toolDids.size,
     interactionsCount: firstPage.total,
-    provenanceRecordID: "",
+    provenanceRecordID: r.provenanceRecordID ?? "",
   });
 }
 
