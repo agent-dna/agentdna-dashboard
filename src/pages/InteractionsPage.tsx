@@ -30,18 +30,20 @@ export function useInteractionColumns(
     {
       key: "id",
       label: "Interaction ID",
+      width: "15%",
       sortFn: (a, b) => a.id.localeCompare(b.id),
       render: (r) => <IdCell id={r.id} truncate />,
     },
     {
       key: "initiator",
       label: "Initiator",
+      width: "20%",
       sortFn: (a, b) =>
         displayName(resolve, a.initiator.id, a.initiator.name).localeCompare(
           displayName(resolve, b.initiator.id, b.initiator.name),
         ),
       render: (r) => (
-        <span style={{ fontSize: 13.5, color: "var(--fg)", fontWeight: 600 }}>
+        <span style={{ fontSize: 13.5, color: "var(--fg)", fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {displayName(resolve, r.initiator.id, r.initiator.name)}
         </span>
       ),
@@ -49,8 +51,9 @@ export function useInteractionColumns(
     {
       key: "target",
       label: "Interacted with",
+      width: "20%",
       render: (r) => (
-        <span style={{ fontSize: 13.5, color: "var(--fg)", fontWeight: 600 }}>
+        <span style={{ fontSize: 13.5, color: "var(--fg)", fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {displayName(resolve, r.target.id, r.target.name)}
         </span>
       ),
@@ -58,6 +61,7 @@ export function useInteractionColumns(
     {
       key: "intent",
       label: "Intent",
+      width: "18%",
       render: (r) => (
         <IntentIdChip id={r.intent.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--accent)", fontWeight: 600 }} />
       ),
@@ -65,6 +69,7 @@ export function useInteractionColumns(
     {
       key: "threat",
       label: "Threat",
+      width: "10%",
       sortFn: (a, b) => Number(b.threat) - Number(a.threat),
       render: (r) =>
         r.threat ? (
@@ -80,6 +85,7 @@ export function useInteractionColumns(
     {
       key: "created",
       label: "Time",
+      width: "10%",
       align: "right",
       sortFn: (a, b) => a.created - b.created,
       render: (r) => (
@@ -91,8 +97,8 @@ export function useInteractionColumns(
     {
       key: "actions",
       label: "",
+      width: "7%",
       align: "right",
-      width: 60,
       render: (r) => (
         <div className="row-actions">
           <button

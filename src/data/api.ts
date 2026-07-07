@@ -496,8 +496,33 @@ async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null> {
 }
 
 export async function fetchIntent(id: string): Promise<Intent | null> {
-  const r = await fetchIntentInfo(id);
+  const [r, firstPage] = await Promise.all([
+    fetchIntentInfo(id),
+    fetchIntentInteractionsPaged(id, 1),
+  ]);
   if (!r) return null;
+
+  // Collect all interactions across pages to derive participant counts.
+  const allInteractions = [...firstPage.interactions];
+  for (let p = 2; p <= firstPage.totalPages; p++) {
+    const page = await fetchIntentInteractionsPaged(id, p);
+    allInteractions.push(...page.interactions);
+  }
+
+  const initiatorDID = (r.initiatorDID ?? "").trim().toLowerCase();
+  const agentDids = new Set<string>();
+  const toolDids = new Set<string>();
+  for (const ix of allInteractions) {
+    for (const { ref, type } of [
+      { ref: ix.initiator, type: ix.targetType === "tool" ? "agent" : "agent" },
+      { ref: ix.target, type: ix.targetType },
+    ] as { ref: { id: string }; type: string }[]) {
+      if (ref.id.trim().toLowerCase() === initiatorDID) continue;
+      if (type === "tool") toolDids.add(ref.id);
+      else agentDids.add(ref.id);
+    }
+  }
+
   return mapIntent({
     intentID: r.intentID,
     initiatorDID: r.initiatorDID,
@@ -506,8 +531,10 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     endedAt: r.endedAt,
     status: r.status,
     threatDetected: r.threatDetected,
-    provenanceRecordID: r.interactions[0]?.provenanceRecordID ?? "",
-
+    agentsCount: agentDids.size,
+    toolsCount: toolDids.size,
+    interactionsCount: firstPage.total,
+    provenanceRecordID: "",
   });
 }
 

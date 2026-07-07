@@ -10,7 +10,7 @@ import { InfoStat } from "../components/InfoStat";
 import { useIntent, useIntentInteractionsPaged, useIntentParticipants } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
-import { fmtRuntime, timeAgo } from "../lib/format";
+import { timeAgo } from "../lib/format";
 import { useInteractionColumns } from "./InteractionsPage";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
 import { IntentIdChip } from "../context/IntentNumbersContext";
@@ -198,7 +198,7 @@ export function IntentDetailPage() {
                   </span>
                 )}
               </div>
-              <InfoStat label="Runtime" value={fmtRuntime(intent.runtime)} mono />
+              <InfoStat label="Intent ID" value={<IntentIdChip id={intent.id} />} />
               <InfoStat label="Started" value={timeAgo(intent.started)} />
               <InfoStat
                 label="Threat detected"
