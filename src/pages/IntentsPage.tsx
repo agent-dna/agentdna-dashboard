@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { ScoreBar } from "../components/ScoreBar";
 import { useIntentsPaged } from "../data/hooks";
 
 import { fmtRuntime, timeAgo } from "../lib/format";
@@ -109,20 +108,6 @@ export function IntentsPage() {
           {r.threats}
         </span>
       ),
-    },
-    {
-      key: "score",
-      label: "Reliability",
-      align: "right",
-      sortFn: (a, b) => a.score - b.score,
-      render: (r) => {
-        const ix = r.interactionsCount;
-        if (ix <= 0) {
-          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
-        }
-        const pct = Math.max(0, Math.round((((ix - r.threats) / ix) * 100) * 100) / 100);
-        return <ScoreBar value={pct} />;
-      },
     },
     {
       key: "time",

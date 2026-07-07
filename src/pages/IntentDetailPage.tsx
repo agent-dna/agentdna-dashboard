@@ -7,8 +7,7 @@ import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
-import { LogsTable } from "../components/LogsTable";
-import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useLogs } from "../data/hooks";
+import { useIntent, useIntentInteractionsPaged, useIntentParticipants } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { fmtRuntime, timeAgo } from "../lib/format";
@@ -17,7 +16,7 @@ import { exportIntentPdf } from "../lib/exportIntentPdf";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { IntentParticipant, Tool } from "../types";
 
-type Tab = "interactions" | "participants" | "logs";
+type Tab = "interactions" | "participants";
 
 export function IntentDetailPage() {
   const { intentId = "" } = useParams<{ intentId: string }>();
@@ -32,7 +31,6 @@ export function IntentDetailPage() {
   const interactionsTotal = interactionsPaged.total;
   const interactionsTotalPages = interactionsPaged.totalPages;
   const { data: participants } = useIntentParticipants(intentId);
-  const { data: logs } = useLogs("intent", intentId);
   const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
   if (loading) {
     return (
@@ -246,7 +244,6 @@ export function IntentDetailPage() {
           tabs={[
             { key: "interactions", label: "Interactions", count: interactionsTotal },
             { key: "participants", label: "Agents & Apps", count: participantRows.length },
-            { key: "logs", label: "Logs", count: logs.length },
           ]}
         />
 
@@ -273,7 +270,6 @@ export function IntentDetailPage() {
           />
         )}
 
-        {tab === "logs" && <LogsTable logs={logs} />}
       </div>
     </div>
   );

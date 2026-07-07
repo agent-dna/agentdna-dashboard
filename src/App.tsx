@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Icon, type IconName } from "./components/Icon";
 import logoMark from "./assets/agentdna-logo.png";
@@ -10,6 +10,7 @@ import { IntentDetail } from "./components/drawer/IntentDetail";
 import { useDrawer } from "./context/DrawerContext";
 import { useTweaks } from "./context/TweaksContext";
 import { useAuth } from "./context/AuthContext";
+import { listAgentCreationRequests, listAccessRequestsForOrg } from "./api/requests";
 import type { Agent, Tool, Intent, Interaction } from "./types";
 
 interface NavEntry {
@@ -24,13 +25,26 @@ export function App() {
   const { drawer, closeDrawer } = useDrawer();
   const { user } = useAuth();
   const location = useLocation();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (!user?.is_admin) return;
+    Promise.all([listAgentCreationRequests(1), listAccessRequestsForOrg(1)])
+      .then(([creation, access]) => {
+        const count =
+          creation.requestsList.filter((r) => r.status === "pending").length +
+          access.requestsList.filter((r) => r.status === "pending").length;
+        setPendingCount(count);
+      })
+      .catch(() => {});
+  }, [user]);
 
   const NAV_WORKSPACE: NavEntry[] = [
     { to: "/dashboard", label: "Home", icon: "home" },
     { to: "/intents", label: "Intents", icon: "intents" },
     { to: "/agents", label: "Agents & Apps", icon: "agents" },
     { to: "/graph", label: "Flow", icon: "activity" },
-    { to: "/requests", label: "Requests", icon: "box" },
+    { to: "/requests", label: "Requests", icon: "box", badge: pendingCount > 0 ? pendingCount : undefined },
     { to: "/interactions", label: "Interactions", icon: "interactions" },
   ];
 

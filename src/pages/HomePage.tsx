@@ -215,8 +215,6 @@ export function HomePage() {
               </div>
             )}
             {metrics.agentList.map((a, i) => {
-              const max = metrics.agentList.reduce((m, x) => Math.max(m, x.totalInteractions), 0) || 1;
-              const pct = (a.totalInteractions / max) * 100;
               return (
                   <div
                     key={a.agentID}
@@ -250,16 +248,7 @@ export function HomePage() {
                       {String(i + 1).padStart(2, "0")}
                     </div>
                     <div>
-                      <div style={{ fontSize: 13, marginBottom: 6 }}>{a.agentName}</div>
-                      <div style={{ height: 4, borderRadius: 2, background: "var(--bg-3)", overflow: "hidden" }}>
-                        <div
-                          style={{
-                            width: `${pct}%`,
-                            height: "100%",
-                            background: "linear-gradient(90deg, var(--accent), var(--accent-2))",
-                          }}
-                        />
-                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--fg)" }}>{a.agentName}</div>
                     </div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-dim)" }}>
                       {a.totalInteractions.toLocaleString()}
