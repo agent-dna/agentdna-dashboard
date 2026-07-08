@@ -851,8 +851,8 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .pb-progress .fill { height: 100%; background: linear-gradient(90deg, var(--accent-3), var(--accent)); border-radius: 999px; transition: width 220ms ease; }
 
 /* Step list */
-.flow-steps { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 2px 4px 4px 0; }
-.flow-steps .sl-cap { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-muted); font-weight: 600; padding: 4px 2px 2px; display: flex; align-items: center; justify-content: space-between; }
+.flow-steps { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 8px; }
+.sl-cap { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-muted); font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
 .step-card {
   display: block; padding: 12px 13px; border-radius: 11px; border: 1px solid var(--line);
   background: var(--bg-1); cursor: pointer; transition: border-color 120ms, background 120ms, box-shadow 120ms;

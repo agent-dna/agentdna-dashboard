@@ -4,7 +4,7 @@ import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { EntityCell, IdCell } from "../components/EntityCell";
+import { EntityCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { AccessRequestModal } from "../components/forms/AccessRequestModal";
@@ -48,11 +48,13 @@ export function AgentsToolsPage() {
       render: (r) => <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>,
     },
     {
-      key: "id",
-      label: "Agent ID",
-      width: "12%",
-      sortFn: (a, b) => a.id.localeCompare(b.id),
-      render: (r) => <IdCell id={r.id} truncate truncateLength={10} />,
+      key: "interactions",
+      label: "Interactions",
+      align: "right",
+      sortFn: (a, b) => a.interactions - b.interactions,
+      render: (r) => (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
+      ),
     },
     {
       key: "score",
@@ -73,15 +75,6 @@ export function AgentsToolsPage() {
       sortFn: (a, b) => a.created - b.created,
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-dim)" }}>{timeAgo(r.created)}</span>
-      ),
-    },
-    {
-      key: "interactions",
-      label: "Interactions",
-      align: "right",
-      sortFn: (a, b) => a.interactions - b.interactions,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
       ),
     },
     {
@@ -116,7 +109,15 @@ export function AgentsToolsPage() {
         <EntityCell name={r.name} sub={r.provider} paletteIx={r.name.charCodeAt(0)} icon={r.provider.slice(0, 2).toUpperCase()} />
       ),
     },
-    { key: "id", label: "App ID", sortFn: (a, b) => a.id.localeCompare(b.id), render: (r) => <IdCell id={r.id} /> },
+    {
+      key: "interactions",
+      label: "Interactions",
+      align: "right",
+      sortFn: (a, b) => a.interactions - b.interactions,
+      render: (r) => (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
+      ),
+    },
     {
       key: "score",
       label: "Reliability",
@@ -136,15 +137,6 @@ export function AgentsToolsPage() {
       sortFn: (a, b) => a.created - b.created,
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-dim)" }}>{timeAgo(r.created)}</span>
-      ),
-    },
-    {
-      key: "interactions",
-      label: "Interactions",
-      align: "right",
-      sortFn: (a, b) => a.interactions - b.interactions,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
       ),
     },
     {

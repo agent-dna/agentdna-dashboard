@@ -149,10 +149,6 @@ export function IntentsPage() {
           <div className="sub">High-level goals being executed across the agent network</div>
         </div>
         <div className="right">
-          <button className="btn">
-            <Icon name="filter" size={14} />
-            Filter
-          </button>
         </div>
       </div>
 

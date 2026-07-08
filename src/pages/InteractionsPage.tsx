@@ -139,10 +139,6 @@ export function InteractionsPage() {
         </div>
         <div className="right">
           <button className="btn">
-            <Icon name="filter" size={14} />
-            Filter
-          </button>
-          <button className="btn">
             <Icon name="download" size={14} />
             Export
           </button>
