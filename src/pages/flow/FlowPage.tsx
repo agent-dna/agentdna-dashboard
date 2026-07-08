@@ -93,14 +93,14 @@ export function FlowPage() {
           {flow && (
             <>
               {/* Trace section — sticky header + scrollable hops */}
-              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: "#0a2240", borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: "#ffffff", borderRadius: 10, overflow: "hidden", border: "1px solid #e2e8f0" }}>
                 {/* Sticky header */}
-                <div style={{ flexShrink: 0, borderBottom: "1px solid rgba(255,255,255,0.1)", padding: "10px 14px", background: "#0a2240" }}>
+                <div style={{ flexShrink: 0, borderBottom: "1px solid #e2e8f0", padding: "10px 14px", background: "#ffffff" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9", marginBottom: 2 }}>Interaction Timeline</div>
-                      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "#94a3b8" }}>
-                        {N} Hops · Sequential
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 2 }}>Interaction Timeline</div>
+                      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "#64748b" }}>
+                        {N} Hops · 
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -129,7 +129,7 @@ export function FlowPage() {
                       top: 16,
                       bottom: 16,
                       width: 2,
-                      background: "rgba(255,255,255,0.15)",
+                      background: "#cbd5e1",
                       borderRadius: 2,
                     }} />
 
@@ -153,7 +153,7 @@ export function FlowPage() {
                             width: 16,
                             height: 16,
                             borderRadius: "50%",
-                            background: "#0a2240",
+                            background: "#ffffff",
                             border: `2.5px solid ${blk ? "#ef4444" : "#22c55e"}`,
                             boxSizing: "border-box",
                           }} />
@@ -161,14 +161,14 @@ export function FlowPage() {
                           {/* Card */}
                           <div style={{
                             borderRadius: 10,
-                            border: `1.5px solid ${blk ? "#fca5a5" : isActive ? "#93c5fd" : "#e2e8f0"}`,
-                            background: blk ? "#fff5f5" : isActive ? "#eff6ff" : "#ffffff",
+                            border: `1.5px solid ${blk ? "#fca5a5" : isActive ? "#3b82f6" : "#bfdbfe"}`,
+                            background: blk ? "#fff5f5" : isActive ? "#dbeafe" : "#eff6ff",
                             padding: "6px 9px",
                             transition: "background 0.15s, border-color 0.15s",
                           }}>
                             {/* Header row */}
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#1e40af" }}>
                                 Hop {String(i + 1).padStart(2, "0")}
                               </span>
                               {blk ? (
