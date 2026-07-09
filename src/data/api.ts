@@ -93,7 +93,7 @@ export interface AgentsAppsMetrics {
 }
 
 export function fetchAgentsAppsMetrics(): Promise<AgentsAppsMetrics> {
-  return apiRequest<AgentsAppsMetrics>("/dashboard/v1/agents-apps-metrics");
+  return apiRequest<AgentsAppsMetrics>("/agents-apps-metrics");
 }
 
 // ============ Lists (org-scoped) ============
