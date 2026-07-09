@@ -212,7 +212,7 @@ export function AgentsToolsPage() {
         <MetricTile label="Total Apps" value={agentsAppsMetrics.metrics.totalApps} icon="box" sparkColor="#0A2240" spark={[]} />
         <MetricTile
           label="Avg. Reliability"
-          value={agentsAppsMetrics.metrics.avgReliability}
+          value={parseFloat(agentsAppsMetrics.metrics.avgReliability.toFixed(2))}
           unit="%"
           icon="target"
           sparkColor="#0EA5E9"
