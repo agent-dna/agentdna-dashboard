@@ -3,32 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
+import { Pagination } from "../components/Pagination";
 import { useIntentsPaged } from "../data/hooks";
 
-import { fmtRuntime, timeAgo } from "../lib/format";
+import { timeAgo } from "../lib/format";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { Intent } from "../types";
-
-function Pagination({
-  page,
-  totalPages,
-  onChange,
-}: {
-  page: number;
-  totalPages: number;
-  onChange: (p: number) => void;
-}) {
-  if (totalPages <= 1) return null;
-  return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page <= 1} onClick={() => onChange(page - 1)}>Prev</button>
-      <span style={{ padding: "4px 10px", fontSize: 12, fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--fg)", background: "var(--surface-raised)", border: "1px solid var(--line-strong)", borderRadius: 6, minWidth: 52, textAlign: "center" as const }}>
-        {page} / {totalPages}
-      </span>
-      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page >= totalPages} onClick={() => onChange(page + 1)}>Next</button>
-    </div>
-  );
-}
 
 export function IntentsPage() {
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
@@ -37,6 +17,7 @@ export function IntentsPage() {
   const intents = paged.items;
   const totalPages = paged.totalPages || 1;
   const total = paged.total || intents.length;
+  const pageSize = paged.pageSize || 10;
   const navigate = useNavigate();
 
 
@@ -81,13 +62,6 @@ export function IntentsPage() {
           {r.initiator.name || "—"}
         </span>
       ),
-    },
-    {
-      key: "runtime",
-      label: "Runtime",
-      align: "right",
-      sortFn: (a, b) => a.runtime - b.runtime,
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{fmtRuntime(r.runtime)}</span>,
     },
     {
       key: "interactions",
@@ -175,8 +149,7 @@ export function IntentsPage() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className="count">{rows.length} of {total}</span>
-            <Pagination page={page} totalPages={totalPages} onChange={(p) => { setPage(p); }} />
+            <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize} inline onChange={setPage} />
           </div>
         </div>
 

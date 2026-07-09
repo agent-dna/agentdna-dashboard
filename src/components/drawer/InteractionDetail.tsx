@@ -218,7 +218,7 @@ export function InteractionDetail({ interaction: i }: Props) {
               <div className="dot" />
               <div className="body">
                 <div className="nm">Envelope sealed</div>
-                <div className="desc">Interaction record signed and committed</div>
+                <div className="desc">Interaction recorded, signed and committed</div>
               </div>
             </div>
           </div>

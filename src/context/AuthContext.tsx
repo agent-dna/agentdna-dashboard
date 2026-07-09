@@ -157,19 +157,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState(res.token);
   }, []);
 
-  // After any login, fetch the profile in the background to populate name.
+  // After any login, fetch the profile in the background to populate name and org_id.
   const fetchAndPatchName = useCallback((isAdmin: boolean) => {
     const fetcher = isAdmin ? fetchAdminProfile : fetchUserProfile;
     fetcher()
       .then((p) => {
-        if (p.name) {
-          setUser((prev) => {
-            if (!prev) return prev;
-            const next = { ...prev, name: p.name };
-            writeStoredUser(next);
-            return next;
-          });
-        }
+        setUser((prev) => {
+          if (!prev) return prev;
+          const patch: Partial<AuthUser> = {};
+          if (p.name) patch.name = p.name;
+          if (p.organizationID) patch.org_id = p.organizationID;
+          if (Object.keys(patch).length === 0) return prev;
+          const next = { ...prev, ...patch };
+          writeStoredUser(next);
+          return next;
+        });
       })
       .catch(() => {});
   }, []);

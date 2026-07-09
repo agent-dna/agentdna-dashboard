@@ -66,7 +66,7 @@ export const useIntents = (page = 1) => useAsync<Intent[]>(() => api.fetchIntent
 export const useIntentsPaged = (page = 1) =>
   useAsync<api.PagedIntentsResult>(
     () => api.fetchIntentsPaged(page),
-    { items: [], total: 0, page: 1, totalPages: 1 },
+    { items: [], total: 0, page: 1, totalPages: 1, pageSize: 10 },
     [page],
   );
 export const useInteractions = (page = 1) => useAsync<Interaction[]>(() => api.fetchInteractions(page), [], [page]);

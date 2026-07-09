@@ -338,6 +338,7 @@ export interface PagedIntentsResult {
   total: number;
   page: number;
   totalPages: number;
+  pageSize: number;
 }
 
 export async function fetchIntentsPaged(page = 1): Promise<PagedIntentsResult> {
@@ -347,6 +348,7 @@ export async function fetchIntentsPaged(page = 1): Promise<PagedIntentsResult> {
     total: res.total || 0,
     page: res.page || page,
     totalPages: res.totalPages || 1,
+    pageSize: res.pageSize || 10,
   };
 }
 
@@ -731,4 +733,21 @@ export async function fetchIntentDiagram(id: string): Promise<IntentDiagram | nu
     console.warn("[intent-diagram] failed", e);
     return null;
   }
+}
+
+// ============ Search ============
+
+export interface SearchResultAgent { did: string; name: string; orgID: string }
+export interface SearchResultApp   { did: string; name: string }
+export interface SearchResultIntent { intentID: string; flowType: string; status: string; threatDetected: boolean; startedAt: string }
+
+export interface SearchResults {
+  agents: SearchResultAgent[];
+  apps:   SearchResultApp[];
+  intents: SearchResultIntent[];
+}
+
+export async function fetchSearch(q: string): Promise<SearchResults> {
+  const res = await apiRequest<SearchResults>("/search", { query: { q } });
+  return res ?? { agents: [], apps: [], intents: [] };
 }

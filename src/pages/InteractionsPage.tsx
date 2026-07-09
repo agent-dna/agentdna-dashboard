@@ -161,9 +161,6 @@ export function InteractionsPage() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className="count">
-              {total > 0 ? `${rows.length} on this page · ${total} total` : `${rows.length}`}
-            </span>
             <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize || undefined} loading={loading} inline onChange={setPage} />
           </div>
         </div>

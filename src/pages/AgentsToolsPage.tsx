@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { Pagination } from "../components/Pagination";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
@@ -27,10 +28,12 @@ export function AgentsToolsPage() {
   const agents = agentsState.data.items;
   const agentsTotalPages = agentsState.data.totalPages || 1;
   const agentsTotal = agentsState.data.total || 0;
+  const agentsPageSize = agentsState.data.pageSize || 10;
   const toolsState = useToolsPaged(toolsPage);
   const tools = toolsState.data.items;
   const toolsTotalPages = toolsState.data.totalPages || 1;
   const toolsTotal = toolsState.data.total || 0;
+  const toolsPageSize = toolsState.data.pageSize || 10;
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
@@ -297,16 +300,14 @@ export function AgentsToolsPage() {
           <div className="filters">
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <span className="count">
-              {rows.length} of {isAgents ? agentsTotal : toolsTotal}
-            </span>
-            {(
-              <Pager
-                page={isAgents ? agentsPage : toolsPage}
-                totalPages={isAgents ? agentsTotalPages : toolsTotalPages}
-                onChange={(p) => (isAgents ? setAgentsPage(p) : setToolsPage(p))}
-              />
-            )}
+            <Pagination
+              page={isAgents ? agentsPage : toolsPage}
+              totalPages={isAgents ? agentsTotalPages : toolsTotalPages}
+              total={isAgents ? agentsTotal : toolsTotal}
+              pageSize={isAgents ? agentsPageSize : toolsPageSize}
+              inline
+              onChange={(p) => (isAgents ? setAgentsPage(p) : setToolsPage(p))}
+            />
           </div>
         </div>
 
@@ -353,24 +354,6 @@ function computeReliability(interactions: number, threats: number): number {
   if (!interactions || interactions <= 0) return 0;
   const pct = ((interactions - threats) / interactions) * 100;
   return Math.max(0, Math.round(pct * 100) / 100);
-}
-
-function Pager({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
-  const [input, setInput] = useState(String(page));
-  useEffect(() => { setInput(String(page)); }, [page]);
-  if (totalPages <= 1) return null;
-  const commit = () => {
-    const n = parseInt(input, 10);
-    if (!Number.isNaN(n) && n >= 1 && n <= totalPages) onChange(n);
-    else setInput(String(page));
-  };
-  return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page <= 1} onClick={() => onChange(Math.max(1, page - 1))}>Prev</button>
-      <input type="number" min={1} max={totalPages} value={input} onChange={(e) => setInput(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") commit(); }} style={{ width: 56, padding: "3px 6px", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--fg)", background: "var(--bg)", border: "2px solid var(--accent)", borderRadius: 6, boxShadow: "0 0 0 3px rgba(37,99,235,0.12)", textAlign: "center", outline: "none" }} />
-      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page >= totalPages} onClick={() => onChange(Math.min(totalPages, page + 1))}>Next</button>
-    </div>
-  );
 }
 
 interface TopListItem {
