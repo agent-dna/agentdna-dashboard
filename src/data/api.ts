@@ -72,6 +72,30 @@ export function fetchPublicMetrics(): Promise<PublicMetrics> {
   return apiRequest<PublicMetrics>("/global-stats", { auth: false });
 }
 
+// ============ Agents & Apps metrics ============
+
+export interface AgentsAppsTopItem {
+  name: string;
+  totalInteractions: number;
+  totalThreats: number;
+}
+
+export interface AgentsAppsMetrics {
+  topAgents: AgentsAppsTopItem[];
+  topApps: AgentsAppsTopItem[];
+  metrics: {
+    totalInteractions: number;
+    totalThreats: number;
+    totalAgents: number;
+    totalApps: number;
+    avgReliability: number;
+  };
+}
+
+export function fetchAgentsAppsMetrics(): Promise<AgentsAppsMetrics> {
+  return apiRequest<AgentsAppsMetrics>("/dashboard/v1/agents-apps-metrics");
+}
+
 // ============ Lists (org-scoped) ============
 
 interface PagedInteractions {

@@ -9,7 +9,7 @@ import { EntityCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { AccessRequestModal } from "../components/forms/AccessRequestModal";
-import { useAgentsPaged, useToolsPaged, useHomeMetrics } from "../data/hooks";
+import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
@@ -34,7 +34,7 @@ export function AgentsToolsPage() {
   const toolsTotalPages = toolsState.data.totalPages || 1;
   const toolsTotal = toolsState.data.total || 0;
   const toolsPageSize = toolsState.data.pageSize || 10;
-  const { data: homeMetrics } = useHomeMetrics();
+  const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
@@ -208,79 +208,53 @@ export function AgentsToolsPage() {
       </div>
 
       <div className="metrics">
-        {isAgents ? (
-          <>
-            <MetricTile label="Total Agents" value={agentsTotal || agents.length} icon="agents" sparkColor="#2563EB" spark={[]} />
-            <MetricTile
-              label="Avg. Reliability"
-              value={agents.length ? Math.round(agents.reduce((a, x) => a + x.score, 0) / agents.length) : 0}
-              unit="/ 100"
-              icon="target"
-              sparkColor="#0EA5E9"
-              spark={[]}
-            />
-            <MetricTile
-              label="Threats (this week)"
-              value={agents.reduce((a, x) => a + x.threats, 0)}
-              icon="shield"
-              sparkColor="#DC2626"
-              spark={[]}
-            />
-            <MetricTile
-              label="Applications"
-              value={toolsTotal}
-              icon="box"
-              sparkColor="#0A2240"
-              spark={[]}
-            />
-          </>
-        ) : (
-          <>
-            <MetricTile label="Total Apps" value={toolsTotal || tools.length} icon="box" sparkColor="#2563EB" spark={[]} />
-            <MetricTile
-              label="Avg. Reliability"
-              value={tools.length ? Math.round(tools.reduce((a, x) => a + x.score, 0) / tools.length) : 0}
-              unit="/ 100"
-              icon="target"
-              sparkColor="#0EA5E9"
-              spark={[]}
-            />
-            <MetricTile
-              label="Threats (this week)"
-              value={tools.reduce((a, x) => a + x.threats, 0)}
-              icon="shield"
-              sparkColor="#DC2626"
-              spark={[]}
-            />
-            <MetricTile
-              label="Agents Reached"
-              value={tools.reduce((a, x) => a + x.connected, 0)}
-              icon="agents"
-              sparkColor="#0A2240"
-              spark={[]}
-            />
-          </>
-        )}
+        <MetricTile label="Total Agents" value={agentsAppsMetrics.metrics.totalAgents} icon="agents" sparkColor="#2563EB" spark={[]} />
+        <MetricTile label="Total Apps" value={agentsAppsMetrics.metrics.totalApps} icon="box" sparkColor="#0A2240" spark={[]} />
+        <MetricTile
+          label="Avg. Reliability"
+          value={agentsAppsMetrics.metrics.avgReliability}
+          unit="%"
+          icon="target"
+          sparkColor="#0EA5E9"
+          spark={[]}
+        />
+        <MetricTile label="Total Threats" value={agentsAppsMetrics.metrics.totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
         <TopList
           title="Top agents by volume"
           subtitle="Ranked by interactions · threats flagged in this period"
-          rows={homeMetrics.agentList.slice(0, 5).map((a) => ({ id: a.agentID, name: a.agentName, interactions: a.totalInteractions, threats: a.totalThreats }))}
+          rows={agentsAppsMetrics.topAgents.map((a) => ({
+            id: a.name,
+            name: a.name,
+            interactions: a.totalInteractions,
+            threats: a.totalThreats,
+          }))}
           accent="var(--accent)"
           accent2="var(--accent-2)"
-          onRowClick={(r) => navigate(`/agents/${r.id}`)}
+          onRowClick={(r) => {
+            const match = agents.find((a) => a.name === r.name);
+            if (match) navigate(`/agents/${match.id}`);
+          }}
           showBar={false}
           showStats={true}
         />
         <TopList
           title="Top apps by volume"
           subtitle="Ranked by interactions"
-          rows={[...tools].sort((a, b) => b.interactions - a.interactions).slice(0, 5)}
+          rows={agentsAppsMetrics.topApps.map((a) => ({
+            id: a.name,
+            name: a.name,
+            interactions: a.totalInteractions,
+            threats: a.totalThreats,
+          }))}
           accent="var(--accent-3)"
           accent2="var(--accent)"
-          onRowClick={(r) => openDrawer("tool", r)}
+          onRowClick={(r) => {
+            const match = tools.find((t) => t.name === r.name);
+            if (match) openDrawer("tool", match);
+          }}
         />
       </div>
 
