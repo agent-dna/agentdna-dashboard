@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../Icon";
 import { EntityCell } from "../EntityCell";
@@ -139,7 +140,10 @@ export function InteractionDetail({ interaction: i }: Props) {
         <DrawerSection title="Metadata">
           <div className="kv">
             <div className="k">Interaction ID</div>
-            <div className="v" style={{ fontFamily: "var(--font-mono)" }}>{truncateId(i.id)}</div>
+            <div className="v" style={{ fontFamily: "var(--font-mono)", display: "flex", alignItems: "center", gap: 6 }}>
+              {truncateId(i.id)}
+              <CopyButton text={i.id} />
+            </div>
             <div className="k">Time</div>
             <div className="v">{timeAgo(i.created)}</div>
        
@@ -154,27 +158,30 @@ export function InteractionDetail({ interaction: i }: Props) {
               {i.threat ? "true" : "false"}
             </div>
             <div className="k">Intent ID</div>
-            <div className="v">
+            <div className="v" style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {i.intent?.id ? (
-                <button
-                  type="button"
-                  onClick={openIntent}
-                  title="Open intent"
-                  style={{
-                    background: "transparent",
-                    border: 0,
-                    padding: 0,
-                    color: "var(--accent)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "inherit",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                    textUnderlineOffset: 2,
-                  }}
-                >
-                  {truncateId(intentLabel(i.intent.id))}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={openIntent}
+                    title="Open intent"
+                    style={{
+                      background: "transparent",
+                      border: 0,
+                      padding: 0,
+                      color: "var(--accent)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "inherit",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      textUnderlineOffset: 2,
+                    }}
+                  >
+                    {truncateId(intentLabel(i.intent.id))}
+                  </button>
+                  <CopyButton text={i.intent.id} />
+                </>
               ) : (
                 "—"
               )}
@@ -280,4 +287,33 @@ function colorizeJson(json: string): string {
         return `<span style="color:#c084fc">${match}</span>`;
       },
     );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={copy}
+      title={copied ? "Copied!" : "Copy to clipboard"}
+      style={{
+        background: "transparent",
+        border: "none",
+        padding: "2px 4px",
+        cursor: "pointer",
+        color: copied ? "var(--safe)" : "var(--fg-muted)",
+        display: "inline-flex",
+        alignItems: "center",
+        borderRadius: 4,
+        transition: "color 120ms",
+      }}
+    >
+      <Icon name={copied ? "check" : "copy"} size={13} />
+    </button>
+  );
 }
