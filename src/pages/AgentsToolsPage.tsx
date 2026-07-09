@@ -9,7 +9,7 @@ import { EntityCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { AccessRequestModal } from "../components/forms/AccessRequestModal";
-import { useAgentsPaged, useToolsPaged } from "../data/hooks";
+import { useAgentsPaged, useToolsPaged, useHomeMetrics } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
@@ -34,6 +34,7 @@ export function AgentsToolsPage() {
   const toolsTotalPages = toolsState.data.totalPages || 1;
   const toolsTotal = toolsState.data.total || 0;
   const toolsPageSize = toolsState.data.pageSize || 10;
+  const { data: homeMetrics } = useHomeMetrics();
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
@@ -266,10 +267,7 @@ export function AgentsToolsPage() {
         <TopList
           title="Top agents by volume"
           subtitle="Ranked by interactions · threats flagged in this period"
-          rows={[...agents]
-            .sort((a, b) => b.interactions - a.interactions)
-            .slice(0, 5)
-            .map((a) => ({ id: a.id, name: a.name, interactions: a.interactions, threats: a.threats }))}
+          rows={homeMetrics.agentList.slice(0, 5).map((a) => ({ id: a.agentID, name: a.agentName, interactions: a.totalInteractions, threats: a.totalThreats }))}
           accent="var(--accent)"
           accent2="var(--accent-2)"
           onRowClick={(r) => navigate(`/agents/${r.id}`)}
