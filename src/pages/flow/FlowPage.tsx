@@ -115,7 +115,7 @@ export function FlowPage() {
                         onClick={() => setInspectSpanId(flow.steps[step]?.spanId || flow.trace.trace.id)}
                       >
                         <Icon name="flow" size={12} />
-                        Data
+                        Envelope 
                       </button>
                     </div>
                   </div>
