@@ -66,7 +66,7 @@ export const useIntents = (page = 1) => useAsync<Intent[]>(() => api.fetchIntent
 export const useIntentsPaged = (page = 1) =>
   useAsync<api.PagedIntentsResult>(
     () => api.fetchIntentsPaged(page),
-    { items: [], total: 0, page: 1, totalPages: 1 },
+    { items: [], total: 0, page: 1, totalPages: 1, pageSize: 10 },
     [page],
   );
 export const useInteractions = (page = 1) => useAsync<Interaction[]>(() => api.fetchInteractions(page), [], [page]);
@@ -82,6 +82,11 @@ export const useHomeMetrics = (page = 1) =>
     () => api.fetchHomeMetrics(page),
     { agentCount: 0, intentCount: 0, interactionsCount: 0, threatCount: 0, page: 1, agentList: [] },
     [page],
+  );
+export const useAgentsAppsMetrics = () =>
+  useAsync<api.AgentsAppsMetrics>(
+    api.fetchAgentsAppsMetrics,
+    { topAgents: [], topApps: [], metrics: { totalInteractions: 0, totalThreats: 0, totalAgents: 0, totalApps: 0, avgReliability: 0 } },
   );
 export const useSeries = (range: "24h" | "7d") =>
   useAsync<TimeSeries>(() => api.fetchSeries(range), { total: [], safe: [], threats: [] }, [range]);

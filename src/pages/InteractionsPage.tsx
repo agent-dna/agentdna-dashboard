@@ -139,10 +139,6 @@ export function InteractionsPage() {
         </div>
         <div className="right">
           <button className="btn">
-            <Icon name="filter" size={14} />
-            Filter
-          </button>
-          <button className="btn">
             <Icon name="download" size={14} />
             Export
           </button>
@@ -165,9 +161,6 @@ export function InteractionsPage() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className="count">
-              {total > 0 ? `${rows.length} on this page · ${total} total` : `${rows.length}`}
-            </span>
             <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize || undefined} loading={loading} inline onChange={setPage} />
           </div>
         </div>

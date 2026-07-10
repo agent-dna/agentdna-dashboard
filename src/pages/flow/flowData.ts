@@ -158,21 +158,6 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
   // Chronological order (oldest first).
   const sorted = [...interactions].sort((a, b) => b.created - a.created);
 
-  // Orchestrator: the agent that initiates the most interactions for this intent.
-  // Used only to assign an "Orchestrator" sub-label to that node — no synthetic
-  // operator hops are added.
-  const callCounts = new Map<string, number>();
-  for (const i of sorted) {
-    callCounts.set(i.initiator.id, (callCounts.get(i.initiator.id) || 0) + 1);
-  }
-  let orchAgentDid: string | null = null;
-  let maxCalls = 0;
-  for (const [did, count] of callCounts) {
-    if (resolve(did).kind !== "tool" && count > maxCalls) {
-      orchAgentDid = did;
-      maxCalls = count;
-    }
-  }
 
   const nodesById = new Map<string, FlowNode>();
   const idForDid = (did: string): string => `nd_${sanitize(did)}`;
@@ -196,7 +181,6 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     const resolved = resolve(did);
     const kind: FlowNodeKind =
       resolved.kind === "tool" ? "tool" : resolved.kind === "user" ? "human" : "agent";
-    const isOrch = did === orchAgentDid;
     // Directory hit (kind set) → use directory name; else prefer backend apiName; else shortDid.
     const name = resolved.kind
       ? resolved.name
@@ -207,7 +191,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       id,
       kind,
       name,
-      label: kind === "tool" ? "App" : isOrch ? "Orchestrator" : "",
+      label: kind === "tool" ? "App" : "",
       x: 0,
       y: 0,
     };
@@ -266,8 +250,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     }
   }
 
-  const orchNodeId = orchAgentDid ? idForDid(orchAgentDid) : null;
-  tierLayout(nodes, orchNodeId, rawSteps as FlowStep[]);
+  tierLayout(nodes, null, rawSteps as FlowStep[]);
 
   const halted = rawSteps.some((s) => s.verdict === "blocked");
 
@@ -617,20 +600,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     if (!seenEdges.has(key)) { seenEdges.add(key); edges.push([s.from, s.to]); }
   }
 
-  // Orchestrator = non-human agent with most outbound steps.
-  const callCounts = new Map<string, number>();
-  for (const s of rawSteps) callCounts.set(s.from, (callCounts.get(s.from) || 0) + 1);
-  let orchId: string | null = null, maxC = 0;
-  for (const [id, c] of callCounts) {
-    const n = nodesById.get(id);
-    if (n && n.kind !== "human" && c > maxC) { orchId = id; maxC = c; }
-  }
-  if (orchId) {
-    const orch = nodesById.get(orchId);
-    if (orch) orch.label = "Orchestrator";
-  }
-
-  tierLayout(nodes, orchId, rawSteps as FlowStep[]);
+  tierLayout(nodes, null, rawSteps as FlowStep[]);
 
   const spanById: Record<string, TraceSpan> = {};
   for (const s of allSpans) spanById[s.id] = s;
@@ -717,7 +687,7 @@ export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): Flo
         id: spanId,
         name: block.agent_name || block.agent_did.slice(-8),
         kind: isHuman ? "human" : "agent",
-        label: isHuman ? "User" : block.block_type === "delegate" ? "Orchestrator" : "Agent",
+        label: isHuman ? "User" : "Agent",
         status: block.threat_detected ? "blocked" : "ok",
                 input: block.message || "",
         output: "",  // filled in when the matching inbound block arrives

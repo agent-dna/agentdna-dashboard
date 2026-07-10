@@ -12,6 +12,7 @@ import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { useAgent, useAgentInteractions, useAgentIntents, useAgentPolicyHistory } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
+import { useResolveName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { isDummyMode } from "../data/dummyRouter";
 import { fmtRuntime, initials, timeAgo } from "../lib/format";
@@ -27,6 +28,7 @@ export function AgentDetailPage() {
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
   const { user } = useAuth();
+  const resolve = useResolveName();
   const isAdmin = !!user?.is_admin;
   const [tab, setTab] = useState<Tab>("interactions");
   const [policyOpen, setPolicyOpen] = useState(false);
@@ -246,7 +248,7 @@ export function AgentDetailPage() {
                 paddingTop: 16,
               }}
             >
-              <InfoStat label="Owner" value={agent.owner} />
+              <InfoStat label="Owner" value={resolve(agent.owner).name} />
               <InfoStat label="Environment" value={agent.env} />
               <InfoStat label="Created" value={timeAgo(agent.created)} />
               <InfoStat label="Connected apps" value={agent.connected} mono />

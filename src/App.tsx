@@ -7,10 +7,12 @@ import { TweaksPanel } from "./components/TweaksPanel";
 import { EntityDetail } from "./components/drawer/EntityDetail";
 import { InteractionDetail } from "./components/drawer/InteractionDetail";
 import { IntentDetail } from "./components/drawer/IntentDetail";
+import { SearchDropdown } from "./components/SearchDropdown";
 import { useDrawer } from "./context/DrawerContext";
 import { useTweaks } from "./context/TweaksContext";
 import { useAuth } from "./context/AuthContext";
 import { listAgentCreationRequests, listAccessRequestsForOrg } from "./api/requests";
+import { fetchSearch, type SearchResults } from "./data/api";
 import type { Agent, Tool, Intent, Interaction } from "./types";
 
 interface NavEntry {
@@ -26,6 +28,24 @@ export function App() {
   const { user } = useAuth();
   const location = useLocation();
   const [pendingCount, setPendingCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) { setSearchResults(null); setSearchOpen(false); return; }
+    setSearchOpen(true);
+    setSearchLoading(true);
+    const timer = setTimeout(() => {
+      fetchSearch(q)
+        .then(setSearchResults)
+        .catch(() => setSearchResults({ agents: [], apps: [], intents: [] }))
+        .finally(() => setSearchLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (!user?.is_admin) return;
@@ -120,9 +140,22 @@ export function App() {
             <span className="sep">/</span>
             <span className="here">{breadcrumb}</span>
           </div>
-          <div className="search">
+          <div className="search" style={{ position: "relative" }}>
             <Icon name="search" className="icon" size={16} />
-            <input placeholder="Search agents, tools, intents…" />
+            <input
+              placeholder="Search agents, tools, intents…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => { if (searchQuery.trim()) setSearchOpen(true); }}
+            />
+            {searchOpen && (
+              <SearchDropdown
+                query={searchQuery}
+                results={searchResults}
+                loading={searchLoading}
+                onClose={() => { setSearchOpen(false); setSearchQuery(""); }}
+              />
+            )}
           </div>
         </div>
 

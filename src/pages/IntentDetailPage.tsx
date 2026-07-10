@@ -198,7 +198,15 @@ export function IntentDetailPage() {
                   </span>
                 )}
               </div>
-              <InfoStat label="Intent ID" value={<IntentIdChip id={intent.id} />} />
+              <InfoStat
+                label="Intent ID"
+                value={
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <IntentIdChip id={intent.id} />
+                    <CopyButton text={intent.id} />
+                  </div>
+                }
+              />
               <InfoStat label="Started" value={timeAgo(intent.started)} />
               <InfoStat
                 label="Threat detected"
@@ -272,5 +280,34 @@ export function IntentDetailPage() {
 
       </div>
     </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={copy}
+      title={copied ? "Copied!" : "Copy to clipboard"}
+      style={{
+        background: "transparent",
+        border: "none",
+        padding: "2px 4px",
+        cursor: "pointer",
+        color: copied ? "var(--safe)" : "var(--fg-muted)",
+        display: "inline-flex",
+        alignItems: "center",
+        borderRadius: 4,
+        transition: "color 120ms",
+      }}
+    >
+      <Icon name={copied ? "check" : "copy"} size={13} />
+    </button>
   );
 }

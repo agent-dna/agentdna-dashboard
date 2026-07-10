@@ -1,48 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon";
 import { TraceInspector } from "../../components/TraceInspector";
-import { useIntent, useIntentBlockData, useIntentDiagram, useIntentInteractions, useIntentsPaged } from "../../data/hooks";
+import { useIntent, useIntentBlockData, useIntentDiagram, useIntentInteractions } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
-import { IntentIdChip } from "../../context/IntentNumbersContext";
 import { FlowCanvas } from "./FlowCanvas";
 import { buildFlowFromIntent, buildFlowFromDiagram, buildTraceFromBlocks, type Flow } from "./flowData";
 import { flattenIntentBlocks } from "../../data/api";
 
 const STEP_MS = 2400;
-const STORAGE_KEY_INTENT = "flow.intent";
 const STORAGE_KEY_STEP = "flow.step";
 
 export function FlowPage() {
   const { intentId: paramId } = useParams<{ intentId: string }>();
-  const navigate = useNavigate();
   const resolve = useResolveName();
-  const [intentsPage, setIntentsPage] = useState(1);
-  const intentsState = useIntentsPaged(intentsPage);
-  const intents = intentsState.data.items;
-  const intentsTotalPages = intentsState.data.totalPages || 1;
-  const intentsTotal = intentsState.data.total || intents.length;
-
-  const knownIds = useMemo(() => new Set(intents.map((i) => i.id)), [intents]);
-  const stored = readStored(STORAGE_KEY_INTENT) || "";
-  // If the URL or storage points at an intent the current list doesn't know
-  // about (stale from a previous backend session, or a deleted intent), drop
-  // it and fall back to the newest intent on the current page.
-  const candidate = paramId || stored;
-  const candidateValid = candidate && (knownIds.size === 0 || knownIds.has(candidate));
-  const activeId = candidateValid ? candidate : intents.length > 0 ? intents[0].id : "";
-
-  useEffect(() => {
-    if (!activeId) return;
-    // Keep URL in sync with whichever intent is actually being rendered.
-    if (paramId !== activeId) {
-      navigate(`/graph/${activeId}`, { replace: true });
-    }
-  }, [paramId, activeId, navigate]);
-
-  useEffect(() => {
-    if (activeId) writeStored(STORAGE_KEY_INTENT, activeId);
-  }, [activeId]);
+  const activeId = paramId || "";
 
   const { data: intent } = useIntent(activeId);
   const { data: interactions } = useIntentInteractions(activeId);
@@ -113,126 +85,131 @@ export function FlowPage() {
     setStep(i);
   };
 
-  const onPickIntent = (id: string) => {
-    if (id === activeId) return;
-    setStep(0);
-    navigate(`/graph/${id}`);
-  };
-
   return (
     <div className="page flow-page">
       <div className="flow-body">
         {/* Rail */}
         <div className="flow-rail">
-          {intents.length > 0 && (
-            <div className="flow-intents-list">
-              <div className="fi-head">
-                <div className="fi-cap">Intents · {intentsTotal}</div>
-                {intentsTotalPages > 1 && (
-                  <div className="fi-pager">
-                    <button
-                      className="fi-pg-btn"
-                      disabled={intentsPage <= 1}
-                      onClick={() => setIntentsPage((p) => Math.max(1, p - 1))}
-                      title="Previous page"
-                    >
-                      <Icon name="chevronLeft" size={12} />
-                    </button>
-                    <span className="fi-pg-counter">
-                      {intentsPage}/{intentsTotalPages}
-                    </span>
-                    <button
-                      className="fi-pg-btn"
-                      disabled={intentsPage >= intentsTotalPages}
-                      onClick={() => setIntentsPage((p) => Math.min(intentsTotalPages, p + 1))}
-                      title="Next page"
-                    >
-                      <Icon name="chevron" size={12} />
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="fi-rows">
-                {intents.map((i) => {
-                  const hops = i.id === activeId && flow ? flow.steps.length : i.interactionsCount;
-                  return (
-                    <button
-                      key={i.id}
-                      className={`fi-row ${i.id === activeId ? "sel" : ""}`}
-                      onClick={() => onPickIntent(i.id)}
-                    >
-                      <span className="fi-hs"><IntentIdChip id={i.id} /></span>
-                      <span className="fi-hops">{hops} {hops === 1 ? "hop" : "hops"}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
           {flow && (
             <>
-              <div className="flow-steps" ref={stepsRef}>
-                <div className="sl-cap">
-                  Trace · {N} hops
-                  <button
-                    className="sl-data-btn"
-                    title="Inspect trace data"
-                    onClick={() => setInspectSpanId(flow.steps[step]?.spanId || flow.trace.trace.id)}
-                  >
-                    <Icon name="flow" size={12} />
-                    Data
-                  </button>
-                </div>
-                {flow.steps.map((s, i) => {
-                  const from = flow.nodeById[s.from];
-                  const to = flow.nodeById[s.to];
-                  const blk = s.verdict === "blocked";
-                  const verified = s.checks.identity && s.checks.trust;
-                  return (
-                    <div
-                      key={i}
-                      data-step={i}
-                      className={`step-card ${i === step ? "active" : ""} ${i < step ? "done" : ""} ${blk ? "blk" : ""}`}
-                      onClick={() => jump(i)}
-                    >
-                      <div className="sc-body">
-                        <div className="sc-pair">
-                          <span className="sc-ix">#{String(i + 1).padStart(2, "0")}</span>
-                          <NodeChip kind={from?.kind || "agent"} name={from?.name || s.from} />
-                          <span className={`arr ${s.dir === "response" ? "ret" : ""}`}>
-                            {s.dir === "response" ? "←" : "→"}
-                          </span>
-                          <NodeChip kind={to?.kind || "agent"} name={to?.name || s.to} />
-                        </div>
-                        <div className="sc-meta">
-                          {verified && (
-                            <span className="sc-tag verified" title="Identity & trust verified">
-                              <Icon name="shield" size={10} />
-                              Verified
-                            </span>
-                          )}
-                          {blk ? (
-                            <span className="sc-tag threat">
-                              <span className="sc-dot" />
-                              Threat
-                            </span>
-                          ) : (
-                            <span className="sc-tag allowed">
-                              <span className="sc-dot" />
-                              Allowed
-                            </span>
-                          )}
-                        </div>
+              {/* Trace section — sticky header + scrollable hops */}
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: "#ffffff", borderRadius: 10, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                {/* Sticky header */}
+                <div style={{ flexShrink: 0, borderBottom: "1px solid #e2e8f0", padding: "10px 14px", background: "#ffffff" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 2 }}>Interaction Timeline</div>
+                      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "#64748b" }}>
+                        {N} Hops · 
                       </div>
                     </div>
-                  );
-                })}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {(() => { const threats = flow.steps.filter(s => s.verdict === "blocked").length; return threats > 0 ? (
+                        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#dc2626", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 20, padding: "3px 10px" }}>
+                          {threats} Threat{threats > 1 ? "s" : ""}
+                        </span>
+                      ) : null; })()}
+                      <button
+                        className="sl-data-btn"
+                        title="Inspect trace data"
+                        onClick={() => setInspectSpanId(flow.steps[step]?.spanId || flow.trace.trace.id)}
+                      >
+                        <Icon name="flow" size={12} />
+                        Envelope 
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flow-steps" ref={stepsRef}>
+                  <div style={{ position: "relative", paddingLeft: 32 }}>
+                    {/* Vertical timeline line */}
+                    <div style={{
+                      position: "absolute",
+                      left: 9,
+                      top: 16,
+                      bottom: 16,
+                      width: 2,
+                      background: "#cbd5e1",
+                      borderRadius: 2,
+                    }} />
+
+                    {flow.steps.map((s, i) => {
+                      const from = flow.nodeById[s.from];
+                      const to = flow.nodeById[s.to];
+                      const blk = s.verdict === "blocked";
+                      const isActive = i === step;
+                      return (
+                        <div
+                          key={i}
+                          data-step={i}
+                          onClick={() => jump(i)}
+                          style={{ position: "relative", marginBottom: 7, cursor: "pointer" }}
+                        >
+                          {/* Timeline dot — outlined circle */}
+                          <div style={{
+                            position: "absolute",
+                            left: -26,
+                            top: 14,
+                            width: 16,
+                            height: 16,
+                            borderRadius: "50%",
+                            background: "#ffffff",
+                            border: `2.5px solid ${blk ? "#ef4444" : "#22c55e"}`,
+                            boxSizing: "border-box",
+                          }} />
+
+                          {/* Card */}
+                          <div style={{
+                            borderRadius: 10,
+                            border: `1.5px solid ${blk ? "#fca5a5" : isActive ? "#3b82f6" : "#bfdbfe"}`,
+                            background: blk ? "#fff5f5" : isActive ? "#dbeafe" : "#eff6ff",
+                            padding: "6px 9px",
+                            transition: "background 0.15s, border-color 0.15s",
+                          }}>
+                            {/* Header row */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#1e40af" }}>
+                                Hop {String(i + 1).padStart(2, "0")}
+                              </span>
+                              {blk ? (
+                                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#dc2626", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 20, padding: "2px 8px", display: "flex", alignItems: "center", gap: 4 }}>
+                                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#dc2626", display: "inline-block" }} />
+                                  Threat Detected
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#16a34a", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 20, padding: "2px 8px", display: "flex", alignItems: "center", gap: 4 }}>
+                                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+                                  Allowed
+                                </span>
+                              )}
+                            </div>
+
+                            {/* FROM row */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3 }}>
+                              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#94a3b8", width: 24, flexShrink: 0 }}>From</span>
+                              <HopNode name={from?.name || s.from} />
+                            </div>
+
+                            {/* TO row */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#94a3b8", width: 24, flexShrink: 0 }}>To</span>
+                              <HopNode name={to?.name || s.to} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
+
+              {/* Step JSON data card */}
+              <StepDataCard flow={flow} step={step} />
             </>
           )}
           {!flow && (
             <div style={{ color: "var(--fg-muted)", fontSize: 13, padding: "20px 4px" }}>
-              {intentsState.loading ? "Loading intents…" : "No intent selected."}
+              No intent selected.
             </div>
           )}
         </div>
@@ -242,7 +219,7 @@ export function FlowPage() {
           <FlowCanvas flow={flow} step={Math.min(step, Math.max(0, N - 1))} />
         ) : (
           <div className="flow-canvas">
-            <div className="flow-empty">{intentsState.loading ? "Loading flow…" : "Pick an intent to visualize."}</div>
+            <div className="flow-empty">Pick an intent to visualize.</div>
           </div>
         )}
       </div>
@@ -259,12 +236,101 @@ export function FlowPage() {
   );
 }
 
-function NodeChip({ kind, name }: { kind: "human" | "agent" | "tool"; name: string }) {
-  const bg = kind === "human" ? "#0A2240" : kind === "tool" ? "#0EA5E9" : "#2563EB";
+function StepDataCard({ flow, step }: { flow: Flow; step: number }) {
+  const s = flow.steps[step];
+  if (!s) return null;
+  const span = flow.trace.spanById[s.spanId];
+  const from = flow.nodeById[s.from];
+  const to = flow.nodeById[s.to];
+
+  const data: Record<string, unknown> = {
+    from: from?.name || s.from,
+    to: to?.name || s.to,
+    direction: s.dir,
+    verdict: s.verdict,
+    checks: s.checks,
+    ...(span?.input ? { input: tryParse(span.input) } : {}),
+    ...(span?.output ? { output: tryParse(span.output) } : {}),
+    ...(span?.model ? { model: span.model } : {}),
+    ...(span?.metadata && Object.keys(span.metadata).length > 0 ? { metadata: span.metadata } : {}),
+  };
+
   return (
-    <span className={`node ${kind}`} title={name}>
-      <span className="nd" style={{ background: bg }} />
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+    <div style={{
+      margin: "12px 0 4px",
+      borderRadius: 10,
+      border: "1px solid var(--border)",
+      background: "var(--bg-card)",
+      overflow: "hidden",
+    }}>
+      {/* <div style={{
+        padding: "8px 12px",
+        fontSize: 11,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.07em",
+        color: "var(--fg-muted)",
+        borderBottom: "1px solid var(--border)",
+        background: "var(--bg)",
+        borderRadius: "10px 10px 0 0",
+      }}>
+        Hop #{String(step + 1).padStart(2, "0")} · Data
+      </div> */}
+      <pre style={{
+        margin: 0,
+        padding: "12px",
+        fontSize: 11.5,
+        fontFamily: "var(--font-mono)",
+        background: "#0f172a",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-all",
+        maxHeight: 320,
+        overflowY: "auto",
+        lineHeight: 1.6,
+      }}
+        dangerouslySetInnerHTML={{ __html: colorizeJson(JSON.stringify(data, null, 2)) }}
+      />
+    </div>
+  );
+}
+
+function tryParse(s: string): unknown {
+  try { return JSON.parse(s); } catch { return s; }
+}
+
+function colorizeJson(json: string): string {
+  return json
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+      (match) => {
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            // key
+            return `<span style="color:#7dd3fc">${match}</span>`;
+          }
+          // string value
+          return `<span style="color:#86efac">${match}</span>`;
+        }
+        if (/true|false/.test(match)) {
+          return `<span style="color:#fbbf24">${match}</span>`;
+        }
+        if (/null/.test(match)) {
+          return `<span style="color:#f87171">${match}</span>`;
+        }
+        // number
+        return `<span style="color:#c084fc">${match}</span>`;
+      },
+    );
+}
+
+function HopNode({ name, dark }: { name: string; dark?: boolean }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563eb", flexShrink: 0 }} />
+      <span style={{ fontSize: 11, fontWeight: 700, color: dark ? "#e2e8f0" : "var(--fg)" }}>{name}</span>
     </span>
   );
 }
