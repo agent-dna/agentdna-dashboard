@@ -199,6 +199,7 @@ export async function fetchAgentsPaged(page = 1): Promise<PagedAgentsResult> {
   };
 }
 
+
 /** Walk every page of /agents-list — used by the DID→name directory. */
 export async function fetchAllAgents(): Promise<Agent[]> {
   const out: Agent[] = [];
@@ -528,7 +529,7 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     fetchIntentInteractionsPaged(id, 1),
   ]);
   if (!r) return null;
-
+  
   // Collect all interactions across pages to derive participant counts.
   const allInteractions = [...firstPage.interactions];
   for (let p = 2; p <= firstPage.totalPages; p++) {
