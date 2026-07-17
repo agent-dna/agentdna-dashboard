@@ -231,10 +231,16 @@ export function LandingPage() {
         {/* logo left · tabs right */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <img src={logo} alt="AgentDNA" style={{ height:38, width:"auto" }} />
-          {screen === "auth" && role === "user" && (
+          {screen === "auth" && (
             <div style={tabs}>
               <div className={mode === "signin"   ? "agd-ton" : "agd-toff"} onClick={() => switchMode("signin")}   style={tab}>Sign in</div>
-              <div className={mode === "register" ? "agd-ton" : "agd-toff"} onClick={() => switchMode("register")} style={tab}>Register</div>
+              <div
+                className={mode === "register" && role !== "admin" ? "agd-ton" : "agd-toff"}
+                onClick={() => role !== "admin" && switchMode("register")}
+                style={{ ...tab, ...(role === "admin" ? { opacity: 0.35, cursor: "not-allowed" } : {}) }}
+              >
+                Register
+              </div>
             </div>
           )}
           {screen === "forgot" && (
@@ -330,7 +336,7 @@ export function LandingPage() {
 
           {/* role pills */}
           <div style={{ display:"flex", gap:7, marginTop:14 }}>
-            {(["user","admin"] as Role[]).map((r) => (
+            {(["user","admin"] as Role[]).filter((r) => !(mode === "register" && r === "admin")).map((r) => (
               <button key={r} type="button"
                 className={role === r ? "agd-pon" : "agd-poff"}
                 onClick={() => switchRole(r)}
