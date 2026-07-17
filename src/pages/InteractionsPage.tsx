@@ -124,7 +124,7 @@ export function InteractionsPage() {
   const { total, totalPages, pageSize } = paged;
   const { openDrawer } = useDrawer();
   const cols = useInteractionColumns((k, e) => openDrawer(k, e));
-  const resolve = useResolveName();
+  // const resolve = useResolveName();
 
   let rows = interactions;
   if (filter === "threats") rows = rows.filter((r) => r.threat);

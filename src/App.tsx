@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Icon, type IconName } from "./components/Icon";
 import logoMark from "./assets/agentdna-logo.png";
 import { Drawer } from "./components/Drawer";
-import { TweaksPanel } from "./components/TweaksPanel";
+// import { TweaksPanel } from "./components/TweaksPanel";
 import { EntityDetail } from "./components/drawer/EntityDetail";
 import { InteractionDetail } from "./components/drawer/InteractionDetail";
 import { IntentDetail } from "./components/drawer/IntentDetail";
