@@ -6,7 +6,7 @@ import { DrawerSection } from "./DrawerSection";
 import { useDrawer } from "../../context/DrawerContext";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useIntentLabel } from "../../context/IntentNumbersContext";
-import { fmtRuntime, timeAgo } from "../../lib/format";
+import {  timeAgo } from "../../lib/format";
 import type { Interaction } from "../../types";
 
 interface Props {

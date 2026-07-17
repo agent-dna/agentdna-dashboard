@@ -39,7 +39,7 @@ export function SearchDropdown({ query, results, loading, onClose }: Props) {
         top: "calc(100% + 6px)",
         left: 0,
         right: 0,
-        zIndex: 1000,
+        zIndex: 9999,
         background: "#fff",
         border: "1px solid #e2e8f0",
         borderRadius: 12,

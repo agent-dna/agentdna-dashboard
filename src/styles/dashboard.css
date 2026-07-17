@@ -232,7 +232,7 @@ body::before {
 .app.collapsed .sb-foot .who { opacity: 0; pointer-events: none; display: none; }
 
 /* ============ Topbar ============ */
-.main { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.main { display: flex; flex-direction: column; min-width: 0; overflow: clip; }
 .topbar {
   height: 64px;
   border-bottom: 1px solid var(--line);
@@ -243,6 +243,8 @@ body::before {
   background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(8px);
   flex-shrink: 0;
+  position: relative;
+  z-index: 100;
 }
 .topbar .crumbs {
   font-family: var(--font-display);

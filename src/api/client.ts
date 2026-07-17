@@ -1,6 +1,10 @@
 import { dummyRespond, isDummyMode } from "../data/dummyRouter";
 
-const BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:9000").replace(/\/$/, "");
+const BASE = (
+  (window as unknown as Record<string, Record<string, string>>).__ENV__?.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://localhost:9000"
+).replace(/\/$/, "");
 const DEV_TOKEN: string | undefined = import.meta.env.VITE_DEV_TOKEN;
 
 const TOKEN_KEY = "agentdna.token";

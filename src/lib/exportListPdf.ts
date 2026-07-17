@@ -11,9 +11,9 @@ const WHITE: [number, number, number] = [255, 255, 255];
 const ROW_BG: [number, number, number] = [244, 247, 252];
 
 const MARGIN_X = 36;
-const PAGE_W = 595;
+// const PAGE_W = 595;
 const PAGE_H = 842;
-const CONTENT_W = PAGE_W - MARGIN_X * 2;
+// const CONTENT_W = PAGE_W - MARGIN_X * 2;
 
 function shortId(id: string, n = 14): string {
   if (!id) return "—";
