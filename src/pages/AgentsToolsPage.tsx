@@ -9,7 +9,7 @@ import { EntityCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { AccessRequestModal } from "../components/forms/AccessRequestModal";
-import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics } from "../data/hooks";
+import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics, useHomeMetrics } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
@@ -35,6 +35,7 @@ export function AgentsToolsPage() {
   const toolsTotal = toolsState.data.total || 0;
   const toolsPageSize = toolsState.data.pageSize || 10;
   const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
+  const { data: homeMetrics } = useHomeMetrics();
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
@@ -208,7 +209,7 @@ export function AgentsToolsPage() {
       </div>
 
       <div className="metrics">
-        <MetricTile label="Total Agents" value={agentsAppsMetrics.metrics.totalAgents} icon="agents" sparkColor="#2563EB" spark={[]} />
+        <MetricTile label="Total Agents" value={isAdmin ? agentsAppsMetrics.metrics.totalAgents : homeMetrics.agentCount} icon="agents" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Total Apps" value={agentsAppsMetrics.metrics.totalApps} icon="box" sparkColor="#0A2240" spark={[]} />
         <MetricTile
           label="Avg. Reliability"
@@ -359,14 +360,14 @@ function TopList<T extends TopListItem>({
 }: TopListProps<T>) {
   const max = rows.reduce((m, x) => Math.max(m, x.interactions), 0) || 1;
   return (
-    <div className="card">
+    <div className="card" style={{ display: "flex", flexDirection: "column" }}>
       <div className="card-head">
         <div>
           <h3>{title}</h3>
           <div className="sub">{subtitle}</div>
         </div>
       </div>
-      <div style={{ padding: "4px 10px 14px", display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ padding: "4px 10px 14px", display: "flex", flexDirection: "column", gap: 2, flex: 1, alignContent: "flex-start" }}>
         {rows.length === 0 && (
           <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>
             No data
