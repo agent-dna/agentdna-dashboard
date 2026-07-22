@@ -90,38 +90,41 @@ export function App() {
       <aside className="sidebar">
           <img src={logoMark} alt="AgentDNA" className="brand-full" />
         <nav className="sb-nav">
-          <div className="sb-section">Workspace</div>
-          {NAV_WORKSPACE.map((n) => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.to === "/requests"}
-              className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
-              title={n.label}
-            >
-              <Icon className="icon" name={n.icon} size={18} />
-              <span className="label">{n.label}</span>
-              {n.badge != null && <span className="badge">{n.badge}</span>}
-            </NavLink>
-          ))}
-
-          <div style={{ flex: 1 }} />
-          <div className="sb-section">Account</div>
-          <NavLink
-            to="/profile"
-            className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
-            title="Profile"
-          >
-            <Icon className="icon" name="user" size={18} />
-            <span className="label">Profile</span>
-          </NavLink>
-        </nav>
-        <div className="sb-foot">
-          <div className="who">
-            {user ? (user.name || (user.is_admin ? user.email : user.email.split("@")[0])) : "Guest"}
-            <div className="sub">{user?.org_id || ""}</div>
+          <div className="sb-workspace">
+            <div className="sb-section">Workspace</div>
+            {NAV_WORKSPACE.map((n) => (
+              <NavLink
+                key={n.to}
+                to={n.to}
+                end={n.to === "/requests"}
+                className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+                title={n.label}
+              >
+                <Icon className="icon" name={n.icon} size={18} />
+                <span className="label">{n.label}</span>
+                {n.badge != null && <span className="badge">{n.badge}</span>}
+              </NavLink>
+            ))}
           </div>
-        </div>
+
+          <div className="sb-bottom">
+            <div className="sb-section">Account</div>
+            <NavLink
+              to="/profile"
+              className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+              title="Profile"
+            >
+              <Icon className="icon" name="user" size={18} />
+              <span className="label">Profile</span>
+            </NavLink>
+            <div className="sb-foot">
+              <div className="who">
+                {user ? (user.name || (user.is_admin ? user.email : user.email.split("@")[0])) : "Guest"}
+                <div className="sub">{user?.org_id || ""}</div>
+              </div>
+            </div>
+          </div>
+        </nav>
       </aside>
 
       <div className="main">

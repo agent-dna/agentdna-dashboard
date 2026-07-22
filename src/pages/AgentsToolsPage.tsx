@@ -3,7 +3,6 @@ import { Pagination } from "../components/Pagination";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
-import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
@@ -223,65 +222,57 @@ export function AgentsToolsPage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-        <TopList
-          title="Top agents by volume"
-          subtitle="Ranked by interactions · threats flagged in this period"
+        <TopAgentsList
           rows={agentsAppsMetrics.topAgents.map((a) => ({
             id: a.name,
             name: a.name,
             interactions: a.totalInteractions,
             threats: a.totalThreats,
           }))}
-          accent="var(--accent)"
-          accent2="var(--accent-2)"
+          totalAgents={agentsAppsMetrics.metrics.totalAgents}
           onRowClick={(r) => {
             const match = agents.find((a) => a.name === r.name);
             if (match) navigate(`/agents/${match.id}`);
           }}
-          showBar={false}
-          showStats={true}
+          onViewAll={() => navigate("/agents")}
         />
-        <TopList
-          title="Top apps by volume"
-          subtitle="Ranked by interactions"
+        <TopAppsList
           rows={agentsAppsMetrics.topApps.map((a) => ({
             id: a.name,
             name: a.name,
             interactions: a.totalInteractions,
-            threats: a.totalThreats,
           }))}
-          accent="var(--accent-3)"
-          accent2="var(--accent)"
+          totalApps={agentsAppsMetrics.metrics.totalApps}
           onRowClick={(r) => {
             const match = tools.find((t) => t.name === r.name);
             if (match) openDrawer("tool", match);
           }}
+          onViewAll={() => navigate("/agents")}
         />
       </div>
 
       <div className="card">
-        <Tabs
-          active={tab}
-          onChange={(k) => setTab(k as Tab)}
-          tabs={[
-            { key: "agents", label: "Agents", count: agents.length },
-            { key: "tools", label: "Apps", count: tools.length },
-          ]}
-        />
-
         <div className="tb-toolbar">
           <div className="filters">
+            {([{ key: "agents", label: "Agents", count: agents.length }, { key: "tools", label: "Apps", count: tools.length }] as const).map((t) => (
+              <div
+                key={t.key}
+                className={`tab ${tab === t.key ? "active" : ""}`}
+                onClick={() => setTab(t.key as Tab)}
+              >
+                {t.label}
+                <span className="pill">{t.count}</span>
+              </div>
+            ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <Pagination
-              page={isAgents ? agentsPage : toolsPage}
-              totalPages={isAgents ? agentsTotalPages : toolsTotalPages}
-              total={isAgents ? agentsTotal : toolsTotal}
-              pageSize={isAgents ? agentsPageSize : toolsPageSize}
-              inline
-              onChange={(p) => (isAgents ? setAgentsPage(p) : setToolsPage(p))}
-            />
-          </div>
+          <Pagination
+            page={isAgents ? agentsPage : toolsPage}
+            totalPages={isAgents ? agentsTotalPages : toolsTotalPages}
+            total={isAgents ? agentsTotal : toolsTotal}
+            pageSize={isAgents ? agentsPageSize : toolsPageSize}
+            inline
+            onChange={(p) => (isAgents ? setAgentsPage(p) : setToolsPage(p))}
+          />
         </div>
 
         {isAgents ? (
@@ -329,215 +320,153 @@ function computeReliability(interactions: number, threats: number): number {
   return Math.max(0, Math.round(pct * 100) / 100);
 }
 
-interface TopListItem {
+interface VolumeRow {
   id: string;
   name: string;
   interactions: number;
   threats?: number;
-  sub?: string;
 }
 
-interface TopListProps<T extends TopListItem> {
-  title: string;
-  subtitle: string;
-  rows: T[];
-  accent: string;
-  accent2: string;
-  onRowClick: (row: T) => void;
-  showBar?: boolean;
-  showStats?: boolean;
-}
-
-function TopList<T extends TopListItem>({
-  title,
-  subtitle,
+function TopAgentsList({
   rows,
-  accent,
-  accent2,
+  totalAgents,
   onRowClick,
-  showBar = true,
-  showStats = false,
-}: TopListProps<T>) {
-  const max = rows.reduce((m, x) => Math.max(m, x.interactions), 0) || 1;
+  onViewAll,
+}: {
+  rows: VolumeRow[];
+  totalAgents: number;
+  onRowClick: (r: VolumeRow) => void;
+  onViewAll: () => void;
+}) {
+  const totalIxns = rows.reduce((s, r) => s + r.interactions, 0) || 1;
   return (
-    <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-      <div className="card-head">
+    <div className="card" style={{ display: "flex", flexDirection: "column", padding: 0, overflow: "hidden" }}>
+      <div style={{ padding: "18px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <h3>{title}</h3>
-          <div className="sub">{subtitle}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--fg)", marginBottom: 2 }}>Top agents by volume</div>
+          <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>Ranked by interactions · threats flagged</div>
         </div>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", background: "var(--bg-3)", color: "var(--fg-muted)", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>LAST 30 DAYS</span>
       </div>
-      <div style={{ padding: "4px 10px 14px", display: "flex", flexDirection: "column", gap: 2, flex: 1, alignContent: "flex-start" }}>
+
+      <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)" }}>
+        {["#", "AGENT", "IXNS", "THREATS"].map((h, i) => (
+          <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase", textAlign: i > 1 ? "right" : "left" }}>{h}</div>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignContent: "flex-start" }}>
         {rows.length === 0 && (
-          <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>
-            No data
-          </div>
+          <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>No data</div>
         )}
         {rows.map((r, i) => {
-          const pct = (r.interactions / max) * 100;
-          const isTop = i === 0;
+          const share = Math.round((r.interactions / totalIxns) * 100);
+          const threats = r.threats ?? 0;
           return (
             <div
               key={r.id}
               onClick={() => onRowClick(r)}
-              style={{
-                display: "grid",
-                gridTemplateColumns: showStats ? "auto 1fr auto auto" : "auto 1fr auto",
-                gap: 14,
-                alignItems: "center",
-                padding: "12px 14px",
-                borderRadius: 10,
-                cursor: "pointer",
-                transition: "background 120ms, transform 120ms",
-                position: "relative",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLDivElement).style.background = "transparent";
-              }}
+              style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", alignItems: "center", padding: "10px 20px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
             >
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  display: "grid",
-                  placeItems: "center",
-                  fontFamily: "var(--font-display)",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  background: isTop
-                    ? `linear-gradient(135deg, ${accent}, ${accent2})`
-                    : "var(--bg-3)",
-                  color: isTop ? "#fff" : "var(--fg-muted)",
-                  boxShadow: isTop ? `0 2px 6px ${accent}33` : "none",
-                  flexShrink: 0,
-                }}
-              >
+              <div style={{ width: 28, height: 28, borderRadius: 8, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, background: i === 0 ? "#0a2240" : "var(--bg-3)", color: i === 0 ? "#fff" : "var(--fg-muted)" }}>
                 {String(i + 1).padStart(2, "0")}
               </div>
-
               <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 13.5,
-                    fontWeight: 600,
-                    color: "var(--fg)",
-                    marginBottom: showBar ? 6 : 2,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {r.name}
-                </div>
-                {r.sub && !showBar && (
-                  <div
-                    style={{
-                      fontSize: 11.5,
-                      color: "var(--fg-muted)",
-                      fontFamily: "var(--font-mono)",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {r.sub}
-                  </div>
-                )}
-                {showBar && (
-                  <div style={{ height: 4, borderRadius: 2, background: "var(--bg-3)", overflow: "hidden" }}>
-                    <div
-                      style={{
-                        width: `${pct}%`,
-                        height: "100%",
-                        background: `linear-gradient(90deg, ${accent}, ${accent2})`,
-                      }}
-                    />
-                  </div>
-                )}
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
+                <div style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>{share}% of agent volume</div>
               </div>
-
-              {showStats ? (
-                <>
-                  <Stat
-                    icon="activity"
-                    value={r.interactions.toLocaleString()}
-                    label="ixns"
-                    color="var(--accent)"
-                  />
-                  <Stat
-                    icon="shield"
-                    value={(r.threats ?? 0).toLocaleString()}
-                    label="threats"
-                    color={(r.threats ?? 0) > 0 ? "var(--threat)" : "var(--fg-faint)"}
-                  />
-                </>
-              ) : (
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "var(--fg)",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {r.interactions.toLocaleString()}
-                </div>
-              )}
+              <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
+                {r.interactions.toLocaleString()}
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, background: threats > 0 ? "rgba(220,38,38,0.1)" : "var(--bg-3)", color: threats > 0 ? "#dc2626" : "var(--fg-muted)", padding: "2px 8px", borderRadius: 4 }}>
+                  {threats.toLocaleString()}
+                </span>
+              </div>
             </div>
           );
         })}
+      </div>
+
+      <div style={{ padding: "12px 20px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Showing top {rows.length} of {totalAgents} agents</span>
+        <button onClick={onViewAll} style={{ background: "none", border: "none", fontSize: 12, fontWeight: 600, color: "var(--accent)", cursor: "pointer", padding: 0 }}>View all agents →</button>
       </div>
     </div>
   );
 }
 
-interface StatProps {
-  icon: import("../components/Icon").IconName;
-  value: string;
-  label: string;
-  color: string;
-}
-
-function Stat({ icon, value, label, color }: StatProps) {
+function TopAppsList({
+  rows,
+  totalApps,
+  onRowClick,
+  onViewAll,
+}: {
+  rows: VolumeRow[];
+  totalApps: number;
+  onRowClick: (r: VolumeRow) => void;
+  onViewAll: () => void;
+}) {
+  const totalIxns = rows.reduce((s, r) => s + r.interactions, 0) || 1;
+  const maxIxns = rows.reduce((m, r) => Math.max(m, r.interactions), 0) || 1;
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-end",
-        gap: 2,
-        minWidth: 72,
-      }}
-    >
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 5, color }}>
-        <Icon name={icon} size={12} />
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 13,
-            fontWeight: 700,
-            color: "var(--fg)",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {value}
-        </span>
+    <div style={{ borderRadius: 14, background: "#0b1633", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "18px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 16.5, fontWeight: 700, color: "#fff", marginBottom: 2 }}>Top apps by volume</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)" }}>Ranked by interactions</div>
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.4)", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>LAST 30 DAYS</span>
       </div>
-      <div
-        style={{
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "var(--fg-muted)",
-        }}
-      >
-        {label}
+
+      <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 76px 72px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+        {["#", "APP", "IXNS", "SHARE"].map((h, i) => (
+          <div key={h} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", textAlign: i > 1 ? "right" : "left" }}>{h}</div>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {rows.length === 0 && (
+          <div style={{ padding: 28, color: "rgba(255,255,255,0.35)", fontSize: 14, textAlign: "center" }}>No data</div>
+        )}
+        {rows.map((r, i) => {
+          const share = Math.round((r.interactions / totalIxns) * 100);
+          const barPct = (r.interactions / maxIxns) * 100;
+          return (
+            <div
+              key={r.id}
+              onClick={() => onRowClick(r)}
+              style={{ cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 20px" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 76px 72px", alignItems: "center", padding: "10px 0 4px" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: i === 0 ? "#fff" : "rgba(255,255,255,0.4)" }}>
+                  {String(i + 1).padStart(2, "0")}
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: "#fff", fontFamily: "var(--font-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {r.name}
+                </div>
+                <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
+                  {r.interactions.toLocaleString()}
+                </div>
+                <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.6)", fontVariantNumeric: "tabular-nums" }}>
+                  {share}%
+                </div>
+              </div>
+              <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginBottom: 8 }}>
+                <div style={{ width: `${barPct}%`, height: "100%", background: "linear-gradient(90deg, #5f83e8, #a8bdf5)", borderRadius: 2 }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.35)" }}>Showing top {rows.length} of {totalApps} apps</span>
+        <button onClick={onViewAll} style={{ background: "none", border: "none", fontSize: 13, fontWeight: 600, color: "#5f83e8", cursor: "pointer", padding: 0 }}>View all apps →</button>
       </div>
     </div>
   );
