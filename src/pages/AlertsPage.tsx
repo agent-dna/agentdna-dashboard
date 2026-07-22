@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MetricTile } from "../components/MetricTile";
-import { DataTable } from "../components/DataTable";
 import { Icon } from "../components/Icon";
 import { useAlerts, useAgentsPaged } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
-import { useInteractionColumns } from "./InteractionsPage";
+import { LedgerTable } from "../components/LedgerTable";
 import type { Agent } from "../types";
 
 const PAGE_SIZE = 5;
@@ -108,7 +107,6 @@ function TopAgentsByThreats() {
 export function AlertsPage() {
   const { data: threats } = useAlerts();
   const { openDrawer } = useDrawer();
-  const cols = useInteractionColumns((k, e) => openDrawer(k, e));
 
   return (
     <div className="page">
@@ -130,11 +128,10 @@ export function AlertsPage() {
               </div>
             <span className="count">{threats.length} flagged</span>
           </div>
-          <DataTable
+          <LedgerTable
             rows={threats}
-            columns={cols}
-            onRowClick={(r) => openDrawer("interaction", r)}
             emptyText="No threats"
+            onView={(r) => openDrawer("interaction", r)}
           />
         </div>
 

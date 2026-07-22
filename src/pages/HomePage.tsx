@@ -4,12 +4,11 @@ import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 
 import { Chart } from "../components/Chart";
-import { DataTable } from "../components/DataTable";
 import { useHomeMetrics, useInteractionsPaged, useAlerts, useSeries, useAgentsAppsMetrics } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
-
-import { useInteractionColumns } from "./InteractionsPage";
+import { LedgerTable } from "../components/LedgerTable";
+import { AppIcon } from "../components/AppIcon";
 
 export function HomePage() {
   const series = "7d";
@@ -35,8 +34,6 @@ export function HomePage() {
   const data = seriesState.data;
 
   const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-  const cols = useInteractionColumns((k, e) => openDrawer(k, e));
 
   const isEmpty = !homeState.loading && metrics.agentCount === 0;
 
@@ -291,9 +288,9 @@ export function HomePage() {
           {/* Apps view — matches TopAppsList dark design */}
           {volumeTab === "apps" && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 76px 72px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                {["#", "APP", "IXNS", "SHARE"].map((h, i) => (
-                  <div key={h} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "36px 22px 1fr 76px 72px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                {["#", "", "APP", "IXNS", "SHARE"].map((h, i) => (
+                  <div key={i} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase" as const, textAlign: (i > 2 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
               </div>
               <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
@@ -314,11 +311,12 @@ export function HomePage() {
                         onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)")}
                         onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
                       >
-                        <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 76px 72px", alignItems: "center", padding: "10px 0 4px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "36px 22px 1fr 76px 72px", alignItems: "center", padding: "10px 0 4px" }}>
                           <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: i === 0 ? "#fff" : "rgba(255,255,255,0.4)" }}>
                             {String(i + 1).padStart(2, "0")}
                           </div>
-                          <div style={{ fontSize: 14, fontWeight: 500, color: "#fff", fontFamily: "var(--font-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</div>
+                          <AppIcon name={a.name} size={22} />
+                          <div style={{ fontSize: 14, fontWeight: 500, color: "#fff", fontFamily: "var(--font-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: 6 }}>{a.name}</div>
                           <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
                             {a.totalInteractions.toLocaleString()}
                           </div>
@@ -374,13 +372,13 @@ export function HomePage() {
             <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} inline onChange={setInteractionsPage} />
           )}
         </div>
-        <DataTable
-          onRowClick={(r) => openDrawer("interaction", r)}
-          columns={cols}
+        <LedgerTable
           rows={bottomTab === "interactions" ? interactions : threats}
           emptyText={bottomTab === "interactions" ? "No interactions yet" : "No threats detected"}
+          onView={(r) => openDrawer("interaction", r)}
         />
       </div>
     </div>
   );
 }
+

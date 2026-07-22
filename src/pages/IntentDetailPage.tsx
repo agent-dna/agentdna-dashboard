@@ -11,7 +11,7 @@ import { useIntent, useIntentInteractionsPaged, useIntentParticipants } from "..
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
-import { useInteractionColumns } from "./InteractionsPage";
+import { LedgerTable } from "../components/LedgerTable";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { IntentParticipant, Tool } from "../types";
@@ -31,7 +31,6 @@ export function IntentDetailPage() {
   const interactionsTotal = interactionsPaged.total;
   const interactionsTotalPages = interactionsPaged.totalPages;
   const { data: participants } = useIntentParticipants(intentId);
-  const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
   if (loading) {
     return (
       <div className="page">
@@ -257,11 +256,10 @@ export function IntentDetailPage() {
 
         {tab === "interactions" && (
           <>
-            <DataTable
+            <LedgerTable
               rows={interactions}
-              columns={interactionCols}
-              onRowClick={(r) => openDrawer("interaction", r)}
               emptyText={interactionsLoading ? "Loading…" : "No interactions recorded for this intent yet."}
+              onView={(r) => openDrawer("interaction", r)}
             />
             <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} loading={interactionsLoading} onChange={setInteractionsPage} />
           </>

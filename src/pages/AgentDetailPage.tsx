@@ -16,7 +16,7 @@ import { useResolveName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { isDummyMode } from "../data/dummyRouter";
 import { fmtRuntime, initials, timeAgo } from "../lib/format";
-import { useInteractionColumns } from "./InteractionsPage";
+import { LedgerTable } from "../components/LedgerTable";
 import type { Intent } from "../types";
 import { fetchAgentPolicyUpdate, type PolicyHistoryEntry, type PolicyUpdate } from "../api/policy";
 import { exportAgentPdf } from "../lib/exportAgentPdf";
@@ -44,7 +44,6 @@ export function AgentDetailPage() {
   const { data: interactions } = useAgentInteractions(agentId);
   const { data: intents } = useAgentIntents(agentId);
   const { data: history } = useAgentPolicyHistory(agentId);
-  const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
   const openHistoryRevision = (entry: PolicyHistoryEntry) => {
     setHistoryOpen(entry);
     setHistoryPolicy(null);
@@ -311,11 +310,10 @@ export function AgentDetailPage() {
         />
 
         {tab === "interactions" && (
-          <DataTable
+          <LedgerTable
             rows={interactions}
-            columns={interactionCols}
-            onRowClick={(r) => openDrawer("interaction", r)}
             emptyText="No interactions yet."
+            onView={(r) => openDrawer("interaction", r)}
           />
         )}
 

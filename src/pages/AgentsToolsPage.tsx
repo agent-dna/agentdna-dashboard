@@ -10,6 +10,7 @@ import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { AccessRequestModal } from "../components/forms/AccessRequestModal";
 import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics, useHomeMetrics } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
+import { AppIcon } from "../components/AppIcon";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
 import { exportAgentsListPdf, exportToolsListPdf } from "../lib/exportListPdf";
@@ -419,9 +420,9 @@ function TopAppsList({
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.4)", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>LAST 30 DAYS</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 76px 72px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-        {["#", "APP", "IXNS", "SHARE"].map((h, i) => (
-          <div key={h} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", textAlign: i > 1 ? "right" : "left" }}>{h}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "36px 28px 1fr 76px 72px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+        {["#", "", "APP", "IXNS", "SHARE"].map((h, i) => (
+          <div key={i} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", textAlign: i > 2 ? "right" : "left" }}>{h}</div>
         ))}
       </div>
 
@@ -440,11 +441,12 @@ function TopAppsList({
               onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)")}
               onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
             >
-              <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 76px 72px", alignItems: "center", padding: "10px 0 4px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "36px 28px 1fr 76px 72px", alignItems: "center", padding: "10px 0 4px" }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: i === 0 ? "#fff" : "rgba(255,255,255,0.4)" }}>
                   {String(i + 1).padStart(2, "0")}
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: "#fff", fontFamily: "var(--font-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <AppIcon name={r.name} size={22} />
+                <div style={{ fontSize: 14, fontWeight: 500, color: "#fff", fontFamily: "var(--font-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: 6 }}>
                   {r.name}
                 </div>
                 <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
