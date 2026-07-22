@@ -252,9 +252,7 @@ export function HomePage() {
                   </div>
                 )}
                 {(() => {
-                  const totalIxns = metrics.agentList.reduce((s, a) => s + a.totalInteractions, 0) || 1;
                   return metrics.agentList.map((a, i) => {
-                    const share = Math.round((a.totalInteractions / totalIxns) * 100);
                     const threats = a.totalThreats ?? 0;
                     return (
                       <div
@@ -269,7 +267,6 @@ export function HomePage() {
                         </div>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.agentName}</div>
-                          <div style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>{share}% of agent volume</div>
                         </div>
                         <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
                           {a.totalInteractions.toLocaleString()}
@@ -286,7 +283,7 @@ export function HomePage() {
               </div>
               <div style={{ padding: "12px 20px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Showing top {metrics.agentList.length} of {metrics.agentCount} agents</span>
-                <button onClick={() => navigate("/agents")} style={{ background: "none", border: "none", fontSize: 12, fontWeight: 600, color: "var(--accent)", cursor: "pointer", padding: 0 }}>View all agents →</button>
+                <button onClick={() => navigate("/agents", { state: { tab: "agents" } })} style={{ background: "none", border: "none", fontSize: 12, fontWeight: 600, color: "var(--accent)", cursor: "pointer", padding: 0 }}>View all agents →</button>
               </div>
             </>
           )}
@@ -339,7 +336,7 @@ export function HomePage() {
               </div>
               <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 13, color: "rgba(255,255,255,0.35)" }}>Showing top {agentsAppsMetrics.topApps.length} of {agentsAppsMetrics.metrics.totalApps} apps</span>
-                <button onClick={() => navigate("/agents")} style={{ background: "none", border: "none", fontSize: 13, fontWeight: 600, color: "#5f83e8", cursor: "pointer", padding: 0 }}>View all apps →</button>
+                <button onClick={() => navigate("/agents", { state: { tab: "tools" } })} style={{ background: "none", border: "none", fontSize: 13, fontWeight: 600, color: "#5f83e8", cursor: "pointer", padding: 0 }}>View all apps →</button>
               </div>
             </>
           )}

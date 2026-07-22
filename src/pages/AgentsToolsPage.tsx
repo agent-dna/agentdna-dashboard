@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pagination } from "../components/Pagination";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
@@ -20,7 +20,8 @@ type Tab = "agents" | "tools";
 export function AgentsToolsPage() {
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
-  const [tab, setTab] = useState<Tab>("agents");
+  const location = useLocation();
+  const [tab, setTab] = useState<Tab>((location.state as { tab?: Tab } | null)?.tab ?? "agents");
   const [agentsPage, setAgentsPage] = useState(1);
   const [toolsPage, setToolsPage] = useState(1);
   const agentsState = useAgentsPaged(agentsPage);
@@ -234,7 +235,7 @@ export function AgentsToolsPage() {
             const match = agents.find((a) => a.name === r.name);
             if (match) navigate(`/agents/${match.id}`);
           }}
-          onViewAll={() => navigate("/agents")}
+          onViewAll={() => navigate("/agents", { state: { tab: "agents" } })}
         />
         <TopAppsList
           rows={agentsAppsMetrics.topApps.map((a) => ({
@@ -247,7 +248,7 @@ export function AgentsToolsPage() {
             const match = tools.find((t) => t.name === r.name);
             if (match) openDrawer("tool", match);
           }}
-          onViewAll={() => navigate("/agents")}
+          onViewAll={() => navigate("/agents", { state: { tab: "tools" } })}
         />
       </div>
 
@@ -338,7 +339,6 @@ function TopAgentsList({
   onRowClick: (r: VolumeRow) => void;
   onViewAll: () => void;
 }) {
-  const totalIxns = rows.reduce((s, r) => s + r.interactions, 0) || 1;
   return (
     <div className="card" style={{ display: "flex", flexDirection: "column", padding: 0, overflow: "hidden" }}>
       <div style={{ padding: "18px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -360,7 +360,6 @@ function TopAgentsList({
           <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>No data</div>
         )}
         {rows.map((r, i) => {
-          const share = Math.round((r.interactions / totalIxns) * 100);
           const threats = r.threats ?? 0;
           return (
             <div
@@ -375,7 +374,6 @@ function TopAgentsList({
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
-                <div style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>{share}% of agent volume</div>
               </div>
               <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
                 {r.interactions.toLocaleString()}
