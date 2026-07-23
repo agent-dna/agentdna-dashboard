@@ -249,6 +249,12 @@ export function RequestsPage() {
                         <button className="btn-mini" style={{ color: "var(--threat)", borderColor: "rgba(220,38,38,0.3)" }} onClick={(e) => { e.stopPropagation(); handleApprove(r, "rejected"); }}>Reject</button>
                       </>
                     )}
+                    {!canEdit && !canApprove && r.status !== "pending" && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--fg-faint)", flexShrink: 0, display: "inline-block" }} />
+                        Acknowledged
+                      </span>
+                    )}
                   </div>
                 </td>
               </tr>

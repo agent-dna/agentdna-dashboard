@@ -30,6 +30,7 @@ export function UserDetailPage() {
 
   const [revoking, setRevoking] = useState(false);
   const [granting, setGranting] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
 
   const { data: result, loading } = useUserInfo(
     userId, interactionsPage, intentsPage, threatsPage, agentsPage,
@@ -317,12 +318,7 @@ export function UserDetailPage() {
               className="btn"
               disabled={revoking}
               style={{ color: "var(--threat)", borderColor: "rgba(220,38,38,0.3)" }}
-              onClick={async () => {
-                if (!confirm(`Revoke all access for ${user.userName}?`)) return;
-                setRevoking(true);
-                // TODO: call revokeAgentAccess or a user-level revoke API
-                setRevoking(false);
-              }}
+              onClick={() => setConfirmRevoke(true)}
             >
               <Icon name="shield" size={14} />
               {revoking ? "Revoking…" : "Revoke access"}
@@ -401,6 +397,43 @@ export function UserDetailPage() {
           />
         )}
       </div>
+
+      {/* Revoke access confirmation modal */}
+      {confirmRevoke && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setConfirmRevoke(false)}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)" }} />
+          <div style={{ position: "relative", background: "var(--surface)", border: "1px solid var(--line-strong)", borderRadius: 14, padding: "28px 28px 24px", width: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}
+            onClick={(e) => e.stopPropagation()}>
+            {/* Icon */}
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.18)", display: "grid", placeItems: "center", marginBottom: 16 }}>
+              <Icon name="shield" size={20} style={{ color: "var(--threat)" }} />
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg)", marginBottom: 8 }}>Revoke access</div>
+            <div style={{ fontSize: 13.5, color: "var(--fg-muted)", lineHeight: 1.6, marginBottom: 24 }}>
+              Are you sure you want to revoke all access for{" "}
+              <span style={{ fontWeight: 600, color: "var(--fg)" }}>{user.displayName || user.userName}</span>?
+              This will remove their access to all agents immediately.
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button className="btn" onClick={() => setConfirmRevoke(false)}>Cancel</button>
+              <button
+                className="btn"
+                disabled={revoking}
+                style={{ background: "var(--threat)", color: "#fff", border: "none" }}
+                onClick={async () => {
+                  setRevoking(true);
+                  // TODO: call revokeAgentAccess or user-level revoke API
+                  setRevoking(false);
+                  setConfirmRevoke(false);
+                }}
+              >
+                {revoking ? "Revoking…" : "Yes, revoke access"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
