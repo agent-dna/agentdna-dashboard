@@ -43,6 +43,7 @@ export interface Intent {
   status: Status;
   provenanceRecordID: string;
   signature?: string;
+  title?: string;
 }
 
 export type EntityRef = Pick<Agent | Tool, "id" | "name">;
