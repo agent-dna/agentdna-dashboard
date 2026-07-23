@@ -953,8 +953,8 @@ export interface UserDetail {
   userID: string;
   userName: string;
   displayName?: string;
-  createdAt: string;
-  lastActive: string | null;
+  createdMinsAgo: number;    // minutes since createdAt
+  lastActiveMinsAgo: number; // minutes since lastActive, 0 if null
   isActive: boolean;
   accessAgentCount: number;
   totalInteractions: number;
@@ -1005,8 +1005,8 @@ export async function fetchUserInfo(
         userID: u.userID,
         userName: u.userName,
         displayName: u.displayName,
-        createdAt: u.createdAt,
-        lastActive: u.lastActive ?? null,
+        createdMinsAgo: isoToMinutesAgo(u.createdAt),
+        lastActiveMinsAgo: isoToMinutesAgo(u.lastActive),
         isActive: !!u.isActive,
         accessAgentCount: u.accessAgentCount || 0,
         totalInteractions: u.totalInteractions || 0,

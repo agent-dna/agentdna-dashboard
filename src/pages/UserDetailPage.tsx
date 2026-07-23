@@ -266,10 +266,10 @@ export function UserDetailPage() {
           {/* Info */}
           <div style={{ flex: 1, position: "relative" }}>
             {/* Last active badge */}
-            {user.lastActive && (
+            {user.lastActiveMinsAgo > 0 && (
               <div style={{ position: "absolute", top: 0, right: 0, display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: "var(--fg)", fontFamily: "var(--font-mono)" }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--safe)", display: "inline-block", flexShrink: 0 }} />
-                active · {timeAgo(Math.floor(new Date(user.lastActive).getTime() / 1000))}
+                active · {timeAgo(user.lastActiveMinsAgo)}
               </div>
             )}
 
@@ -293,7 +293,7 @@ export function UserDetailPage() {
             {/* Info grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
               <InfoStat label="Email" value={user.userName} />
-              <InfoStat label="Joined" value={timeAgo(Math.floor(new Date(user.createdAt).getTime() / 1000))} />
+              <InfoStat label="Joined" value={timeAgo(user.createdMinsAgo)} />
               <InfoStat label="Agents Access" value={user.accessAgentCount} mono />
               <InfoStat label="Agents Deployed" value={user.totalAgentsDeployed} mono />
             </div>
