@@ -127,12 +127,6 @@ const BRANDS: Record<string, BrandDef> = {
   },
 };
 
-export function isKnownApp(name: string): boolean {
-  if (!name) return false;
-  const lower = name.toLowerCase();
-  return Object.keys(BRANDS).some((key) => lower.includes(key));
-}
-
 function matchBrand(name: string): BrandDef | null {
   const lower = name.toLowerCase();
   for (const [key, def] of Object.entries(BRANDS)) {

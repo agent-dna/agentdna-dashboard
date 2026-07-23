@@ -2,7 +2,6 @@ import type { Interaction } from "../types";
 import { useResolveName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { timeAgo } from "../lib/format";
-import { AppIcon, isKnownApp } from "./AppIcon";
 
 const TD_STYLE = { padding: "14px 22px", borderBottom: "1px solid var(--line)", verticalAlign: "middle" } as const;
 
@@ -80,24 +79,14 @@ export function LedgerTable({
                 </span>
               </td>
               <td style={TD_STYLE}>
-                {(() => {
-                  const name = resolveName(r.initiator.id, r.initiator.name);
-                  return isKnownApp(name) ? (
-                    <AppIcon name={name} size={22} />
-                  ) : (
-                    <span style={{ font: "600 13px var(--font-mono)", color: "var(--fg)" }}>{name}</span>
-                  );
-                })()}
+                <span style={{ font: "600 13px var(--font-mono)", color: "var(--fg)" }}>
+                  {resolveName(r.initiator.id, r.initiator.name)}
+                </span>
               </td>
               <td style={TD_STYLE}>
-                {(() => {
-                  const name = resolveName(r.target.id, r.target.name);
-                  return r.targetType === "tool" || isKnownApp(name) ? (
-                    <AppIcon name={name} size={22} />
-                  ) : (
-                    <span style={{ font: "500 13px var(--font-mono)", color: "var(--fg-dim, var(--fg-muted))" }}>{name}</span>
-                  );
-                })()}
+                <span style={{ font: "500 13px var(--font-mono)", color: "var(--fg-dim, var(--fg-muted))" }}>
+                  {resolveName(r.target.id, r.target.name)}
+                </span>
               </td>
               <td style={TD_STYLE}>
                 <IntentIdChip id={r.intent.id} style={{ font: "500 13px var(--font-mono)", color: "var(--accent)" }} />
