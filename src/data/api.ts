@@ -882,6 +882,43 @@ function mapToolIntent(i: ApiToolIntent): Intent {
 
 // ─── User detail ─────────────────────────────────────────────────────────────
 
+interface ApiUserIntent {
+  intentID: string;
+  initiatorDID: string;
+  initiatorName?: string;
+  flowType?: string;
+  status?: string;
+  threatDetected?: boolean;
+  threatCount?: number;
+  startedAt?: string;
+  endedAt?: string;
+  runtimeSeconds?: number;
+  agentsCount?: number;
+  toolsCount?: number;
+  interactionsCount?: number;
+  chainDepth?: number;
+  executor?: string;
+  firstInteractionAt?: string | null;
+  lastInteractionAt?: string | null;
+}
+
+function mapUserIntent(i: ApiUserIntent): Intent {
+  return {
+    id: i.intentID,
+    name: i.intentID,
+    initiator: { id: i.initiatorDID, name: i.initiatorName || shortDid(i.initiatorDID) } as Agent,
+    runtime: (i.runtimeSeconds || 0) * 1000,
+    started: i.startedAt ? isoToMinutesAgo(i.startedAt) : 0,
+    agentsInteracted: i.agentsCount || 0,
+    toolsInteracted: i.toolsCount || 0,
+    interactionsCount: i.interactionsCount || 0,
+    threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
+    score: i.threatDetected ? 0 : 100,
+    status: (i.status as Agent["status"]) || "safe",
+    provenanceRecordID: "",
+  };
+}
+
 interface ApiUserInfo {
   userID: string;
   userName: string;
@@ -895,7 +932,7 @@ interface ApiUserInfo {
   totalIntents: number;
   totalAgentsDeployed: number;
   interactions: { list: ApiToolInteraction[]; total: number; page: number; pageSize: number; totalPages: number };
-  intents: { list: ApiToolIntent[]; total: number; page: number; pageSize: number; totalPages: number };
+  intents: { list: ApiUserIntent[]; total: number; page: number; pageSize: number; totalPages: number };
   threats: { list: ApiToolInteraction[]; total: number; page: number; pageSize: number; totalPages: number };
   agents: {
     list: {
@@ -977,7 +1014,7 @@ export async function fetchUserInfo(
       interactions: (r.interactions?.list || []).map(mapToolInteraction),
       interactionsTotal: r.interactions?.total || 0,
       interactionsTotalPages: r.interactions?.totalPages || 1,
-      intents: (r.intents?.list || []).map(mapToolIntent),
+      intents: (r.intents?.list || []).map(mapUserIntent),
       intentsTotal: r.intents?.total || 0,
       intentsTotalPages: r.intents?.totalPages || 1,
       threats: (r.threats?.list || []).map(mapToolInteraction),
