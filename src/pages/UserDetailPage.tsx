@@ -124,15 +124,6 @@ export function UserDetailPage() {
       ),
     },
     {
-      key: "title",
-      label: "Title",
-      render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-          {r.title || <span style={{ color: "var(--fg-faint)" }}>—</span>}
-        </span>
-      ),
-    },
-    {
       key: "runtime",
       label: "Runtime",
       align: "right",

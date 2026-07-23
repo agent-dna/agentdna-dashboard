@@ -302,7 +302,6 @@ interface ApiIntent {
   /** Distinct tools touched by this intent. */
   toolsCount?: number;
   provenanceRecordID?: string;
-  title?: string;
 }
 
 interface PagedIntents {
@@ -351,7 +350,6 @@ function mapIntent(i: ApiIntent): Intent {
     score: 0,
     status: i.threatDetected ? "threat" : "safe",
     provenanceRecordID: i.provenanceRecordID ?? "",
-    title: i.title || "",
   };
 }
 
@@ -804,7 +802,6 @@ interface ApiToolIntent {
   threatDetected?: boolean;
   startedAt?: string;
   endedAt?: string;
-  title?: string;
 }
 
 interface ApiToolInfo {
@@ -880,7 +877,6 @@ function mapToolIntent(i: ApiToolIntent): Intent {
     score: i.threatDetected ? 0 : 100,
     status: (i.status as Agent["status"]) || "safe",
     provenanceRecordID: "",
-    title: i.title || "",
   };
 }
 
@@ -904,7 +900,6 @@ interface ApiUserIntent {
   executor?: string;
   firstInteractionAt?: string | null;
   lastInteractionAt?: string | null;
-  title?: string;
 }
 
 function mapUserIntent(i: ApiUserIntent): Intent {
@@ -921,7 +916,6 @@ function mapUserIntent(i: ApiUserIntent): Intent {
     score: i.threatDetected ? 0 : 100,
     status: (i.status as Agent["status"]) || "safe",
     provenanceRecordID: "",
-    title: i.title || "",
   };
 }
 

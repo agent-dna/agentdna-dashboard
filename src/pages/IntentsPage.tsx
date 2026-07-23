@@ -39,15 +39,6 @@ export function IntentsPage() {
       ),
     },
     {
-      key: "title",
-      label: "Title",
-      render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-          {r.title || <span style={{ color: "var(--fg-faint)" }}>—</span>}
-        </span>
-      ),
-    },
-    {
       key: "name",
       label: "Status",
       sortFn: (a, b) => a.name.localeCompare(b.name),
