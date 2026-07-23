@@ -317,7 +317,7 @@ export function ProfilePage() {
               Get up and running in minutes
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-              {[
+              {[ 
                 { step: "01", icon: "key" as const, title: "Copy your API key", desc: "Find your API key in the card on the right. This authenticates your agent with the AgentDNA platform." },
                 { step: "02", icon: "helix" as const, title: "Install the SDK", desc: "Install the AgentDNA SDK in your project and initialise it with your API key and organisation ID." },
                 { step: "03", icon: "activity" as const, title: "Wrap your agent", desc: "Wrap your agent's inference calls with the AgentDNA middleware to start capturing interactions automatically." },

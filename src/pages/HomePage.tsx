@@ -306,7 +306,7 @@ export function HomePage() {
                     return (
                       <div
                         key={a.name}
-                        onClick={() => navigate("/agents")}
+                        onClick={() => navigate(`/tools/${encodeURIComponent(a.name)}`)}
                         style={{ cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 20px" }}
                         onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)")}
                         onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}

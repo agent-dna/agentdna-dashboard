@@ -776,3 +776,143 @@ export async function fetchSearch(q: string): Promise<SearchResults> {
   const res = await apiRequest<SearchResults>("/search", { query: { q } });
   return res ?? { agents: [], apps: [], intents: [] };
 }
+
+// ============ Tool / App detail ============
+
+interface ApiToolInteraction {
+  interactionID: string;
+  from: string;
+  fromName?: string;
+  to: string;
+  toName?: string;
+  type: string;
+  threat: boolean;
+  intentID: string;
+  message?: string;
+  signature?: string;
+  provenanceRecordID?: string;
+  time: string;
+}
+
+interface ApiToolIntent {
+  intentID: string;
+  initiatorDID: string;
+  flowType?: string;
+  status?: string;
+  threatDetected?: boolean;
+  startedAt?: string;
+  endedAt?: string;
+}
+
+interface ApiToolInfo {
+  toolDID: string;
+  toolName: string;
+  totalInteractions: number;
+  totalThreats: number;
+  totalIntents: number;
+  totalAgents: number;
+  score: number;
+  interactions: {
+    list: ApiToolInteraction[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  };
+  intents: {
+    list: ApiToolIntent[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  };
+}
+
+export interface ToolDetail {
+  id: string;
+  name: string;
+  totalInteractions: number;
+  totalThreats: number;
+  totalIntents: number;
+  totalAgents: number;
+  score: number;
+}
+
+export interface ToolDetailResult {
+  tool: ToolDetail;
+  interactions: Interaction[];
+  interactionsTotal: number;
+  interactionsTotalPages: number;
+  intents: Intent[];
+  intentsTotal: number;
+  intentsTotalPages: number;
+}
+
+function mapToolInteraction(i: ApiToolInteraction): Interaction {
+  const fromName = i.fromName?.trim() || shortDid(i.from);
+  const toName = i.toName?.trim() || shortDid(i.to);
+  return {
+    id: i.interactionID,
+    initiator: { id: i.from, name: fromName },
+    target: { id: i.to, name: toName },
+    targetType: "tool",
+    intent: { id: i.intentID, name: "" },
+    runtime: 0,
+    threat: !!i.threat,
+    created: isoToMinutesAgo(i.time),
+  };
+}
+
+function mapToolIntent(i: ApiToolIntent): Intent {
+  return {
+    id: i.intentID,
+    name: i.intentID,
+    initiator: { id: i.initiatorDID, name: shortDid(i.initiatorDID) } as Agent,
+    runtime: 0,
+    started: i.startedAt ? isoToMinutesAgo(i.startedAt) : 0,
+    agentsInteracted: 0,
+    toolsInteracted: 0,
+    interactionsCount: 0,
+    threats: i.threatDetected ? 1 : 0,
+    score: i.threatDetected ? 0 : 100,
+    status: (i.status as Agent["status"]) || "safe",
+    provenanceRecordID: "",
+  };
+}
+
+export async function fetchToolInfo(
+  nameOrDid: string,
+  interactionsPage = 1,
+  intentsPage = 1,
+): Promise<ToolDetailResult | null> {
+  try {
+    const isDid = nameOrDid.startsWith("bafy") || nameOrDid.includes("did:");
+    const query: Record<string, string | number> = {
+      interactionsPage,
+      intentsPage,
+    };
+    if (isDid) query.toolDID = nameOrDid;
+    else query.name = nameOrDid;
+
+    const r = await apiRequest<ApiToolInfo>("/tool-info", { query });
+    return {
+      tool: {
+        id: r.toolDID,
+        name: r.toolName,
+        totalInteractions: r.totalInteractions,
+        totalThreats: r.totalThreats,
+        totalIntents: r.totalIntents,
+        totalAgents: r.totalAgents || 0,
+        score: r.score,
+      },
+      interactions: (r.interactions?.list || []).map(mapToolInteraction),
+      interactionsTotal: r.interactions?.total || 0,
+      interactionsTotalPages: r.interactions?.totalPages || 1,
+      intents: (r.intents?.list || []).map(mapToolIntent),
+      intentsTotal: r.intents?.total || 0,
+      intentsTotalPages: r.intents?.totalPages || 1,
+    };
+  } catch {
+    return null;
+  }
+}

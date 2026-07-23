@@ -4,7 +4,6 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { EntityCell } from "../components/EntityCell";
 import { ScoreBar } from "../components/ScoreBar";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { AccessRequestModal } from "../components/forms/AccessRequestModal";
@@ -112,7 +111,13 @@ export function AgentsToolsPage() {
       label: "App",
       sortFn: (a, b) => a.name.localeCompare(b.name),
       render: (r) => (
-        <EntityCell name={r.name} sub={r.provider} paletteIx={r.name.charCodeAt(0)} icon={r.provider.slice(0, 2).toUpperCase()} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <AppIcon name={r.name} size={28} />
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</div>
+            {r.provider && <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 1 }}>{r.provider}</div>}
+          </div>
+        </div>
       ),
     },
     {
@@ -245,10 +250,7 @@ export function AgentsToolsPage() {
             interactions: a.totalInteractions,
           }))}
           totalApps={agentsAppsMetrics.metrics.totalApps}
-          onRowClick={(r) => {
-            const match = tools.find((t) => t.name === r.name);
-            if (match) openDrawer("tool", match);
-          }}
+          onRowClick={(r) => navigate(`/tools/${encodeURIComponent(r.name)}`)}
           onViewAll={() => navigate("/agents", { state: { tab: "tools" } })}
         />
       </div>
@@ -288,7 +290,7 @@ export function AgentsToolsPage() {
           <DataTable
             columns={toolCols}
             rows={rows as Tool[]}
-            onRowClick={(r) => openDrawer("tool", r)}
+            onRowClick={(r) => navigate(`/tools/${encodeURIComponent(r.name)}`)}
             emptyText="No tools yet"
           />
         )}

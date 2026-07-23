@@ -126,3 +126,10 @@ export const useIntentDiagram = (id: string) =>
 
 export const useIntentBlockData = (id: string) =>
   useAsync<api.IntentBlock | null>(() => api.fetchIntentBlockData(id), null, [id]);
+
+export const useToolInfo = (nameOrDid: string, interactionsPage = 1, intentsPage = 1) =>
+  useAsync<api.ToolDetailResult | null>(
+    () => api.fetchToolInfo(nameOrDid, interactionsPage, intentsPage),
+    null,
+    [nameOrDid, interactionsPage, intentsPage],
+  );
