@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icon } from "../../components/Icon";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { AddUserModal } from "../../components/forms/AddUserModal";
@@ -36,6 +37,7 @@ function fmtDate(s: string) {
 export function UsersTab() {
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<OrgUser[]>([]);
   const [total, setTotal] = useState(0);
@@ -125,6 +127,7 @@ export function UsersTab() {
       <DataTable
         rows={rows.map((r) => ({ ...r, id: r.userID }))}
         columns={cols}
+        onRowClick={(r) => navigate(`/users/${encodeURIComponent(r.userID)}`)}
         emptyText={loading ? "Loading…" : "No users in this org yet"}
       />
 

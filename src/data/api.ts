@@ -880,6 +880,125 @@ function mapToolIntent(i: ApiToolIntent): Intent {
   };
 }
 
+// ─── User detail ─────────────────────────────────────────────────────────────
+
+interface ApiUserInfo {
+  userID: string;
+  userName: string;
+  displayName?: string;
+  createdAt: string;
+  lastActive: string | null;
+  isActive: boolean;
+  accessAgentCount: number;
+  totalInteractions: number;
+  totalThreats: number;
+  totalIntents: number;
+  totalAgentsDeployed: number;
+  interactions: { list: ApiToolInteraction[]; total: number; page: number; pageSize: number; totalPages: number };
+  intents: { list: ApiToolIntent[]; total: number; page: number; pageSize: number; totalPages: number };
+  threats: { list: ApiToolInteraction[]; total: number; page: number; pageSize: number; totalPages: number };
+  agents: {
+    list: {
+      agentDID: string;
+      agentName: string;
+      created: number;
+      totalInteractions: number;
+      totalThreats: number;
+      status: "active" | "warn" | "inactive";
+    }[];
+    total: number; page: number; pageSize: number; totalPages: number;
+  };
+}
+
+export interface UserDetail {
+  userID: string;
+  userName: string;
+  displayName?: string;
+  createdAt: string;
+  lastActive: string | null;
+  isActive: boolean;
+  accessAgentCount: number;
+  totalInteractions: number;
+  totalThreats: number;
+  totalIntents: number;
+  totalAgentsDeployed: number;
+}
+
+export interface DeployedAgent {
+  id: string;
+  name: string;
+  created: number;
+  interactions: number;
+  threats: number;
+  status: "active" | "warn" | "inactive";
+}
+
+export interface UserDetailResult {
+  user: UserDetail;
+  interactions: Interaction[];
+  interactionsTotal: number;
+  interactionsTotalPages: number;
+  intents: Intent[];
+  intentsTotal: number;
+  intentsTotalPages: number;
+  threats: Interaction[];
+  threatsTotal: number;
+  threatsTotalPages: number;
+  agents: DeployedAgent[];
+  agentsTotal: number;
+  agentsTotalPages: number;
+}
+
+export async function fetchUserInfo(
+  userID: string,
+  interactionsPage = 1,
+  intentsPage = 1,
+  threatsPage = 1,
+  agentsPage = 1,
+): Promise<UserDetailResult | null> {
+  try {
+    const r = await apiRequest<ApiUserInfo>("/user-info", {
+      query: { userID, interactionsPage, intentsPage, threatsPage, agentsPage },
+    });
+    return {
+      user: {
+        userID: r.userID,
+        userName: r.userName,
+        displayName: r.displayName,
+        createdAt: r.createdAt,
+        lastActive: r.lastActive ?? null,
+        isActive: !!r.isActive,
+        accessAgentCount: r.accessAgentCount || 0,
+        totalInteractions: r.totalInteractions || 0,
+        totalThreats: r.totalThreats || 0,
+        totalIntents: r.totalIntents || 0,
+        totalAgentsDeployed: r.totalAgentsDeployed || 0,
+      },
+      interactions: (r.interactions?.list || []).map(mapToolInteraction),
+      interactionsTotal: r.interactions?.total || 0,
+      interactionsTotalPages: r.interactions?.totalPages || 1,
+      intents: (r.intents?.list || []).map(mapToolIntent),
+      intentsTotal: r.intents?.total || 0,
+      intentsTotalPages: r.intents?.totalPages || 1,
+      threats: (r.threats?.list || []).map(mapToolInteraction),
+      threatsTotal: r.threats?.total || 0,
+      threatsTotalPages: r.threats?.totalPages || 1,
+      agents: (r.agents?.list || []).map((a) => ({
+        id: a.agentDID,
+        name: a.agentName,
+        created: a.created,
+        interactions: a.totalInteractions || 0,
+        threats: a.totalThreats || 0,
+        status: a.status,
+      })),
+      agentsTotal: r.agents?.total || 0,
+      agentsTotalPages: r.agents?.totalPages || 1,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchToolInfo(
   nameOrDid: string,
   interactionsPage = 1,

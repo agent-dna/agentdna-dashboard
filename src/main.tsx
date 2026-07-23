@@ -8,6 +8,7 @@ import { IntentsPage } from "./pages/IntentsPage";
 import { AgentsToolsPage } from "./pages/AgentsToolsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { ToolDetailPage } from "./pages/ToolDetailPage";
+import { UserDetailPage } from "./pages/UserDetailPage";
 import { IntentDetailPage } from "./pages/IntentDetailPage";
 import { InteractionsPage } from "./pages/InteractionsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -47,6 +48,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="agents" element={<AgentsToolsPage />} />
                 <Route path="agents/:agentId" element={<AgentDetailPage />} />
                 <Route path="tools/:toolId" element={<ToolDetailPage />} />
+                <Route path="users/:userId" element={<UserDetailPage />} />
                 <Route path="requests" element={<RequestsPage />} />
                 <Route path="graph" element={<FlowPage />} />
                 <Route path="graph/:intentId" element={<FlowPage />} />

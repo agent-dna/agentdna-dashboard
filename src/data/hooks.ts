@@ -114,6 +114,19 @@ export const useIntentParticipants = (id: string) =>
 export const useLogs = (kind: "agent" | "intent", id: string) =>
   useAsync<LogEntry[]>(() => api.fetchLogs(kind, id), [], [kind, id]);
 
+export const useUserInfo = (
+  userID: string,
+  interactionsPage = 1,
+  intentsPage = 1,
+  threatsPage = 1,
+  agentsPage = 1,
+) =>
+  useAsync<api.UserDetailResult | null>(
+    () => api.fetchUserInfo(userID, interactionsPage, intentsPage, threatsPage, agentsPage),
+    null,
+    [userID, interactionsPage, intentsPage, threatsPage, agentsPage],
+  );
+
 export const useAgentPolicyHistory = (id: string) =>
   useAsync<PolicyHistory | null>(
     () => (id ? fetchAgentPolicyHistory(id).catch(() => null) : Promise.resolve(null)),

@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { Tabs } from "../components/Tabs";
-import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { DeployAgentModal, type DeployPhase } from "../components/forms/DeployAgentModal";
 import { UsersTab } from "./requests/UsersTab";
@@ -160,120 +159,105 @@ export function RequestsPage() {
     }
   };
 
-  const baseColumns: DataTableColumn<AgentRequest>[] = [
-    {
-      key: "requestID",
-      label: "Request",
-      render: (r) => (
-        <span className="cell-id">
-          <span className="pre">req_</span>
-          {r.requestID.slice(0, 12)}
-        </span>
-      ),
-    },
-    {
-      key: "agentName",
-      label: "Agent",
-      render: (r) => {
-        // Prefer the agentName from the request; if missing, try resolving the
-        // agentDID via the directory; finally fall back to a short DID.
-        let label = r.agentName?.trim();
-        if (!label && r.agentDID) {
-          const hit = resolve(r.agentDID);
-          if (hit.kind && hit.name) label = hit.name;
-        }
-        if (!label && r.agentDID) label = `${r.agentDID.slice(0, 18)}…`;
-        return (
-          <div style={{ fontSize: 13.5, color: "var(--fg)", fontWeight: 600 }}>{label || "—"}</div>
-        );
-      },
-    },
-    {
-      key: "creatorDID",
-      label: "Creator",
-      render: (r) => {
-        if (!r.creatorDID) return "—";
-        const hit = resolve(r.creatorDID);
-        const label = hit.kind && hit.name ? hit.name : `${r.creatorDID.slice(0, 18)}…`;
-        const isMono = !hit.kind;
-        return (
-          <span
-            style={{
-              fontFamily: isMono ? "var(--font-mono)" : "var(--font-body)",
-              fontSize: 12.5,
-              fontWeight: hit.kind ? 600 : 500,
-              color: hit.kind ? "var(--fg)" : "var(--fg-dim)",
-            }}
-          >
-            {label}
-          </span>
-        );
-      },
-    },
-    { key: "status", label: "Status", render: (r) => <StatusChip status={r.status} /> },
-    {
-      key: "createdAt",
-      label: "Created",
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)" }}>
-          {fmtDate(r.createdAt)}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      label: "",
-      align: "right",
-      render: (r) => {
-        const isCreator = r.creatorDID === user?.did;
-        // Admin can edit any pending creation request; non-admins only their own.
-        // Backend will still enforce creator-only on /agents-creation-requests-edit,
-        // so as an admin the call may 403 unless the backend allows admin override.
-        const canEdit =
-          tab === "creation" && r.status === "pending" && (isCreator || isAdmin);
-        const canApprove =
-          isAdmin && r.status === "pending" && (tab === "creation" || tab === "access-org");
-        return (
-          <div className="row-actions">
-            {canEdit && (
-              <button
-                className="btn-mini"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditTarget(r);
-                }}
-              >
-                Edit
-              </button>
-            )}
-            {canApprove && (
-              <>
-                <button
-                  className="btn-mini"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleApprove(r, "approved");
-                  }}
-                >
-                  Approve
-                </button>
-                <button
-                  className="btn-mini"
-                  style={{ color: "var(--threat)", borderColor: "rgba(220,38,38,0.3)" }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleApprove(r, "rejected");
-                  }}
-                >
-                  Reject
-                </button>
-              </>
-            )}
-          </div>
-        );
-      },
-    },
-  ];
+  function RequestsLedger() {
+    if (rows.length === 0) {
+      return (
+        <div style={{ padding: "40px 0", textAlign: "center", color: "var(--fg-faint)", fontSize: 13, fontFamily: "var(--font-mono)" }}>
+          {loading ? "Loading…" : "No requests"}
+        </div>
+      );
+    }
+
+    const TH = ({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) => (
+      <th style={{ padding: "10px 22px", textAlign: align, fontSize: 11.5, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.07em", color: "var(--fg-muted)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" as const, background: "transparent" }}>
+        {children}
+      </th>
+    );
+
+    return (
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: "15%" }} />
+          <col style={{ width: "20%" }} />
+          <col style={{ width: "20%" }} />
+          <col style={{ width: "11%" }} />
+          <col style={{ width: "18%" }} />
+          <col style={{ width: "16%" }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <TH>Request ID</TH>
+            <TH>Agent</TH>
+            <TH>Creator</TH>
+            <TH>Status</TH>
+            <TH>Created</TH>
+            <TH align="right">Actions</TH>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            let agentLabel = r.agentName?.trim();
+            if (!agentLabel && r.agentDID) {
+              const hit = resolve(r.agentDID);
+              if (hit.kind && hit.name) agentLabel = hit.name;
+            }
+            if (!agentLabel && r.agentDID) agentLabel = `${r.agentDID.slice(0, 18)}…`;
+
+            let creatorLabel = "—";
+            let creatorMono = false;
+            if (r.creatorDID) {
+              const hit = resolve(r.creatorDID);
+              creatorLabel = hit.kind && hit.name ? hit.name : `${r.creatorDID.slice(0, 18)}…`;
+              creatorMono = !hit.kind;
+            }
+
+            const isCreator = r.creatorDID === user?.did;
+            const canEdit = tab === "creation" && r.status === "pending" && (isCreator || isAdmin);
+            const canApprove = isAdmin && r.status === "pending" && (tab === "creation" || tab === "access-org");
+
+            const td: React.CSSProperties = { padding: "14px 22px", borderBottom: "1px solid var(--line)", verticalAlign: "middle" };
+
+            return (
+              <tr key={r.requestID} style={{ transition: "background 0.1s" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
+                <td style={td}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--fg-muted)" }}>
+                    <span style={{ opacity: 0.55 }}>req_</span>{r.requestID.slice(0, 12)}
+                  </span>
+                </td>
+                <td style={td}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{agentLabel || "—"}</span>
+                </td>
+                <td style={td}>
+                  <span style={{ fontFamily: creatorMono ? "var(--font-mono)" : "var(--font-body)", fontSize: 13, fontWeight: creatorMono ? 500 : 600, color: creatorMono ? "var(--fg-muted)" : "var(--fg)" }}>
+                    {creatorLabel}
+                  </span>
+                </td>
+                <td style={td}><StatusChip status={r.status} /></td>
+                <td style={td}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>{fmtDate(r.createdAt)}</span>
+                </td>
+                <td style={{ ...td, textAlign: "right" }}>
+                  <div className="row-actions" style={{ justifyContent: "flex-end" }}>
+                    {canEdit && (
+                      <button className="btn-mini" onClick={(e) => { e.stopPropagation(); setEditTarget(r); }}>Edit</button>
+                    )}
+                    {canApprove && (
+                      <>
+                        <button className="btn-mini" onClick={(e) => { e.stopPropagation(); handleApprove(r, "approved"); }}>Approve</button>
+                        <button className="btn-mini" style={{ color: "var(--threat)", borderColor: "rgba(220,38,38,0.3)" }} onClick={(e) => { e.stopPropagation(); handleApprove(r, "rejected"); }}>Reject</button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: "creation", label: "Agent Creation" },
@@ -378,11 +362,7 @@ export function RequestsPage() {
                 </button>
               </div>
             ) : (
-              <DataTable
-                rows={rows.map((r) => ({ ...r, id: r.requestID }))}
-                columns={baseColumns}
-                emptyText={loading ? "Loading…" : "No requests"}
-              />
+              <RequestsLedger />
             )}
           </>
         )}
