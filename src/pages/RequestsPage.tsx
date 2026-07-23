@@ -222,8 +222,8 @@ export function RequestsPage() {
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
                 <td style={td}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--fg-muted)" }}>
-                    <span style={{ opacity: 0.55 }}>req_</span>{r.requestID.slice(0, 12)}
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--fg)" }}>
+                    <span style={{ opacity: 0.4 }}>req_</span>{r.requestID.slice(0, 12)}
                   </span>
                 </td>
                 <td style={td}>
