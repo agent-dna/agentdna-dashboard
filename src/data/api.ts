@@ -920,17 +920,19 @@ function mapUserIntent(i: ApiUserIntent): Intent {
 }
 
 interface ApiUserInfo {
-  userID: string;
-  userName: string;
-  displayName?: string;
-  createdAt: string;
-  lastActive: string | null;
-  isActive: boolean;
-  accessAgentCount: number;
-  totalInteractions: number;
-  totalThreats: number;
-  totalIntents: number;
-  totalAgentsDeployed: number;
+  user: {
+    userID: string;
+    userName: string;
+    displayName?: string;
+    createdAt: string;
+    lastActive: string | null;
+    isActive: boolean;
+    accessAgentCount: number;
+    totalInteractions: number;
+    totalThreats: number;
+    totalIntents: number;
+    totalAgentsDeployed: number;
+  };
   interactions: { list: ApiToolInteraction[]; total: number; page: number; pageSize: number; totalPages: number };
   intents: { list: ApiUserIntent[]; total: number; page: number; pageSize: number; totalPages: number };
   threats: { list: ApiToolInteraction[]; total: number; page: number; pageSize: number; totalPages: number };
@@ -997,19 +999,20 @@ export async function fetchUserInfo(
     const r = await apiRequest<ApiUserInfo>("/user-info", {
       query: { userID, interactionsPage, intentsPage, threatsPage, agentsPage },
     });
+    const u = r.user;
     return {
       user: {
-        userID: r.userID,
-        userName: r.userName,
-        displayName: r.displayName,
-        createdAt: r.createdAt,
-        lastActive: r.lastActive ?? null,
-        isActive: !!r.isActive,
-        accessAgentCount: r.accessAgentCount || 0,
-        totalInteractions: r.totalInteractions || 0,
-        totalThreats: r.totalThreats || 0,
-        totalIntents: r.totalIntents || 0,
-        totalAgentsDeployed: r.totalAgentsDeployed || 0,
+        userID: u.userID,
+        userName: u.userName,
+        displayName: u.displayName,
+        createdAt: u.createdAt,
+        lastActive: u.lastActive ?? null,
+        isActive: !!u.isActive,
+        accessAgentCount: u.accessAgentCount || 0,
+        totalInteractions: u.totalInteractions || 0,
+        totalThreats: u.totalThreats || 0,
+        totalIntents: u.totalIntents || 0,
+        totalAgentsDeployed: u.totalAgentsDeployed || 0,
       },
       interactions: (r.interactions?.list || []).map(mapToolInteraction),
       interactionsTotal: r.interactions?.total || 0,

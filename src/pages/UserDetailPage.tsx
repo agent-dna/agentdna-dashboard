@@ -293,7 +293,7 @@ export function UserDetailPage() {
             {/* Info grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
               <InfoStat label="Email" value={user.userName} />
-              <InfoStat label="Joined" value={timeAgo(new Date(user.createdAt).getTime() / 1000)} />
+              <InfoStat label="Joined" value={timeAgo(Math.floor(new Date(user.createdAt).getTime() / 1000))} />
               <InfoStat label="Agents Access" value={user.accessAgentCount} mono />
               <InfoStat label="Agents Deployed" value={user.totalAgentsDeployed} mono />
             </div>
@@ -341,28 +341,30 @@ export function UserDetailPage() {
 
       {/* Tabbed table */}
       <div className="card">
-        <Tabs
-          active={tab}
-          onChange={(k) => setTab(k as Tab)}
-          tabs={[
-            { key: "interactions", label: "Interactions", count: interactionsTotal },
-            { key: "intents", label: "Intents", count: intentsTotal },
-            { key: "threats", label: "Threats", count: threatsTotal },
-            { key: "agents", label: "Agents Deployed", count: agentsTotal },
-          ]}
-        />
-
-        {/* Toolbar with pagination */}
-        <div className="tb-toolbar" style={{ borderTop: "none" }}>
-          <div />
-          <Pagination
-            page={currentPageFor(tab)}
-            totalPages={totalPagesFor(tab)}
-            total={totalCountFor(tab)}
-            pageSize={10}
-            inline
-            onChange={(p) => setPageFor(tab, p)}
-          />
+        <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--line)" }}>
+          {/* marginBottom: -1 collapses .tabs own border into the wrapper border */}
+          <div style={{ flex: 1, marginBottom: -1 }}>
+            <Tabs
+              active={tab}
+              onChange={(k) => setTab(k as Tab)}
+              tabs={[
+                { key: "interactions", label: "Interactions", count: interactionsTotal },
+                { key: "intents", label: "Intents", count: intentsTotal },
+                { key: "threats", label: "Threats", count: threatsTotal },
+                { key: "agents", label: "Agents Deployed", count: agentsTotal },
+              ]}
+            />
+          </div>
+          <div style={{ paddingRight: 16, flexShrink: 0 }}>
+            <Pagination
+              page={currentPageFor(tab)}
+              totalPages={totalPagesFor(tab)}
+              total={totalCountFor(tab)}
+              pageSize={10}
+              inline
+              onChange={(p) => setPageFor(tab, p)}
+            />
+          </div>
         </div>
 
         {tab === "interactions" && (
