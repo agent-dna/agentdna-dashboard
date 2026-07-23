@@ -402,25 +402,29 @@ export function UserDetailPage() {
       {confirmRevoke && (
         <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={() => setConfirmRevoke(false)}>
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)" }} />
-          <div style={{ position: "relative", background: "var(--surface)", border: "1px solid var(--line-strong)", borderRadius: 14, padding: "28px 28px 24px", width: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(3px)" }} />
+          <div style={{ position: "relative", background: "#ffffff", borderRadius: 16, padding: "32px 28px 28px", width: 420, boxShadow: "0 24px 64px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)" }}
             onClick={(e) => e.stopPropagation()}>
             {/* Icon */}
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.18)", display: "grid", placeItems: "center", marginBottom: 16 }}>
-              <Icon name="shield" size={20} style={{ color: "var(--threat)" }} />
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#FEF2F2", border: "1.5px solid #FECACA", display: "grid", placeItems: "center", marginBottom: 18 }}>
+              <Icon name="shield" size={22} style={{ color: "#DC2626" }} />
             </div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg)", marginBottom: 8 }}>Revoke access</div>
-            <div style={{ fontSize: 13.5, color: "var(--fg-muted)", lineHeight: 1.6, marginBottom: 24 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Revoke access</div>
+            <div style={{ fontSize: 13.5, color: "#6B7280", lineHeight: 1.65, marginBottom: 28 }}>
               Are you sure you want to revoke all access for{" "}
-              <span style={{ fontWeight: 600, color: "var(--fg)" }}>{user.displayName || user.userName}</span>?
+              <span style={{ fontWeight: 600, color: "#111827" }}>{user.displayName || user.userName}</span>?
               This will remove their access to all agents immediately.
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button className="btn" onClick={() => setConfirmRevoke(false)}>Cancel</button>
               <button
-                className="btn"
+                onClick={() => setConfirmRevoke(false)}
+                style={{ padding: "9px 20px", fontSize: 13.5, fontWeight: 600, borderRadius: 8, border: "1.5px solid #2563EB", background: "#fff", color: "#2563EB", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
                 disabled={revoking}
-                style={{ background: "var(--threat)", color: "#fff", border: "none" }}
+                style={{ padding: "9px 20px", fontSize: 13.5, fontWeight: 600, borderRadius: 8, border: "none", background: "#DC2626", color: "#fff", cursor: revoking ? "not-allowed" : "pointer", opacity: revoking ? 0.7 : 1 }}
                 onClick={async () => {
                   setRevoking(true);
                   // TODO: call revokeAgentAccess or user-level revoke API
