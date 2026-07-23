@@ -91,7 +91,7 @@ export function UserDetailPage() {
     agents, agentsTotal, agentsTotalPages,
   } = result;
 
-  const displayName = user.displayName || user.userName;
+  const displayName = user.displayName || user.userName || user.userID?.slice(0, 8) || "?";
   const currentPageFor = (t: Tab) =>
     t === "interactions" ? interactionsPage
     : t === "intents" ? intentsPage
@@ -192,7 +192,7 @@ export function UserDetailPage() {
       render: (r) => (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, rgba(37,99,235,0.18), rgba(14,165,233,0.05))", display: "grid", placeItems: "center", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 11, color: "var(--accent)", border: "1px solid var(--line-strong)", flexShrink: 0 }}>
-            {initials(r.name)}
+            {initials(r.name || "A")}
           </div>
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>
         </div>
