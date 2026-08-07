@@ -1,0 +1,1108 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AgentDNA Dashboard Portal — Technical Specification</title>
+<style>
+  @page { size: A4; margin: 18mm 15mm 16mm 15mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font: 10.2pt/1.55 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #16233a; margin: 0;
+  }
+  h1, h2, h3, h4 { color: #0A2240; line-height: 1.25; margin: 0 0 .4em; font-weight: 700; }
+  h1 { font-size: 24pt; letter-spacing: -0.5px; }
+  h2 {
+    font-size: 15pt; margin-top: 26px; padding-bottom: 6px;
+    border-bottom: 2px solid #0A2240; page-break-after: avoid;
+  }
+  h3 { font-size: 11.6pt; margin-top: 18px; color: #123663; page-break-after: avoid; }
+  h4 { font-size: 10.2pt; margin-top: 13px; color: #2b4a7a; page-break-after: avoid; }
+  p { margin: 0 0 .65em; }
+  ul, ol { margin: 0 0 .7em; padding-left: 18px; }
+  li { margin-bottom: .22em; }
+  code, kbd {
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 8.9pt; background: #eef2f9; color: #123663;
+    padding: 1px 4px; border-radius: 3px;
+  }
+  pre {
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 8.1pt; line-height: 1.45; background: #f6f8fc;
+    border: 1px solid #dbe4f2; border-left: 3px solid #2563EB;
+    border-radius: 5px; padding: 10px 12px; overflow: hidden;
+    white-space: pre-wrap; page-break-inside: avoid; margin: 0 0 12px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 8.7pt;
+    margin: 0 0 14px; page-break-inside: auto;
+  }
+  th {
+    background: #0A2240; color: #fff; text-align: left; font-weight: 700;
+    padding: 6px 8px; font-size: 8.2pt; letter-spacing: .03em; text-transform: uppercase;
+  }
+  td { padding: 5px 8px; border-bottom: 1px solid #e3eaf5; vertical-align: top; }
+  tr { page-break-inside: avoid; }
+  tbody tr:nth-child(even) { background: #f7f9fd; }
+  td code { font-size: 8.2pt; background: #eef2f9; }
+  .cover { text-align: left; padding-top: 40mm; page-break-after: always; }
+  .cover .eyebrow { font: 700 10pt/1 sans-serif; letter-spacing: .22em; text-transform: uppercase; color: #2563EB; margin-bottom: 14px; }
+  .cover h1 { font-size: 32pt; margin-bottom: 8px; }
+  .cover .sub { font-size: 13pt; color: #5F73A0; margin-bottom: 34px; }
+  .cover .meta { border-top: 2px solid #0A2240; padding-top: 14px; font-size: 9.4pt; color: #47597e; }
+  .cover .meta div { margin-bottom: 4px; color: #47597e; }
+  .note {
+    background: #eff5ff; border: 1px solid #c9dcfb; border-left: 3px solid #2563EB;
+    border-radius: 5px; padding: 9px 12px; margin: 0 0 13px; font-size: 9.4pt;
+    page-break-inside: avoid;
+  }
+  .warn {
+    background: #fff7ed; border: 1px solid #fed7aa; border-left: 3px solid #ea580c;
+    border-radius: 5px; padding: 9px 12px; margin: 0 0 13px; font-size: 9.4pt;
+    page-break-inside: avoid;
+  }
+  .pagebreak { page-break-before: always; }
+  .toc { font-size: 9.6pt; }
+  .toc ol { padding-left: 22px; }
+  .toc li { margin-bottom: 3px; }
+  .toc .sub { font-size: 9pt; color: #5F73A0; }
+  .badge {
+    display: inline-block; font: 700 7.4pt/1 sans-serif; letter-spacing: .05em;
+    text-transform: uppercase; padding: 3px 6px; border-radius: 4px; vertical-align: 1px;
+  }
+  .b-get { background: #dcfce7; color: #166534; }
+  .b-post { background: #dbeafe; color: #1e40af; }
+  .b-patch { background: #fef3c7; color: #92400e; }
+  .b-auth { background: #ede9fe; color: #5b21b6; }
+  .b-pub { background: #f1f5f9; color: #475569; }
+  .b-admin { background: #fee2e2; color: #991b1b; }
+  .kv td:first-child { width: 30%; font-weight: 600; color: #123663; }
+  .small { font-size: 9pt; color: #5F73A0; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="eyebrow">Technical Specification</div>
+  <h1>AgentDNA Dashboard Portal</h1>
+  <div class="sub">Architecture, API surface, page reference and user flows —<br>source material for the public documentation site.</div>
+  <div class="meta">
+    <div><strong>Repository:</strong> agentdna-dashboard</div>
+    <div><strong>Type:</strong> React 19 + TypeScript single-page application (Vite)</div>
+    <div><strong>Backends:</strong> Dashboard middleware API &amp; Agent-admin API</div>
+    <div><strong>Audience:</strong> documentation authors, integrators, new engineers</div>
+    <div><strong>Status:</strong> derived from the current <code>soni/user-page</code> branch source</div>
+  </div>
+</div>
+
+<h2>0. How to use this document</h2>
+<p>
+  This document is a complete, self-contained description of the AgentDNA Dashboard Portal
+  front-end. It is written to be turned directly into a Docusaurus documentation site — every
+  section maps cleanly onto a docs page, and §16 proposes a concrete sidebar structure.
+</p>
+<ul>
+  <li><strong>§1–§3</strong> are conceptual — good candidates for <em>Introduction</em> / <em>Concepts</em> pages.</li>
+  <li><strong>§4–§8</strong> are architectural — <em>Architecture</em> section.</li>
+  <li><strong>§9</strong> is the page-by-page product reference — <em>User Guide</em> section.</li>
+  <li><strong>§10–§12</strong> are the API and auth contracts — <em>API Reference</em> section.</li>
+  <li><strong>§13–§15</strong> are operational — <em>Deployment &amp; Configuration</em> section.</li>
+</ul>
+<div class="note">
+  <strong>Scope note.</strong> This describes the front-end only. Backend implementation details
+  (databases, chain writes, threat-detection logic) are out of scope; the dashboard consumes them
+  purely over HTTP. Where the front-end compensates for a missing backend capability, that is
+  called out explicitly so the docs do not over-promise.
+</div>
+
+<h2>Contents</h2>
+<div class="toc">
+<ol>
+  <li>Product overview</li>
+  <li>Domain concepts &amp; glossary</li>
+  <li>Technology stack</li>
+  <li>System architecture</li>
+  <li>Application bootstrap &amp; provider tree</li>
+  <li>Repository structure</li>
+  <li>Routing map</li>
+  <li>State management &amp; contexts</li>
+  <li>Page reference (screen by screen)</li>
+  <li>Data layer &amp; type mapping</li>
+  <li>API reference</li>
+  <li>Authentication &amp; authorization</li>
+  <li>Key end-to-end flows</li>
+  <li>Configuration &amp; environment</li>
+  <li>Build, deployment &amp; demo mode</li>
+  <li>Known gaps, stubs &amp; proposed docs structure</li>
+</ol>
+</div>
+
+<div class="pagebreak"></div>
+<h2>1. Product overview</h2>
+
+<p>
+  The AgentDNA Dashboard Portal is a web-based monitoring and analytics interface for autonomous
+  agent networks. An organization deploys agents; those agents talk to each other and to external
+  tools (called <em>Apps</em> in the UI) in order to fulfil user-initiated tasks. Every one of those
+  hops is recorded. The dashboard is the window onto that record.
+</p>
+
+<h3>What the product answers</h3>
+<table>
+  <thead><tr><th style="width:38%">Question</th><th>Where it is answered</th></tr></thead>
+  <tbody>
+    <tr><td>What is my agent network doing right now?</td><td>Home dashboard — KPI tiles, 30-day volume chart, live interaction ledger</td></tr>
+    <tr><td>Which agents and apps are most active, and which are risky?</td><td>Agents &amp; Apps page — top-N cards, reliability score, threat counts</td></tr>
+    <tr><td>What happened during one specific task?</td><td>Intent detail + Flow graph — participants, ordered interactions, animated replay</td></tr>
+    <tr><td>Who talked to whom, and was it blocked?</td><td>Interactions ledger + interaction drawer</td></tr>
+    <tr><td>What is this agent allowed to do, and when did that change?</td><td>Agent detail — policy viewer and policy-history tab</td></tr>
+    <tr><td>Who is asking to deploy an agent or get access to one?</td><td>Requests page — creation and access approval queues</td></tr>
+    <tr><td>What has a particular person in my org been doing?</td><td>User detail — interactions, intents, threats, agents deployed</td></tr>
+  </tbody>
+</table>
+
+<h3>Two audiences, one app</h3>
+<ul>
+  <li><strong>Users</strong> see their own activity, can browse the org's agents and apps, request an
+      agent deployment, and request access to an existing agent.</li>
+  <li><strong>Admins</strong> additionally approve or reject those requests, create org users, manage
+      per-user agent access, and upload/replace agent policies.</li>
+</ul>
+<p class="small">
+  Role is carried on the session as <code>is_admin</code> and gates UI at render time
+  (<code>ProtectedRoute</code> plus per-component checks). It is not a security boundary on its own —
+  the backend enforces authorization.
+</p>
+
+<h2>2. Domain concepts &amp; glossary</h2>
+<table>
+  <thead><tr><th style="width:22%">Term</th><th>Meaning in this product</th></tr></thead>
+  <tbody>
+    <tr><td><strong>DID</strong></td><td>Decentralized identifier — the primary key for every actor (agent, app, user). Long opaque string; the UI shortens it to <code>first12…last6</code> and resolves it to a human name wherever possible. Agent DIDs in this deployment start with <code>bafy</code>, which the client uses to distinguish agents from tools when the backend does not label the side.</td></tr>
+    <tr><td><strong>Agent</strong></td><td>An autonomous deployed actor owned by the org. Carries a name, a deployer, a creation time, a policy document, and running counters (interactions, threats, reliability score).</td></tr>
+    <tr><td><strong>App / Tool</strong></td><td>An external capability an agent calls (e.g. a weather service). Identified by <code>toolDID</code>; the UI derives a "provider" by taking the part of the tool name before the first dot. Labelled <em>Apps</em> in the interface, <code>Tool</code> in the type system.</td></tr>
+    <tr><td><strong>Intent</strong></td><td>One user-initiated task and the entire agent chain it triggers. Has an initiator, a start (and optionally end) time, a status (<code>completed</code> / <code>running</code> / <code>failed</code> / <code>pending</code>), a threat flag, a chain depth, and a provenance record ID.</td></tr>
+    <tr><td><strong>Interaction</strong></td><td>A single hop inside an intent: one actor sending to another at a point in time, with a threat verdict and an optional block type.</td></tr>
+    <tr><td><strong>Policy</strong></td><td>A Markdown or plain-text document attached to an agent (or user) describing what it may do. Versioned — each upload becomes a history entry with an <code>updateID</code> and timestamp.</td></tr>
+    <tr><td><strong>Threat</strong></td><td>An interaction the platform flagged as unsafe. Threat counts roll up to agents, apps, intents, users, and the org.</td></tr>
+    <tr><td><strong>Score / reliability</strong></td><td>A backend-computed 0–100 trust value per agent and app, rendered as a score bar.</td></tr>
+    <tr><td><strong>Provenance record ID</strong></td><td>Chain reference proving the intent's execution record.</td></tr>
+    <tr><td><strong>Block / block chain data</strong></td><td>The signed per-step record of an intent (<code>trigger</code>, <code>delegate</code>, <code>tool_call</code>, <code>execute</code>, <code>response</code>, <code>verify</code>), linked by <code>parent_block</code>. Powers the trace inspector.</td></tr>
+    <tr><td><strong>Request</strong></td><td>An approval workflow item. Two kinds: <code>deploy_agent</code> (create a new agent) and <code>agent_access</code> (grant a user access to an existing one).</td></tr>
+    <tr><td><strong>Intent number</strong></td><td>A client-side convenience: intents are sorted oldest-first and numbered #1, #2, … so humans can refer to them without quoting a hash. Purely presentational — every API call still uses the real <code>intentID</code>.</td></tr>
+  </tbody>
+</table>
+
+<div class="pagebreak"></div>
+<h2>3. Technology stack</h2>
+<table>
+  <thead><tr><th style="width:26%">Concern</th><th style="width:30%">Choice</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>UI framework</td><td>React 19</td><td>Function components + hooks only; <code>StrictMode</code> enabled</td></tr>
+    <tr><td>Language</td><td>TypeScript ~5.9</td><td>Strict project references (<code>tsconfig.app.json</code> / <code>tsconfig.node.json</code>)</td></tr>
+    <tr><td>Bundler / dev server</td><td>Vite 7</td><td>Dev port <code>4009</code> by default, <code>strictPort</code>, host exposed</td></tr>
+    <tr><td>Routing</td><td>react-router-dom 7</td><td><code>BrowserRouter</code> + nested layout route</td></tr>
+    <tr><td>Styling</td><td>Tailwind CSS 4 + custom CSS</td><td>Tailwind via <code>@tailwindcss/vite</code>; most visual identity lives in CSS custom properties in <code>src/index.css</code></td></tr>
+    <tr><td>Charts</td><td>Recharts 3</td><td>Area/line/bar volume chart, sparklines</td></tr>
+    <tr><td>Animation</td><td>Framer Motion 12</td><td>Flow graph transitions, drawer/modal motion</td></tr>
+    <tr><td>Icons</td><td>lucide-react</td><td>Wrapped by <code>src/components/Icon.tsx</code> with a named icon registry</td></tr>
+    <tr><td>PDF generation</td><td>jsPDF 4</td><td>Client-side report export — no server involvement</td></tr>
+    <tr><td>Lint</td><td>ESLint 9 + typescript-eslint</td><td>Includes react-hooks and react-refresh plugins</td></tr>
+    <tr><td>Production server</td><td>nginx 1.27 (alpine)</td><td>Static files, SPA fallback, gzip, immutable asset caching</td></tr>
+    <tr><td>State management</td><td>React Context + local hooks</td><td>Deliberately no Redux / Zustand / React Query</td></tr>
+  </tbody>
+</table>
+
+<h3>NPM scripts</h3>
+<table>
+  <thead><tr><th style="width:24%">Script</th><th>Command</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>npm run dev</code></td><td><code>vite</code></td><td>Dev server with HMR</td></tr>
+    <tr><td><code>npm run build</code></td><td><code>tsc -b &amp;&amp; vite build</code></td><td>Type-check then bundle to <code>dist/</code></td></tr>
+    <tr><td><code>npm run preview</code></td><td><code>vite preview</code></td><td>Serve the production bundle locally</td></tr>
+    <tr><td><code>npm run lint</code></td><td><code>eslint .</code></td><td>Lint the whole repo</td></tr>
+  </tbody>
+</table>
+
+<h2>4. System architecture</h2>
+
+<p>
+  The dashboard is a stateless client. It owns no persistence beyond browser
+  <code>localStorage</code> (session token, cached user, UI preferences). Everything displayed comes
+  from two HTTP services.
+</p>
+
+<pre><code>┌───────────────────────────────────────────────────────────────────────┐
+│  Browser — single-page app served by nginx                            │
+│                                                                       │
+│   main.tsx                                                            │
+│     └─ BrowserRouter                                                  │
+│          └─ AuthProvider                                              │
+│               └─ DirectoryProvider                                    │
+│                    └─ IntentNumbersProvider                           │
+│                         └─ TweaksProvider                             │
+│                              └─ DrawerProvider                        │
+│                                   └─ Routes                           │
+│                                        ├─ /            LockedPage     │
+│                                        ├─ /login       LoginPage      │
+│                                        └─ ProtectedRoute → App shell  │
+│                                             └─ Outlet → feature pages │
+│                                                                       │
+│   ── Presentation ──────────────────────────────────────────────────  │
+│   Pages (src/pages)  •  Components (src/components)                   │
+│                     │ consume                                         │
+│                     ▼                                                 │
+│   ── Access ────────────────────────────────────────────────────────  │
+│   Hooks (src/data/hooks.ts) — useAsync: data/loading/error/refetch    │
+│                     │ call                                            │
+│                     ▼                                                 │
+│   ── Domain ────────────────────────────────────────────────────────  │
+│   src/data/api.ts        wire → domain mapping, derived aggregates    │
+│   src/api/*.ts           thin per-feature endpoint wrappers           │
+│                     │ call                                            │
+│                     ▼                                                 │
+│   ── Transport ─────────────────────────────────────────────────────  │
+│   src/api/client.ts      base URL • Bearer token • envelope unwrap    │
+│                          401 handling • logging • dummy short-circuit │
+└──────────────┬──────────────────────────────────┬─────────────────────┘
+               │                                  │
+   VITE_API_BASE_URL                 VITE_ADMIN_API_BASE_URL
+               │                                  │
+               ▼                                  ▼
+   Dashboard middleware API              Agent-admin API
+   /dashboard/v1/…                       /agent-admin/v1/…
+   (everything except admin login)       (admin login &amp; admin register)</code></pre>
+
+<h3>Layering contract</h3>
+<ol>
+  <li><strong>Pages never call <code>fetch</code>.</strong> They call a hook or a data-layer function. No page constructs a URL or knows about the token.</li>
+  <li><strong><code>src/data/api.ts</code> owns every wire→domain mapping.</strong> If the backend renames a field, that file is the only place that should need editing.</li>
+  <li><strong><code>src/api/client.ts</code> is the only transport.</strong> It is the single place that knows the base URL, the auth header, and the response envelope.</li>
+  <li><strong>Types flow one way.</strong> Wire interfaces (<code>ApiAgent</code>, <code>ApiIntent</code>, …) are private to the data layer; the rest of the app only ever sees the domain types from <code>src/types.ts</code>.</li>
+</ol>
+
+<h3>Request lifecycle</h3>
+<p>Every call goes through <code>apiRequest&lt;T&gt;(path, opts)</code>:</p>
+<ol>
+  <li><strong>Dummy short-circuit</strong> — if <code>VITE_DUMMY</code> is on and the mock router recognizes the path, the mock response is returned immediately and logged as <code>[DUMMY …]</code>.</li>
+  <li><strong>URL assembly</strong> — <code>new URL(BASE + path)</code>; query params are appended, skipping <code>null</code>/<code>undefined</code>/empty values.</li>
+  <li><strong>Headers</strong> — always <code>Accept: application/json</code>; <code>Content-Type: application/json</code> only when a body is present; <code>Authorization: Bearer &lt;token&gt;</code> unless <code>auth: false</code>.</li>
+  <li><strong>Timing &amp; logging</strong> — start time is captured and every outcome (success, network failure, non-OK, invalid JSON) is logged with elapsed milliseconds. This is intentional: the console is the primary field-debugging tool.</li>
+  <li><strong>401 handling</strong> — throws <code>ApiError("Unauthorized", 401)</code>. If <code>skipLogoutOn401</code> is false, the token is cleared and the registered unauthorized handler fires, signing the user out.</li>
+  <li><strong>Envelope unwrap</strong> — the body is parsed as <code>{ status, data, message }</code>. A non-OK HTTP status <em>or</em> <code>status: false</code> throws <code>ApiError(message, httpStatus)</code>. Otherwise the inner <code>data</code> is returned.</li>
+</ol>
+<p>
+  File uploads use <code>apiUpload&lt;T&gt;(path, formData)</code>, which is the same pipeline minus the
+  <code>Content-Type</code> header, so the browser can set the multipart boundary itself.
+</p>
+
+<div class="note">
+  <strong>Error model.</strong> A single <code>ApiError</code> class carries <code>message</code> and
+  <code>status</code>. Network failures surface as status <code>0</code>. Many read paths in the data
+  layer deliberately swallow errors and return an empty result so one failing panel cannot blank the
+  whole page; write paths always propagate so the UI can show a real message.
+</div>
+
+<div class="pagebreak"></div>
+<h2>5. Application bootstrap &amp; provider tree</h2>
+
+<p><code>src/main.tsx</code> mounts the app and declares the entire route table. The provider order matters:</p>
+
+<table>
+  <thead><tr><th style="width:26%">Provider</th><th>Responsibility</th><th style="width:26%">Why at this level</th></tr></thead>
+  <tbody>
+    <tr><td><code>AuthProvider</code></td><td>Session, token storage, JWT decode/expiry, login/register/logout</td><td>Outermost — everything else may depend on who is signed in</td></tr>
+    <tr><td><code>DirectoryProvider</code></td><td>Builds a <code>DID → { name, kind }</code> map by walking every page of agents, tools and users</td><td>Needs auth; every table below it wants name resolution</td></tr>
+    <tr><td><code>IntentNumbersProvider</code></td><td>Walks every intent and assigns stable sequential numbers (oldest = #1)</td><td>Needs auth; used by intent chips everywhere</td></tr>
+    <tr><td><code>TweaksProvider</code></td><td>UI preferences — density, sidebar state, chart style, font — persisted to <code>localStorage</code></td><td>Pure presentation, no data dependency</td></tr>
+    <tr><td><code>DrawerProvider</code></td><td>Global right-hand detail drawer: <code>{ kind, entity }</code> plus open/close</td><td>Innermost — the drawer is rendered by the app shell</td></tr>
+  </tbody>
+</table>
+
+<p>
+  The authenticated area is a single nested route: <code>&lt;ProtectedRoute&gt;&lt;App /&gt;&lt;/ProtectedRoute&gt;</code>.
+  <code>App.tsx</code> renders the persistent chrome and an <code>&lt;Outlet /&gt;</code> for the active page.
+</p>
+
+<h3>App shell (<code>App.tsx</code>)</h3>
+<ul>
+  <li><strong>Sidebar</strong> — logo, a <em>Workspace</em> group (Home, Intents, Agents &amp; Apps, Flow, Requests, Interactions) and an <em>Account</em> group (Profile), plus a footer showing the signed-in identity and org. Collapsible; the collapsed state is a tweak.</li>
+  <li><strong>Requests badge</strong> — for admins only, the shell fetches page 1 of both request queues on mount and shows the combined count of <code>pending</code> items next to the Requests nav item.</li>
+  <li><strong>Topbar</strong> — sidebar toggle, breadcrumb (<code>ORG / Section</code>, derived from the current path), and global search.</li>
+  <li><strong>Global search</strong> — 300 ms debounce, hits <code>/search?q=</code>, renders a <code>SearchDropdown</code> grouped into Agents / Apps / Intents; selecting a result navigates and clears the query. Closes on outside click or <kbd>Escape</kbd>.</li>
+  <li><strong>Drawer host</strong> — one <code>&lt;Drawer&gt;</code> whose body is chosen from the drawer kind: <code>agent</code>/<code>tool</code> → <code>EntityDetail</code>, <code>interaction</code> → <code>InteractionDetail</code>, <code>intent</code> → <code>IntentDetail</code>.</li>
+  <li><strong>Font injection</strong> — the selected tweak font is written to the <code>--font-body</code> CSS variable on the document element.</li>
+</ul>
+
+<h2>6. Repository structure</h2>
+<pre><code>agentdna-dashboard/
+├── docker/
+│   ├── Dockerfile            multi-stage node build → nginx serve
+│   └── entrypoint.sh         writes env-config.js at container start
+├── nginx.conf                reference SPA config (SPA fallback, gzip, caching)
+├── vite.config.ts            react + tailwind plugins, dev port, allowed hosts
+├── index.html                loads /env-config.js before the bundle
+├── public/
+└── src/
+    ├── main.tsx              provider tree + route table
+    ├── App.tsx               authenticated shell
+    ├── types.ts              domain types
+    ├── index.css             design tokens + component styles
+    │
+    ├── api/                  transport + thin per-feature wrappers
+    │   ├── client.ts         apiRequest / apiUpload / token / ApiError
+    │   ├── auth.ts           login, admin login, register, OTP, password reset
+    │   ├── profile.ts        user &amp; admin profile, update, change password
+    │   ├── users.ts          org users, create user, access grant/revoke
+    │   ├── requests.ts       agent-creation &amp; agent-access workflows
+    │   ├── policy.ts         policy fetch/upload/history
+    │   └── keys.ts           API key lifecycle, token usage
+    │
+    ├── data/
+    │   ├── api.ts            domain data layer + wire→domain mappers
+    │   ├── hooks.ts          useAsync + all useX hooks
+    │   ├── dummyRouter.ts    offline mock router
+    │   └── dummy.json        seed data
+    │
+    ├── context/
+    │   ├── AuthContext.tsx
+    │   ├── DirectoryContext.tsx
+    │   ├── IntentNumbersContext.tsx
+    │   ├── DrawerContext.tsx
+    │   └── TweaksContext.tsx
+    │
+    ├── components/           shared UI
+    │   ├── drawer/           EntityDetail, InteractionDetail, IntentDetail, DrawerSection
+    │   └── forms/            modals &amp; pickers
+    │
+    ├── lib/
+    │   ├── exportAgentPdf.ts • exportIntentPdf.ts • exportListPdf.ts
+    │   └── format.ts         timeAgo, fmtRuntime, initials
+    │
+    └── pages/
+        ├── LockedPage.tsx    public landing + auth
+        ├── LoginPage.tsx
+        ├── HomePage.tsx
+        ├── IntentsPage.tsx • IntentDetailPage.tsx
+        ├── AgentsToolsPage.tsx • AgentDetailPage.tsx • ToolDetailPage.tsx
+        ├── UserDetailPage.tsx
+        ├── InteractionsPage.tsx • AlertsPage.tsx
+        ├── RequestsPage.tsx • requests/UsersTab.tsx
+        ├── ProfilePage.tsx
+        └── flow/             FlowPage.tsx • FlowCanvas.tsx • flowData.ts</code></pre>
+
+<div class="pagebreak"></div>
+<h2>7. Routing map</h2>
+<table>
+  <thead><tr><th style="width:22%">Path</th><th style="width:20%">Component</th><th style="width:10%">Access</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>/</code></td><td>LockedPage</td><td><span class="badge b-pub">Public</span></td><td>Landing page with live global stats and the full auth experience</td></tr>
+    <tr><td><code>/login</code></td><td>LoginPage</td><td><span class="badge b-pub">Public</span></td><td>Standalone sign-in screen</td></tr>
+    <tr><td><code>/dashboard</code></td><td>HomePage</td><td><span class="badge b-auth">Auth</span></td><td>Org overview</td></tr>
+    <tr><td><code>/intents</code></td><td>IntentsPage</td><td><span class="badge b-auth">Auth</span></td><td>Intent list</td></tr>
+    <tr><td><code>/intents/:intentId</code></td><td>IntentDetailPage</td><td><span class="badge b-auth">Auth</span></td><td>One intent in depth</td></tr>
+    <tr><td><code>/agents</code></td><td>AgentsToolsPage</td><td><span class="badge b-auth">Auth</span></td><td>Agents and Apps inventory</td></tr>
+    <tr><td><code>/agents/:agentId</code></td><td>AgentDetailPage</td><td><span class="badge b-auth">Auth</span></td><td>One agent in depth</td></tr>
+    <tr><td><code>/tools/:toolId</code></td><td>ToolDetailPage</td><td><span class="badge b-auth">Auth</span></td><td>One app in depth (param may be a name or a DID)</td></tr>
+    <tr><td><code>/users/:userId</code></td><td>UserDetailPage</td><td><span class="badge b-auth">Auth</span></td><td>One org user in depth</td></tr>
+    <tr><td><code>/graph</code></td><td>FlowPage</td><td><span class="badge b-auth">Auth</span></td><td>Flow graph, no intent selected</td></tr>
+    <tr><td><code>/graph/:intentId</code></td><td>FlowPage</td><td><span class="badge b-auth">Auth</span></td><td>Animated replay of one intent</td></tr>
+    <tr><td><code>/requests</code></td><td>RequestsPage</td><td><span class="badge b-auth">Auth</span></td><td>Approval queues; the Users tab is admin-only</td></tr>
+    <tr><td><code>/interactions</code></td><td>InteractionsPage</td><td><span class="badge b-auth">Auth</span></td><td>Full interaction ledger</td></tr>
+    <tr><td><code>/profile</code></td><td>ProfilePage</td><td><span class="badge b-auth">Auth</span></td><td>Account, API key, usage, security</td></tr>
+    <tr><td><code>*</code></td><td>→ <code>/dashboard</code></td><td><span class="badge b-auth">Auth</span></td><td>Catch-all redirect</td></tr>
+  </tbody>
+</table>
+<p class="small">
+  Unauthenticated visitors hitting a protected path are redirected to <code>/</code> with the attempted
+  path preserved in router state, so they land where they meant to go after signing in.
+  <code>AlertsPage</code> and <code>LandingPage</code> exist in the tree but are not currently routed.
+</p>
+
+<h2>8. State management &amp; contexts</h2>
+
+<h3>8.1 AuthContext</h3>
+<p>Owns the session. Exposes <code>user</code>, <code>token</code>, <code>loading</code>, and the actions
+<code>login</code>, <code>loginAdmin</code>, <code>registerAdmin</code>, <code>registerUser</code>,
+<code>logout</code>, <code>patchUser</code>.</p>
+<ul>
+  <li>Persists the JWT at <code>localStorage["agentdna.token"]</code> and the decoded user at <code>localStorage["agentdna.user"]</code>.</li>
+  <li>On boot it restores the stored user, falling back to decoding the stored token.</li>
+  <li><code>decodeJwt</code> base64url-decodes the payload. A token whose <code>exp</code> has passed yields <code>null</code> — an expired token is never treated as a session.</li>
+  <li>A 30-second interval re-checks the token and signs the user out the moment it expires, rather than waiting for the next 401.</li>
+  <li>Registers itself as the client's unauthorized handler so a hard 401 clears the session.</li>
+  <li>Admin JWTs carry <code>sub</code> (username) and no <code>email</code>; user JWTs carry <code>email</code>. When <code>is_admin</code> is absent the context infers admin from that shape.</li>
+  <li>After any successful sign-in it fetches the matching profile in the background and patches <code>name</code> and <code>org_id</code> onto the session.</li>
+</ul>
+
+<h3>8.2 DirectoryContext</h3>
+<p>
+  Interaction records carry DIDs, not names. On mount this provider walks <em>every page</em> of
+  <code>/agents-list</code>, <code>/tools-list</code> and <code>/users-list</code> (capped at 200 pages
+  each, stopping early on an empty page or when <code>totalPages</code> is reached) and builds a
+  <code>Map&lt;DID, { name, kind }&gt;</code>. Each of the three fetches fails independently and
+  degrades to an empty list rather than breaking the map.
+</p>
+<p>
+  <code>useResolveName()</code> returns a lookup that falls back to a shortened DID for unknown
+  entries. Tables prefer the directory name, then any backend-supplied name on the record, then the
+  shortened DID.
+</p>
+
+<h3>8.3 IntentNumbersContext</h3>
+<p>
+  Loads all intents once, sorts oldest-first, and exposes <code>Map&lt;intentID, number&gt;</code>.
+  Also exports <code>IntentIdChip</code>, which renders a truncated ID (<code>abcd...xyz</code>) with a
+  hover tooltip showing the full value, positioned in the viewport so it is never clipped by a table's
+  overflow.
+</p>
+
+<h3>8.4 DrawerContext &amp; TweaksContext</h3>
+<p>
+  <code>DrawerContext</code> holds at most one <code>{ kind, entity }</code> pair; any table row can open
+  a detail panel without prop-drilling. <code>TweaksContext</code> holds four presentation preferences —
+  density (<code>compact</code>/<code>comfortable</code>/<code>spacious</code>), sidebar
+  (<code>expanded</code>/<code>collapsed</code>), chart style (<code>area</code>/<code>line</code>/<code>bar</code>)
+  and font (Inter, Geist, IBM Plex Sans, Manrope, DM Sans) — persisted to
+  <code>localStorage["agentdna.tweaks"]</code>.
+</p>
+
+<h3>8.5 The <code>useAsync</code> primitive</h3>
+<pre><code>interface AsyncState&lt;T&gt; {
+  data: T;              // always defined — callers supply an initial value
+  loading: boolean;
+  error: Error | null;
+  refetch: () =&gt; void;  // bumps an internal nonce to re-run the effect
+}</code></pre>
+<p>
+  Every data hook is one line on top of this. Stale responses are discarded via a
+  <code>cancelled</code> flag, so rapid pagination cannot render an out-of-order page.
+</p>
+<div class="warn">
+  <strong>No shared cache.</strong> There is no request de-duplication or cache layer. Navigating away
+  and back refetches. This keeps the mental model simple and the data fresh, at the cost of repeat
+  traffic — worth stating plainly in the docs so integrators size their backend accordingly.
+</div>
+
+<div class="pagebreak"></div>
+<h2>9. Page reference</h2>
+
+<h3>9.1 Landing &amp; authentication — <code>/</code> (LockedPage)</h3>
+<p>The public entry point. Combines marketing surface with the full auth experience.</p>
+<ul>
+  <li><strong>Live stats strip</strong> — <code>/global-stats</code> (unauthenticated) supplies Agents, Users, Interactions, Intents and Threats, abbreviated as <code>1.2K</code> / <code>3.4M</code>.</li>
+  <li><strong>Role switch</strong> — User or Admin.</li>
+  <li><strong>Sign in</strong> — user sign-in goes to the dashboard API; admin sign-in goes to the agent-admin API.</li>
+  <li><strong>Register</strong> (user role only) — email, name, password, confirm, and an emailed OTP. <code>Send OTP</code> starts a 300-second countdown before a resend is allowed.</li>
+  <li><strong>Forgot password</strong> — a separate screen: request an OTP, then submit OTP + new password.</li>
+  <li><strong>Post-auth redirect</strong> — an already-signed-in visitor is redirected to the path they originally attempted, or <code>/dashboard</code>.</li>
+</ul>
+<p class="small">Default org for self-service user registration is <code>AGENT_DNA_BETA</code>.</p>
+
+<h3>9.2 Home — <code>/dashboard</code></h3>
+<table class="kv">
+  <tbody>
+    <tr><td>Data sources</td><td><code>/home-metrics</code>, <code>/interactions-list</code>, <code>/interactions/series?range=30d</code>, <code>/agents-apps-metrics</code></td></tr>
+    <tr><td>Empty state</td><td>When <code>agentCount</code> is 0 after loading, the page replaces itself with a "get started" panel instead of showing zeroed tiles</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li><strong>KPI tiles</strong> — Active Agents, Total Intents, Total Interactions, Threats Detected.</li>
+  <li><strong>Volume chart</strong> — 30-day series split into safe vs threat, with total derived client-side. Renders as area, line or bar according to the chart-style tweak.</li>
+  <li><strong>Top agents / Top apps</strong> — a toggle between the two leaderboards from <code>/agents-apps-metrics</code>; rows link through to the relevant detail page.</li>
+  <li><strong>Bottom ledger</strong> — tabbed <em>Interactions</em> / <em>Threats</em>. Interactions are server-paginated; threats are the same feed filtered client-side on the threat flag. Clicking a row opens the interaction drawer.</li>
+  <li><strong>CSV export</strong> — builds a two-section CSV (summary block, then the agent list) entirely in the browser and downloads it as <code>agentdna-dashboard-YYYY-MM-DD.csv</code>.</li>
+</ul>
+
+<h3>9.3 Intents — <code>/intents</code></h3>
+<p>Server-paginated intent table with client-side filter pills: <em>All</em>, <em>Threats</em>, <em>Safe</em>.</p>
+<p>
+  Columns: Intent ID (truncated chip with hover tooltip), Status chip (<code>completed</code> green,
+  <code>running</code> blue, <code>failed</code> red, <code>pending</code> amber), Initiator,
+  Agents/Apps touched, Interactions, Threats, Started. Header cells with a comparator are sortable.
+  Summary tiles above the table aggregate the current page.
+</p>
+<div class="warn">
+  The filter pills operate on the <em>current page only</em>, because filtering is not pushed to the
+  API. Document this so users are not surprised when "Threats" shows fewer rows than the org total.
+</div>
+
+<h3>9.4 Intent detail — <code>/intents/:intentId</code></h3>
+<table class="kv">
+  <tbody>
+    <tr><td>Data sources</td><td><code>/intent-info</code> + paginated <code>/interactions-list?intentID=</code></td></tr>
+    <tr><td>Tabs</td><td><strong>Interactions</strong> (paginated ledger) · <strong>Agents &amp; Apps</strong> (participants)</td></tr>
+    <tr><td>Tiles</td><td>Interactions · Agents touched · Apps touched · Threats</td></tr>
+    <tr><td>Actions</td><td>Export a PDF report · jump to the Flow view · open any row in the drawer</td></tr>
+  </tbody>
+</table>
+<p>
+  Participant rows are derived, not fetched: the client walks every page of the intent's interactions,
+  drops the initiator, groups the remaining actors by DID, and counts appearances, threats and last-seen
+  time. Agent-vs-tool classification uses the <code>bafy</code> DID prefix. Clicking a participant goes
+  to the agent detail page or opens the tool drawer.
+</p>
+<p>Runtime is computed as <code>endedAt − startedAt</code>; an intent with no <code>endedAt</code> shows a runtime of zero.</p>
+
+<h3>9.5 Agents &amp; Apps — <code>/agents</code></h3>
+<ul>
+  <li><strong>Header cards</strong> — Top Agents and Top Apps by interaction volume, plus org totals and average reliability from <code>/agents-apps-metrics</code>.</li>
+  <li><strong>Tabbed table</strong> — <em>Agents</em> and <em>Apps</em>, each server-paginated with its own page state. Agent rows navigate to <code>/agents/:id</code>; app rows navigate to <code>/tools/:name</code> (URL-encoded).</li>
+  <li><strong>Actions</strong> — request an agent deployment (<code>AgentRequestModal</code>), request access to an existing agent (<code>AccessRequestModal</code>), and export the visible list as a PDF.</li>
+</ul>
+
+<h3>9.6 Agent detail — <code>/agents/:agentId</code></h3>
+<table class="kv">
+  <tbody>
+    <tr><td>Data sources</td><td><code>/agent-info</code>, <code>/agent-interactions</code>, <code>/agent-intents</code>, <code>/agent-policy-history</code>, <code>/agent-policy-update</code></td></tr>
+    <tr><td>Tabs</td><td><strong>Interactions</strong> · <strong>Intents</strong> · <strong>Policy History</strong></td></tr>
+    <tr><td>Tiles</td><td>Interactions · Threats · Intents handled (plus reliability score bar)</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li><strong>Header</strong> — name, shortened DID with copy, deployer, org, created-ago, status chip.</li>
+  <li><strong>Policy viewer</strong> — the current policy text from <code>/agent-info</code>; empty when none is uploaded. Admins can replace it via <code>EditAgentPolicyModal</code> (multipart <code>.md</code>/<code>.txt</code> upload).</li>
+  <li><strong>Policy History</strong> — history entries sorted oldest-first to assign a change number, then displayed newest-first. Selecting an entry fetches that version's full text and opens it in <code>ViewPolicyModal</code>.</li>
+  <li><strong>PDF export</strong> — one report bundling the agent summary, interactions, intents and policy history.</li>
+</ul>
+
+<h3>9.7 App detail — <code>/tools/:toolId</code></h3>
+<p>
+  The route parameter can be either a DID or a tool name; the data layer inspects it (<code>bafy</code>
+  prefix or a <code>did:</code> substring means DID) and sends <code>toolDID</code> or <code>name</code>
+  accordingly. A single <code>/tool-info</code> call returns the summary plus both paginated
+  sub-collections, so the <em>Interactions</em> and <em>Intents</em> tabs each drive their own page
+  parameter on the same endpoint.
+</p>
+
+<h3>9.8 User detail — <code>/users/:userId</code></h3>
+<p>
+  One <code>/user-info</code> call returns the user record plus four independently paginated
+  collections. Tabs: <strong>Interactions</strong>, <strong>Intents</strong>, <strong>Threats</strong>,
+  <strong>Agents Deployed</strong> — each with its own page parameter, all sent on every request.
+  Header stats: interactions, threats, intents, agents deployed, agents accessible, active flag,
+  created and last-active times.
+</p>
+
+<h3>9.9 Interactions — <code>/interactions</code></h3>
+<p>
+  The complete org ledger, server-paginated. The <code>LedgerTable</code> columns are: Interaction ID,
+  Initiator, Interacted with, Intent, Threat, Time. Every row opens the interaction drawer, which shows
+  the full IDs, both counterparties, the intent link, the threat verdict, the block type and the
+  timestamp.
+</p>
+
+<h3>9.10 Flow — <code>/graph/:intentId</code></h3>
+<p>The most involved screen: an animated reconstruction of how an intent moved through the network.</p>
+<h4>Source precedence</h4>
+<ol>
+  <li><strong><code>/intent-diagram</code></strong> — preferred. Carries real messages, typed hops (<code>trigger</code>, <code>delegate</code>, <code>tool_call</code>, <code>response</code>, <code>execute</code>) and correct tree structure.</li>
+  <li><strong><code>/interactions-list</code> + <code>/intent-block-data</code></strong> — fallback. The flow graph is built from the interaction list, and the trace is enriched by flattening the <code>parent_block</code> chain into an oldest→newest sequence.</li>
+</ol>
+<p class="small">
+  When the diagram endpoint answers, its trace is <em>not</em> overridden by block data — block
+  messages are placeholders and would degrade the display.
+</p>
+<h4>Model</h4>
+<pre><code>Flow {
+  intentId, intent,
+  nodes: FlowNode[]        // kind: human | agent | tool, tier-laid-out x/y
+  edges: [from, to][]      // unique directed pairs
+  steps: FlowStep[]        // ordered hops: dir (request|response), title, summary,
+                           // verdict (allowed|blocked), checks {identity,trust,scope},
+                           // latency, spanId
+  status: "halted" | "completed"
+  trace: FlowTrace         // span tree + totals (tokens in/out, cost, ids)
+  rawDiagram?: unknown     // raw API payload, shown verbatim in the JSON tab
+}</code></pre>
+<h4>Interaction model</h4>
+<ul>
+  <li><strong>Canvas</strong> — nodes laid out in tiers (initiator → agents → tools), edges highlighted as the active step advances, threat hops marked.</li>
+  <li><strong>Step rail</strong> — a scrollable list of hops; the active card auto-scrolls into view. Clicking a step jumps to it and pauses playback.</li>
+  <li><strong>Playback</strong> — auto-advance every 2.4 s, wrapping at the end. The current step index is persisted to <code>localStorage["flow.step"]</code> and clamped when the flow changes.</li>
+  <li><strong>TraceInspector</strong> — an OpenTelemetry-style span tree per step: input, output, model, status, signature, metadata, plus a raw-JSON tab.</li>
+</ul>
+
+<h3>9.11 Requests — <code>/requests</code></h3>
+<table>
+  <thead><tr><th style="width:22%">Tab</th><th style="width:12%">Visible to</th><th>Endpoint</th></tr></thead>
+  <tbody>
+    <tr><td>Creation requests</td><td>All</td><td><code>/agents-creation-requests-list</code> (admin) or <code>…-list-user</code></td></tr>
+    <tr><td>Org access requests</td><td>All</td><td><code>/agent-access-requests-list-org</code></td></tr>
+    <tr><td>My access requests</td><td>All</td><td><code>/agent-access-requests-list-user</code></td></tr>
+    <tr><td>Users</td><td><span class="badge b-admin">Admin</span></td><td><code>/users-list</code></td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Rows show request type, agent name, requester (DID resolved to a name), status chip (pending / approved / rejected), created time, and the attached policy.</li>
+  <li>Admins get approve and reject actions per row; the list reloads afterwards.</li>
+  <li>Users can create a new agent request and edit their own pending ones.</li>
+  <li>Approving a deployment opens <code>DeployAgentModal</code>, which shows the deployment phase (loading / success / error) rather than a bare toast.</li>
+  <li>A backend <code>no_did</code> error is handled as its own empty state — the account has no DID yet, which is a distinct situation from "no requests".</li>
+  <li>The Users tab lists org members with intent and threat counts and accessible-agent counts, offers <code>AddUserModal</code> for admins, and opens <code>UserAccessDrawer</code> to manage per-agent access.</li>
+</ul>
+
+<h3>9.12 Profile — <code>/profile</code></h3>
+<p>
+  Loads <code>/admin-profile</code> or <code>/user-profile</code> depending on the role, plus
+  <code>/token-usage</code>. Shows name, email, organization, role, member-since, and the API key —
+  masked as <code>abcd••••••••wxyz</code> with reveal and copy actions. Token usage renders as a
+  used/limit meter with a reset date. Inline editing of name and email posts to
+  <code>/update-profile</code>; a separate form posts to <code>/change-password</code>. A support
+  contact block and sign-out complete the page.
+</p>
+
+<div class="pagebreak"></div>
+<h2>10. Data layer &amp; type mapping</h2>
+
+<h3>10.1 Domain types</h3>
+<pre><code>type Status = "safe" | "warn" | "threat";
+
+interface Agent {
+  id; name; score; created;        // created = minutes since creation
+  interactions; threats; connected;
+  status: Status; env; owner;      // env = orgID, owner = deployer DID
+  policy?: string;                 // raw .md/.txt text, "" when none
+}
+
+interface Tool {
+  id; name; score; created;
+  interactions; threats; connected;
+  status: Status; scope; provider; // provider = tool name before the first "."
+}
+
+interface Intent {
+  id; name;                        // name carries the status string
+  initiator: Agent;                // stub Agent built from the initiator DID
+  runtime;                         // ms, endedAt − startedAt (0 if unfinished)
+  started;                         // minutes ago
+  agentsInteracted; toolsInteracted; interactionsCount;
+  threats; score; status: Status;
+  provenanceRecordID; signature?;
+}
+
+interface Interaction {
+  id; initiator: EntityRef; target: EntityRef;
+  targetType: "agent" | "tool";
+  intent: { id; name };
+  runtime; threat: boolean; created;  // created = minutes ago
+  blockType?: string;
+}</code></pre>
+<p class="small">
+  Also defined: <code>TimeSeries</code>, <code>HeatmapRow</code>, <code>LogEntry</code>,
+  <code>IntentParticipant</code>, <code>HomeMetrics</code>, <code>HomeAgentSummary</code>,
+  <code>PublicMetrics</code>.
+</p>
+
+<h3>10.2 Mapping conventions</h3>
+<table>
+  <thead><tr><th style="width:30%">Convention</th><th>Detail</th></tr></thead>
+  <tbody>
+    <tr><td>Timestamps → minutes-ago</td><td><code>isoToMinutesAgo</code> converts every ISO timestamp to an integer number of minutes at map time. The UI formats it with <code>timeAgo</code>. Invalid or missing dates become <code>0</code>.</td></tr>
+    <tr><td>DID shortening</td><td>Anything longer than 24 characters renders as <code>first12…last6</code>.</td></tr>
+    <tr><td>Name resolution order</td><td>Directory map → backend-supplied <code>fromName</code>/<code>toName</code> → shortened DID.</td></tr>
+    <tr><td>Derived status</td><td>Agents flip to <code>warn</code> above 5 threats; tools above 4. These thresholds live in the client.</td></tr>
+    <tr><td>Agent vs tool</td><td>Determined by the <code>bafy</code> DID prefix wherever the backend does not label the side.</td></tr>
+    <tr><td>Full-collection walks</td><td><code>fetchAllAgents</code>, <code>fetchAllTools</code>, <code>fetchAllIntents</code>, <code>listAllUsers</code> loop pages up to a 200-page ceiling, stopping on an empty page or at <code>totalPages</code>.</td></tr>
+    <tr><td>Defensive reads</td><td>Detail and series fetches catch and return <code>null</code> or an empty result so a single failing panel does not blank the page.</td></tr>
+  </tbody>
+</table>
+
+<h3>10.3 Hook catalogue</h3>
+<table>
+  <thead><tr><th style="width:34%">Hook</th><th>Returns</th></tr></thead>
+  <tbody>
+    <tr><td><code>useHomeMetrics(page)</code></td><td>Home KPI payload + agent summary list</td></tr>
+    <tr><td><code>useAgentsAppsMetrics()</code></td><td>Top agents/apps and org rollups</td></tr>
+    <tr><td><code>useSeries(range)</code></td><td>Interaction time series for <code>24h</code>/<code>7d</code>/<code>30d</code></td></tr>
+    <tr><td><code>useAgents / useAgentsPaged(page)</code></td><td>Agent list, plain or with pagination metadata</td></tr>
+    <tr><td><code>useTools / useToolsPaged(page)</code></td><td>App list</td></tr>
+    <tr><td><code>useIntents / useIntentsPaged(page)</code></td><td>Intent list</td></tr>
+    <tr><td><code>useInteractions / useInteractionsPaged(page)</code></td><td>Interaction ledger</td></tr>
+    <tr><td><code>useAlerts(page)</code></td><td>Interactions filtered to threats (client-side)</td></tr>
+    <tr><td><code>useUsers(page)</code></td><td>Org users</td></tr>
+    <tr><td><code>useAgent(id)</code></td><td>Single agent</td></tr>
+    <tr><td><code>useAgentInteractions / useAgentIntents(id)</code></td><td>Agent sub-collections</td></tr>
+    <tr><td><code>useAgentPolicyHistory(id)</code></td><td>Policy version list</td></tr>
+    <tr><td><code>useIntent(id)</code></td><td>Intent header with derived participant counts</td></tr>
+    <tr><td><code>useIntentInteractionsPaged(id, page)</code></td><td>Interactions inside one intent</td></tr>
+    <tr><td><code>useIntentParticipants(id)</code></td><td>Derived participant rollup</td></tr>
+    <tr><td><code>useIntentDiagram(id)</code> / <code>useIntentBlockData(id)</code></td><td>Flow graph sources</td></tr>
+    <tr><td><code>useToolInfo(nameOrDid, …)</code></td><td>App detail with both sub-collections</td></tr>
+    <tr><td><code>useUserInfo(userID, …4 page params)</code></td><td>User detail with all four sub-collections</td></tr>
+  </tbody>
+</table>
+<p class="small"><code>useHeatmap</code> and <code>useLogs</code> exist but currently resolve to empty arrays — no backend endpoint yet.</p>
+
+<div class="pagebreak"></div>
+<h2>11. API reference</h2>
+
+<h3>11.1 Conventions</h3>
+<ul>
+  <li><strong>Base URLs</strong> — everything except admin sign-in/registration is relative to <code>VITE_API_BASE_URL</code>; admin sign-in uses <code>VITE_ADMIN_API_BASE_URL</code>.</li>
+  <li><strong>Envelope</strong> — every response is <code>{ status: boolean, data: T, message?: string }</code>. The client returns <code>data</code> and throws on <code>status: false</code>.</li>
+  <li><strong>Auth</strong> — <code>Authorization: Bearer &lt;jwt&gt;</code> on all authenticated calls.</li>
+  <li><strong>Pagination</strong> — list responses carry <code>{ &lt;items&gt;, total, page, pageSize, totalPages }</code>. Default page size is 10.</li>
+  <li><strong>Uploads</strong> — multipart <code>FormData</code>; the client omits <code>Content-Type</code> so the browser sets the boundary.</li>
+</ul>
+
+<h3>11.2 Authentication &amp; account</h3>
+<table>
+  <thead><tr><th style="width:8%">Method</th><th style="width:26%">Endpoint</th><th style="width:9%">Auth</th><th>Request → Response</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/login</code></td><td><span class="badge b-pub">No</span></td><td><code>{ email, password }</code> → <code>{ token, did, email, org_id, api_key, nft_id?, is_admin, agent_access_list? }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/login</code> <em>(admin base)</em></td><td><span class="badge b-pub">No</span></td><td><code>{ username, password }</code> → JWT string in <code>data</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/register-user</code></td><td><span class="badge b-pub">No</span></td><td><code>{ name?, email, password, orgID, otp }</code> → <code>{ api_key, name, email, orgID }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/create-admin</code></td><td><span class="badge b-pub">No</span></td><td><code>{ username, email, orgID, password, otp }</code> → <code>{ did }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/register-admin</code></td><td><span class="badge b-pub">No</span></td><td><code>{ did, org_id }</code> → same. Whitelists a newly created admin DID in the middleware.</td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/send-otp</code></td><td><span class="badge b-pub">No</span></td><td><code>{ email }</code> → <code>{ message }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/forgot-password</code></td><td><span class="badge b-pub">No</span></td><td><code>{ email }</code> → <code>{ message }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/reset-password</code></td><td><span class="badge b-pub">No</span></td><td><code>{ email, otp, new_password }</code> → <code>{ message }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/user-profile</code></td><td><span class="badge b-auth">Yes</span></td><td>→ <code>{ name, email, apiKey, organizationID, createdAt, adminEmail }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/admin-profile</code></td><td><span class="badge b-admin">Admin</span></td><td>→ <code>{ name, email, organizationID, apiKey, agentCount, intentCount, threatCount, totalUsers, createdAt }</code> (<code>createdAt</code> = epoch seconds)</td></tr>
+    <tr><td><span class="badge b-patch">PATCH</span></td><td><code>/update-profile</code></td><td><span class="badge b-auth">Yes</span></td><td><code>{ name?, email? }</code> → <code>{ message }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/change-password</code></td><td><span class="badge b-auth">Yes</span></td><td><code>{ currentPassword, newPassword }</code> → <code>{ message }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/generate-api-key</code></td><td><span class="badge b-auth">Yes</span></td><td>→ <code>{ api_key }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/revoke-api-key</code></td><td><span class="badge b-auth">Yes</span></td><td>→ void</td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/token-usage</code></td><td><span class="badge b-auth">Yes</span></td><td>→ <code>{ tokensUsed, tokensLimit, resetAt? }</code></td></tr>
+  </tbody>
+</table>
+
+<h3>11.3 Metrics</h3>
+<table>
+  <thead><tr><th style="width:8%">Method</th><th style="width:28%">Endpoint</th><th>Response &amp; consumer</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/global-stats</code></td><td><code>{ totalUsers, totalAgents, totalInteractions, totalIntents, totalThreats }</code> — public landing page, no auth</td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/home-metrics?page=</code></td><td><code>{ agentCount, intentCount, interactionsCount, threatCount, page, agentList[] }</code> where each entry is <code>{ agentID, agentName, totalInteractions, totalThreats }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agents-apps-metrics</code></td><td><code>{ topAgents[], topApps[], metrics: { totalInteractions, totalThreats, totalAgents, totalApps, avgReliability } }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/interactions/series?range=</code></td><td><code>{ safe: number[], threats: number[] }</code>; <code>total</code> is summed client-side. <code>range</code> ∈ <code>24h</code> | <code>7d</code> | <code>30d</code>. Failure degrades to empty arrays.</td></tr>
+  </tbody>
+</table>
+
+<h3>11.4 Lists</h3>
+<table>
+  <thead><tr><th style="width:8%">Method</th><th style="width:30%">Endpoint</th><th>Item shape</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agents-list?page=</code></td><td><code>agentsList[]</code>: <code>{ agentID, agentName, createdAt, deployer, policy, totalInteractions, totalThreats, score }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/tools-list?page=</code></td><td><code>toolsList[]</code>: <code>{ toolDID, toolName, totalInteractions, totalThreats, score }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/intent-list?page=</code></td><td><code>intentsList[]</code>: <code>{ intentID, initiatorDID, initiatorName?, startedAt, endedAt?, status, threatDetected, threatCount?, flowType?, executor?, chainDepth?, interactionsCount?, agentsCount?, toolsCount?, provenanceRecordID? }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/interactions-list?page=&amp;intentID=</code></td><td><code>interactionList[]</code>: <code>{ interactionID, from, to, fromName?, toName?, threat, intentID, time, blockType? }</code>. <code>intentID</code> is optional and scopes the feed to one intent.</td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/users-list?page=</code></td><td><code>usersList[]</code>: <code>{ userID, userName, createdAt, totalIntents, totalThreats, accessAgentCount }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/search?q=</code></td><td><code>{ agents: [{ did, name, orgID }], apps: [{ did, name }], intents: [{ intentID, flowType, status, threatDetected, startedAt }] }</code></td></tr>
+  </tbody>
+</table>
+
+<h3>11.5 Detail</h3>
+<table>
+  <thead><tr><th style="width:8%">Method</th><th style="width:32%">Endpoint</th><th>Response</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agent-info?agentDID=</code></td><td><code>{ agentDID, agentName, createdAt, deployerDID, policy?, orgID, totalInteractions, totalThreats, score }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agent-interactions?agentDID=&amp;page=</code></td><td><code>interactionsList[]</code> + pagination</td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agent-intents?agentDID=&amp;page=</code></td><td><code>intentsList[]</code> + pagination</td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/tool-info?toolDID=|name=&amp;interactionsPage=&amp;intentsPage=</code></td><td><code>{ toolDID, toolName, totalInteractions, totalThreats, totalIntents, totalAgents, score, interactions:{list,…}, intents:{list,…} }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/user-info?userID=&amp;interactionsPage=&amp;intentsPage=&amp;threatsPage=&amp;agentsPage=</code></td><td><code>{ user:{…}, interactions:{…}, intents:{…}, threats:{…}, agents:{…} }</code> — four independently paginated collections in one call</td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/intent-info?intentID=</code></td><td><code>{ intentID, initiatorDID, initiatorName?, startedAt, endedAt?, status, threatDetected, provenanceRecordID?, interactions? }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/intent-diagram?intentID=</code></td><td><code>{ basicInfo: { intentID, initiatorDID, initiatorName, flowType, status, threatDetected, chainDepth, interactionsCount, agentsCount, toolsCount, startedAt }, interactions: [{ interactionID, initiator, initiatorName, to, toName, type, message, intentID, threat, epoch }] }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/intent-block-data?intent_id=</code></td><td>A recursive <code>IntentBlock</code>: <code>{ id, block_index, agent_did, agent_name, direction, block_type, message, response, delegate_to, received_from, cbac_app, cbac_decision, threat_detected, trust_issues[], signature, created_at, parent_block }</code></td></tr>
+  </tbody>
+</table>
+<p class="small">Note the parameter casing inconsistency: <code>/intent-block-data</code> takes <code>intent_id</code> (snake case) while every other intent endpoint takes <code>intentID</code>.</p>
+
+<h3>11.6 Policy</h3>
+<table>
+  <thead><tr><th style="width:8%">Method</th><th style="width:32%">Endpoint</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agent-policy-history?agentDID=</code></td><td><code>{ agentDID?, nftID?, history: [{ updateID, time }] }</code> — <code>time</code> is epoch seconds</td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agent-policy-update?agentDID=&amp;updateID=</code></td><td><code>{ updateID, time, policy }</code> — full text of one version</td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/user-policy?userDID=</code></td><td><code>{ filename?, content, uploadedAt? }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/upload-agent-policy</code></td><td>multipart <code>agentDID</code> + <code>file</code> (<code>.md</code>/<code>.txt</code>) — admin only</td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/upload-user-policy</code></td><td>multipart <code>userDID</code> + <code>file</code></td></tr>
+  </tbody>
+</table>
+
+<h3>11.7 Requests &amp; user administration</h3>
+<table>
+  <thead><tr><th style="width:8%">Method</th><th style="width:34%">Endpoint</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agents-creation-requests-list?page=</code></td><td><span class="badge b-admin">Admin</span> every creation request in the org</td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agents-creation-requests-list-user?page=</code></td><td>The caller's own creation requests</td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/agents-creation-requests-create</code></td><td>multipart <code>agentName</code> (required), <code>agentID?</code>, <code>requestInfo?</code>, <code>policy</code> (file or plain text) → <code>{ requestID }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/agents-creation-requests-edit</code></td><td><code>{ requestID, agentName, policy, requestInfo?, agentID? }</code> → <code>{ requestID }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/agent-creation-request-result-submit</code></td><td><span class="badge b-admin">Admin</span> <code>{ requestID, status: "approved"|"rejected" }</code></td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agent-access-requests-list-org?page=</code></td><td><span class="badge b-admin">Admin</span> org-wide access requests</td></tr>
+    <tr><td><span class="badge b-get">GET</span></td><td><code>/agent-access-requests-list-user?page=</code></td><td>The caller's own access requests</td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/agent-access-request-create</code></td><td><code>{ agentDID, agentName?, requestInfo? }</code> → <code>{ requestID }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/agent-access-request-submit</code></td><td><span class="badge b-admin">Admin</span> <code>{ requestID, status }</code></td></tr>
+    <tr><td><span class="badge b-post">POST</span></td><td><code>/create-user</code></td><td><span class="badge b-admin">Admin</span> <code>{ did, name?, email, password, orgID }</code>. <code>nft_id</code> and <code>api_key</code> are generated server-side; a blank name auto-assigns <code>user_1</code>, <code>user_2</code>, …</td></tr>
+  </tbody>
+</table>
+<p><strong>Request record shape</strong> (both queues):</p>
+<pre><code>{ requestID, requestType: "deploy_agent" | "agent_access",
+  policy, creatorDID, agentDID, agentName, requestInfo,
+  status: "pending" | "approved" | "rejected", createdAt }</code></pre>
+
+<div class="warn">
+  <strong>Proposed, not guaranteed.</strong> <code>/user-access-list</code>,
+  <code>/admin-grant-agent-access</code> and <code>/admin-revoke-agent-access</code> are wired in the
+  client but may not exist on every backend build. Mark them clearly as provisional in the docs.
+</div>
+
+<div class="pagebreak"></div>
+<h2>12. Authentication &amp; authorization</h2>
+
+<h3>12.1 Two sign-in paths</h3>
+<table>
+  <thead><tr><th style="width:18%"></th><th style="width:41%">User</th><th>Admin</th></tr></thead>
+  <tbody>
+    <tr><td>Endpoint</td><td><code>POST /login</code> on the dashboard API</td><td><code>POST /login</code> on the agent-admin API</td></tr>
+    <tr><td>Credentials</td><td>email + password</td><td>username + password</td></tr>
+    <tr><td>Response</td><td>Full object: token, did, email, org, api_key, is_admin, access list</td><td>A bare JWT string in <code>data</code></td></tr>
+    <tr><td>Session build</td><td>Fields copied straight from the response</td><td>JWT decoded; <code>sub</code> without <code>email</code> implies admin</td></tr>
+  </tbody>
+</table>
+
+<h3>12.2 Token handling</h3>
+<ul>
+  <li>Stored at <code>localStorage["agentdna.token"]</code>; the decoded user at <code>localStorage["agentdna.user"]</code>.</li>
+  <li><code>VITE_DEV_TOKEN</code> acts as a fallback when storage is empty — a development convenience that must not be set in production builds.</li>
+  <li>Expiry is enforced client-side from the <code>exp</code> claim, re-checked every 30 seconds.</li>
+  <li>A 401 raises <code>ApiError(401)</code>. By default <code>skipLogoutOn401</code> is <code>true</code>, so a single failing panel does not eject the user; endpoints that opt out clear the session and fire the unauthorized handler.</li>
+</ul>
+
+<h3>12.3 Registration flows</h3>
+<p><strong>User self-registration:</strong></p>
+<pre><code>POST /send-otp { email }                                  → OTP emailed, 300s resend countdown
+POST /register-user { name?, email, password, orgID, otp } → { api_key, … }
+POST /login { email, password }                            → session established
+GET  /user-profile                                         → patch name + org onto the session</code></pre>
+<p><strong>Admin registration</strong> spans both services:</p>
+<pre><code>POST /create-admin    { username, email, orgID, password, otp }  → { did }   (dashboard API)
+POST /register-admin  { did, org_id }                            → whitelist the DID
+POST /login           { username, password }                     → JWT       (admin API)
+GET  /admin-profile                                              → patch name + org</code></pre>
+
+<h3>12.4 Authorization surface</h3>
+<ul>
+  <li><code>ProtectedRoute</code> redirects unauthenticated visitors to <code>/</code>, preserving the attempted path, and supports an <code>adminOnly</code> flag that bounces non-admins to <code>/dashboard</code>.</li>
+  <li>Admin-only UI: approve/reject on both request queues, the Users tab, Add User, per-user access management, and agent-policy replacement.</li>
+  <li>The pending-requests badge only loads for admins.</li>
+</ul>
+<div class="note">
+  Client-side gating is a UX affordance, not a security control. Every restricted operation must be
+  enforced server-side; the docs should say so explicitly.
+</div>
+
+<h2>13. Key end-to-end flows</h2>
+
+<h3>13.1 Sign in</h3>
+<pre><code>Landing (/) → pick role → submit credentials
+  → POST /login (dashboard or admin API)
+  → store token + user in localStorage
+  → background GET /user-profile | /admin-profile → patch name + org
+  → DirectoryProvider walks agents/tools/users → DID→name map
+  → IntentNumbersProvider walks intents → stable intent numbers
+  → redirect to the originally attempted path, else /dashboard</code></pre>
+
+<h3>13.2 Request an agent deployment</h3>
+<pre><code>User: /requests → "New request" → AgentRequestModal
+  fields: agentName (required), agentID?, requestInfo?, policy file (.md/.txt) or text
+  → POST /agents-creation-requests-create  (multipart) → { requestID }
+  → row appears as "pending"; the user may edit it while pending
+     via POST /agents-creation-requests-edit
+
+Admin: sidebar badge shows the pending count
+  → /requests → Creation tab → review name, requester, policy
+  → Approve → POST /agent-creation-request-result-submit { requestID, "approved" }
+  → DeployAgentModal shows loading → success | error
+  → list reloads; the new agent appears under /agents</code></pre>
+
+<h3>13.3 Request access to an existing agent</h3>
+<pre><code>User: /agents → pick an agent → "Request access" → AccessRequestModal
+  → POST /agent-access-request-create { agentDID, agentName?, requestInfo? }
+Admin: /requests → Org access requests
+  → POST /agent-access-request-submit { requestID, "approved" | "rejected" }
+  → the agent joins the user's agent_access_list</code></pre>
+
+<h3>13.4 Investigate an intent</h3>
+<pre><code>/dashboard or /intents → click an intent
+  → /intents/:id
+      GET /intent-info                        header + status + provenance
+      GET /interactions-list?intentID=&page=   ledger (all pages walked to derive participants)
+      → Interactions tab: row → interaction drawer (full IDs, threat, block type)
+      → Agents & Apps tab: derived participants → agent page or tool drawer
+  → "View flow" → /graph/:id
+      GET /intent-diagram        preferred: real messages + typed hops
+      GET /intent-block-data     fallback: signed block chain → trace spans
+      → animated canvas + step rail + TraceInspector (input/output/model/signature/raw JSON)
+  → "Export PDF" → jsPDF report generated in the browser</code></pre>
+
+<h3>13.5 Update an agent policy</h3>
+<pre><code>Admin: /agents/:id → "Edit policy" → EditAgentPolicyModal → pick .md/.txt
+  → POST /upload-agent-policy (multipart agentDID + file)
+  → Policy History tab reloads: GET /agent-policy-history
+  → click a version: GET /agent-policy-update?agentDID=&updateID= → ViewPolicyModal</code></pre>
+
+<h3>13.6 Export reports</h3>
+<table>
+  <thead><tr><th style="width:26%">Export</th><th style="width:22%">Where</th><th>Contents</th></tr></thead>
+  <tbody>
+    <tr><td>Agent PDF</td><td>Agent detail</td><td>Summary, score, interactions, intents, policy history</td></tr>
+    <tr><td>Intent PDF</td><td>Intent detail</td><td>Intent header, interaction list, participant rollup</td></tr>
+    <tr><td>List PDF</td><td>Agents &amp; Apps</td><td>The visible agent or app table, with status colouring</td></tr>
+    <tr><td>Dashboard CSV</td><td>Home</td><td>Summary block plus the full agent list</td></tr>
+  </tbody>
+</table>
+<p class="small">All exports are generated client-side (jsPDF for PDF, a Blob download for CSV) at A4, 40 pt margins, with a navy/blue/red palette matching the UI. No data leaves the browser.</p>
+
+<div class="pagebreak"></div>
+<h2>14. Configuration &amp; environment</h2>
+<table>
+  <thead><tr><th style="width:26%">Variable</th><th style="width:10%">Required</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>VITE_API_BASE_URL</code></td><td>Yes</td><td>Base URL of the dashboard middleware API, e.g. <code>http://host:9000/dashboard/v1/</code>. A trailing slash is stripped. Falls back to <code>http://localhost:9000</code>.</td></tr>
+    <tr><td><code>VITE_ADMIN_API_BASE_URL</code></td><td>Yes</td><td>Base URL of the agent-admin API, e.g. <code>http://host:8001/agent-admin/v1</code>. Falls back to <code>http://localhost:8000/agent-admin/v1</code>.</td></tr>
+    <tr><td><code>VITE_DUMMY</code></td><td>No</td><td><code>true</code>/<code>1</code> runs entirely on mock data with no backend.</td></tr>
+    <tr><td><code>VITE_PORT</code></td><td>No</td><td>Dev-server port, default <code>4009</code> (<code>strictPort</code> is on, so a busy port fails loudly).</td></tr>
+    <tr><td><code>VITE_DEV_TOKEN</code></td><td>No</td><td>Fallback bearer token when <code>localStorage</code> has none. Development only.</td></tr>
+  </tbody>
+</table>
+
+<h3>Resolution order</h3>
+<pre><code>window.__ENV__.VITE_API_BASE_URL     ← runtime, written by the Docker entrypoint
+  ?? import.meta.env.VITE_API_BASE_URL ← build time, baked in by Vite
+  ?? "http://localhost:9000"           ← last-resort default</code></pre>
+<p>
+  This is what makes one image deployable to many environments: <code>index.html</code> loads
+  <code>/env-config.js</code> before the bundle, so the runtime value is present before the first
+  request. Note that the admin base URL currently reads only from <code>import.meta.env</code>, so
+  changing it requires a rebuild — worth flagging in the docs.
+</p>
+<p>Dev-server <code>allowedHosts</code> is pinned to <code>dashboard-dev.agentdna.io</code> and <code>dashboard.agentdna.io</code>.</p>
+
+<h2>15. Build, deployment &amp; demo mode</h2>
+
+<h3>15.1 Local development</h3>
+<pre><code>npm install
+cp .env.sample .env      # fill in the two base URLs
+npm run dev              # http://localhost:4009
+npm run build            # tsc -b && vite build → dist/
+npm run preview
+npm run lint</code></pre>
+
+<h3>15.2 Docker</h3>
+<pre><code># Build (multi-stage: node:22-alpine → nginx:1.27-alpine)
+docker build -t agentdna-dashboard -f docker/Dockerfile .
+
+# Run — configuration happens at runtime, not build time
+docker run -p 80:80 \
+  -e VITE_API_BASE_URL=http://your-backend-ip:9000/dashboard/v1/ \
+  -e VITE_ADMIN_API_BASE_URL=http://your-backend-ip:8001/agent-admin/v1 \
+  -e VITE_DUMMY=false \
+  agentdna-dashboard</code></pre>
+<p><code>docker/entrypoint.sh</code> writes the runtime config before starting nginx:</p>
+<pre><code>window.__ENV__ = {
+  VITE_API_BASE_URL: "…",
+  VITE_ADMIN_API_BASE_URL: "…",
+  VITE_DUMMY: "false"
+};</code></pre>
+<p>
+  The nginx layer serves <code>dist/</code> with an SPA fallback
+  (<code>try_files $uri $uri/ /index.html</code>), gzip for text assets, and
+  <code>Cache-Control: public, immutable</code> with a one-year expiry for hashed assets.
+</p>
+<div class="note">
+  <strong>Host networking.</strong> On macOS and Windows, a backend on the same machine is reachable
+  as <code>host.docker.internal</code>, not <code>localhost</code>. On Linux, use the host's LAN IP.
+</div>
+
+<h3>15.3 Dummy / demo mode</h3>
+<p>
+  With <code>VITE_DUMMY=true</code> the transport layer never reaches the network. Every request is
+  offered to <code>src/data/dummyRouter.ts</code>, which serves 10-item pages from
+  <code>src/data/dummy.json</code> and logs each intercepted call as
+  <code>[DUMMY &lt;METHOD&gt; &lt;path&gt;]</code>. Auth is stubbed with a fixed demo user, so sign-in
+  succeeds with any credentials. The volume chart is bucketed from the seeded interaction timestamps —
+  anchored on the latest seeded time rather than "now", so the window is always full — and layered with
+  a deterministic baseline so the chart is never flat.
+</p>
+<p class="small">Useful for demos, design review, and front-end work while the backend is unavailable.</p>
+
+<h2>16. Known gaps, stubs &amp; docs structure</h2>
+
+<h3>16.1 Stubs and client-side compensations</h3>
+<table>
+  <thead><tr><th style="width:32%">Area</th><th>Current state</th></tr></thead>
+  <tbody>
+    <tr><td>Heatmap (<code>fetchHeatmap</code>)</td><td>Returns an empty array — no endpoint yet</td></tr>
+    <tr><td>Logs (<code>fetchLogs</code>)</td><td>Returns an empty array — no endpoint yet</td></tr>
+    <tr><td>Alerts</td><td>No dedicated endpoint; threats are the interaction feed filtered client-side, so counts reflect the fetched page, not the org</td></tr>
+    <tr><td>Intent participants</td><td>Derived client-side by walking every page of the intent's interactions — expensive for large intents</td></tr>
+    <tr><td>Directory &amp; intent numbering</td><td>Walk every page of four collections on login; fine for current org sizes, a scaling concern later</td></tr>
+    <tr><td>Intent list filters</td><td>Applied to the current page only</td></tr>
+    <tr><td>Agent/tool classification</td><td>Inferred from the <code>bafy</code> DID prefix where the backend does not label the side</td></tr>
+    <tr><td>Status thresholds</td><td>Hard-coded in the client (agents &gt; 5 threats, tools &gt; 4)</td></tr>
+    <tr><td>Access management endpoints</td><td>Three endpoints wired but marked proposed</td></tr>
+    <tr><td>Unrouted pages</td><td><code>AlertsPage</code> and <code>LandingPage</code> exist but are not in the route table</td></tr>
+    <tr><td>Admin base URL</td><td>Build-time only — not runtime-configurable like the main API URL</td></tr>
+  </tbody>
+</table>
+
+<h3>16.2 Proposed Docusaurus sidebar</h3>
+<pre><code>Introduction
+  ├─ What is the AgentDNA Dashboard          (§1)
+  ├─ Concepts & glossary                     (§2)
+  └─ Quick start                             (§15.1)
+
+Architecture
+  ├─ System overview                         (§4)
+  ├─ Application structure                   (§5, §6)
+  ├─ Routing                                 (§7)
+  ├─ State management                        (§8)
+  └─ Data layer & types                      (§10)
+
+User guide
+  ├─ Signing in & registration               (§9.1, §12.3)
+  ├─ Home dashboard                          (§9.2)
+  ├─ Intents & intent detail                 (§9.3, §9.4)
+  ├─ Agents & Apps                           (§9.5, §9.6, §9.7)
+  ├─ Users                                   (§9.8)
+  ├─ Interactions ledger                     (§9.9)
+  ├─ Flow visualization                      (§9.10)
+  ├─ Requests & approvals                    (§9.11)
+  ├─ Profile & API keys                      (§9.12)
+  └─ Exporting reports                       (§13.6)
+
+API reference
+  ├─ Conventions                             (§11.1)
+  ├─ Authentication & account                (§11.2)
+  ├─ Metrics                                 (§11.3)
+  ├─ Lists                                   (§11.4)
+  ├─ Detail                                  (§11.5)
+  ├─ Policy                                  (§11.6)
+  └─ Requests & administration               (§11.7)
+
+Guides
+  ├─ Deploy an agent (end to end)            (§13.2)
+  ├─ Grant agent access                      (§13.3)
+  ├─ Investigate an intent                   (§13.4)
+  └─ Manage agent policies                   (§13.5)
+
+Operations
+  ├─ Configuration                           (§14)
+  ├─ Docker deployment                       (§15.2)
+  ├─ Demo mode                               (§15.3)
+  └─ Known limitations                       (§16.1)</code></pre>
+
+<h3>16.3 Writing guidance for the docs</h3>
+<ul>
+  <li><strong>Use the UI's vocabulary.</strong> The interface says <em>Apps</em>; the code says <code>Tool</code>. User-facing docs should say Apps and note the equivalence once.</li>
+  <li><strong>Be honest about derived data.</strong> Where the client computes something the backend does not provide (participants, threat filtering, intent numbering), say so — it prevents bug reports about numbers that "don't match".</li>
+  <li><strong>Split by audience.</strong> Admin-only capabilities are a meaningful subset; either badge them inline or give admins their own section.</li>
+  <li><strong>Keep the API reference generated-looking.</strong> Consistent method / path / auth / request / response tables per endpoint, as in §11.</li>
+  <li><strong>Screenshots.</strong> Demo mode (<code>VITE_DUMMY=true</code>) produces a fully populated dashboard with no backend — the cheapest way to capture consistent screenshots for every page.</li>
+</ul>
+
+</body>
+</html>

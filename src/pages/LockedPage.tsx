@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type FormEvent, type CSSProperties } from 
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import logo from "../assets/agentdna-logo.png";
 import { useAuth } from "../context/AuthContext";
-import { ApiError } from "../api/client";
+import { friendlyAuthError, type FriendlyError } from "../lib/authErrors";
 import { fetchPublicMetrics } from "../data/api";
 import { sendOtp, forgotPassword, resetPassword } from "../api/auth";
 import type { PublicMetrics } from "../types";
@@ -38,7 +38,7 @@ export function LandingPage() {
   const [username, setUsername]     = useState("");
   const [password, setPassword]     = useState("");
   const [confirm, setConfirm]       = useState("");
-  const [error, setError]           = useState<string | null>(null);
+  const [error, setError]           = useState<FriendlyError | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [metrics, setMetrics]       = useState<PublicMetrics | null>(null);
   const [fpSuccess, setFpSuccess]   = useState<string | null>(null);
@@ -100,7 +100,7 @@ export function LandingPage() {
       setOtpSent(true);
       setCountdown(300);
     } catch (err) {
-      setOtpError(err instanceof ApiError ? err.message : "Failed to send OTP.");
+      setOtpError(friendlyAuthError(err, "Couldn't send the OTP. Please try again.").message);
     } finally {
       setOtpLoading(false);
     }
@@ -109,16 +109,16 @@ export function LandingPage() {
   const handleForgotSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (password !== confirm) { setError("Passwords do not match."); return; }
-    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
-    if (!otp.trim()) { setError("Enter the OTP sent to your email."); return; }
+    if (password !== confirm) { setError({ message: "Passwords do not match." }); return; }
+    if (password.length < 8) { setError({ message: "Password must be at least 8 characters." }); return; }
+    if (!otp.trim()) { setError({ message: "Enter the OTP sent to your email." }); return; }
     setSubmitting(true);
     try {
       await resetPassword(email.trim(), otp.trim(), password);
       setFpSuccess("Password updated successfully. Please sign in.");
       backToAuth();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong.");
+      setError(friendlyAuthError(err, "We couldn't reset your password. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -132,7 +132,7 @@ export function LandingPage() {
       setOtpSent(true);
       setCountdown(300); // 5 min
     } catch (err) {
-      setOtpError(err instanceof ApiError ? err.message : "Failed to send OTP.");
+      setOtpError(friendlyAuthError(err, "Couldn't send the OTP. Please try again.").message);
     } finally {
       setOtpLoading(false);
     }
@@ -141,8 +141,8 @@ export function LandingPage() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (isRegister && password !== confirm) { setError("Passwords do not match."); return; }
-    if (isRegister && !otp.trim()) { setError("Enter the OTP sent to your email."); return; }
+    if (isRegister && password !== confirm) { setError({ message: "Passwords do not match." }); return; }
+    if (isRegister && !otp.trim()) { setError({ message: "Enter the OTP sent to your email." }); return; }
     setSubmitting(true);
     try {
       if (isUserRegister)     await registerUser(username.trim(), email.trim(), password, USER_ORG_ID, otp.trim());
@@ -151,7 +151,7 @@ export function LandingPage() {
       const to = (location.state as LocationState | null)?.from?.pathname || "/dashboard";
       navigate(to, { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong.");
+      setError(friendlyAuthError(err));
     } finally {
       setSubmitting(false);
     }
@@ -309,11 +309,7 @@ export function LandingPage() {
                   <span style={flt}>Confirm password</span>
                   <input className="agd-in" type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••••••" />
                 </label>
-                {error && (
-                  <div style={{ padding:"8px 12px", borderRadius:8, background:"rgba(220,38,38,0.06)", border:"1px solid rgba(220,38,38,0.18)", color:"#DC2626", fontSize:12.5 }}>
-                    {error}
-                  </div>
-                )}
+                <ErrorBanner error={error} />
                 <button type="submit" disabled={submitting} className="agd-btn" style={subBtn}>
                   {submitting ? "Updating…" : "Update password →"}
                 </button>
@@ -427,11 +423,10 @@ export function LandingPage() {
               </label>
             )}
 
-            {error && (
-              <div style={{ padding:"8px 12px", borderRadius:8, background:"rgba(220,38,38,0.06)", border:"1px solid rgba(220,38,38,0.18)", color:"#DC2626", fontSize:12.5 }}>
-                {error}
-              </div>
-            )}
+            <ErrorBanner
+              error={error}
+              onSignIn={() => { const keep = email; switchMode("signin"); setEmail(keep); }}
+            />
 
             <button type="submit" disabled={submitting} className="agd-btn" style={subBtn}>
               {btnLabel}
@@ -485,6 +480,42 @@ export function LandingPage() {
     </div>
   );
 }
+
+/* ── Error banner ───────────────────────────────────────────────── */
+
+function ErrorBanner({ error, onSignIn }: { error: FriendlyError | null; onSignIn?: () => void }) {
+  if (!error) return null;
+  return (
+    <div role="alert" style={errBox}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+           strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8v5M12 16v.5" />
+      </svg>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        <span>{error.message}</span>
+        {error.action === "signin" && onSignIn && (
+          <button type="button" style={errAction} onClick={onSignIn}>
+            Sign in instead →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const errBox: CSSProperties = {
+  display: "flex", alignItems: "flex-start", gap: 9,
+  padding: "10px 12px", borderRadius: 8,
+  background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.18)",
+  color: "#B91C1C", fontSize: 12.5, lineHeight: 1.45,
+};
+
+const errAction: CSSProperties = {
+  alignSelf: "flex-start", background: "none", border: "none", padding: 0,
+  color: "#B91C1C", fontFamily: "var(--font-body)", fontSize: 12.5, fontWeight: 600,
+  textDecoration: "underline", cursor: "pointer",
+};
 
 /* ── Styles ─────────────────────────────────────────────────────── */
 

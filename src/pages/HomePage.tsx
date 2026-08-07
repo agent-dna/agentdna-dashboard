@@ -11,7 +11,7 @@ import { LedgerTable } from "../components/LedgerTable";
 import { AppIcon } from "../components/AppIcon";
 
 export function HomePage() {
-  const series = "7d";
+  const series = "30d";
 
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
@@ -164,7 +164,7 @@ export function HomePage() {
           <div className="card-head">
             <div>
               <h3>Interactions over time</h3>
-              <div className="sub">Safe vs threat-classified runs · Last 7 days</div>
+              <div className="sub">Safe vs threat-classified runs · Last 30 days</div>
             </div>
           </div>
           <div className="chart-legend">

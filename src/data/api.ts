@@ -388,7 +388,7 @@ export async function fetchAllIntents(): Promise<Intent[]> {
   return out;
 }
 
-export async function fetchSeries(range: "24h" | "7d"): Promise<TimeSeries> {
+export async function fetchSeries(range: "24h" | "7d" | "30d"): Promise<TimeSeries> {
   if (isDummyMode()) {
     return dummySeries(range);
   }
@@ -417,11 +417,11 @@ interface DummyInteractionForSeries {
  * Built so the demo chart isn't flat — values come from the dummy.json times,
  * augmented with a small synthetic baseline so we don't show a row of zeros.
  */
-function dummySeries(range: "24h" | "7d"): TimeSeries {
+function dummySeries(range: "24h" | "7d" | "30d"): TimeSeries {
   const ix: DummyInteractionForSeries[] = (dummy.intents as Array<{ interactions: DummyInteractionForSeries[] }>)
     .flatMap((i) => i.interactions);
 
-  const buckets = range === "24h" ? 24 : 7;
+  const buckets = range === "24h" ? 24 : range === "7d" ? 7 : 30;
   const stepMs = range === "24h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
   // Anchor on the latest interaction so the chart fills the whole window even
   // if "now" has drifted past the seeded times.
@@ -448,10 +448,14 @@ function dummySeries(range: "24h" | "7d"): TimeSeries {
   // bucketed dataset is sparse.
   const baseline = range === "24h"
     ? [4, 3, 2, 2, 3, 4, 6, 9, 12, 15, 17, 19, 22, 24, 23, 21, 19, 17, 15, 13, 11, 9, 7, 5]
-    : [42, 51, 48, 63, 70, 58, 66];
+    : range === "7d"
+    ? [42, 51, 48, 63, 70, 58, 66]
+    : [38, 42, 45, 50, 48, 55, 60, 58, 63, 66, 70, 68, 72, 75, 71, 69, 74, 78, 76, 80, 77, 73, 68, 65, 70, 74, 72, 76, 80, 78];
   const threatBaseline = range === "24h"
     ? [0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 4, 4, 3, 2, 2, 1, 1, 0, 0, 0, 0]
-    : [3, 5, 4, 6, 7, 5, 4];
+    : range === "7d"
+    ? [3, 5, 4, 6, 7, 5, 4]
+    : [2, 3, 2, 4, 3, 5, 4, 3, 5, 6, 5, 4, 6, 7, 5, 4, 6, 7, 5, 6, 4, 3, 5, 4, 6, 5, 4, 6, 7, 5];
 
   for (let i = 0; i < buckets; i++) {
     safe[i] += baseline[i] ?? 0;
@@ -737,7 +741,14 @@ export interface DiagramInteraction {
   initiatorName: string;
   to: string;           // DID of recipient
   toName: string;
-  type: "trigger" | "delegate" | "tool_call" | "response" | "execute";
+  /**
+   * New schema carries no actor-type info, so `tool_call` / `tool_response`
+   * no longer exist. Only three hop kinds remain:
+   *   trigger  — first hop
+   *   delegate — forward to a new agent
+   *   response — returning back
+   */
+  type: "trigger" | "delegate" | "response";
   message: string;
   intentID: string;
   threat: boolean;

@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type CSSProperties } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { ApiError } from "../api/client";
+import { friendlyAuthError, type FriendlyError } from "../lib/authErrors";
 import { Icon } from "../components/Icon";
 import logo from "../assets/agentdna-logo.png";
 
@@ -28,7 +28,7 @@ export function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [org] = useState(USER_ORG_ID);
 
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FriendlyError | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (user) {
@@ -53,8 +53,8 @@ export function LoginPage() {
     e.preventDefault();
     setError(null);
     if (isRegister) {
-      if (password !== confirmPassword) { setError("Passwords do not match."); return; }
-      if (isAdminRegister && !org.trim()) { setError("Organisation name is required."); return; }
+      if (password !== confirmPassword) { setError({ message: "Passwords do not match." }); return; }
+      if (isAdminRegister && !org.trim()) { setError({ message: "Organisation name is required." }); return; }
     }
     setSubmitting(true);
     try {
@@ -65,7 +65,7 @@ export function LoginPage() {
       const to = (location.state as LocationState | null)?.from?.pathname || "/dashboard";
       navigate(to, { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setError(friendlyAuthError(err));
     } finally {
       setSubmitting(false);
     }
@@ -221,7 +221,23 @@ export function LoginPage() {
               </>
             )}
 
-            {error && <div style={errorStyle}>{error}</div>}
+            {error && (
+              <div role="alert" style={errorStyle}>
+                <Icon name="alerts" size={14} style={{ color: "var(--threat)", flexShrink: 0, marginTop: 1 }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span>{error.message}</span>
+                  {error.action === "signin" && (
+                    <button
+                      type="button"
+                      style={errorActionStyle}
+                      onClick={() => { const keep = email; switchMode("login"); setEmail(keep); }}
+                    >
+                      Sign in instead →
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             <button type="submit" disabled={submitting} style={submitBtnStyle(submitting)}>
               {btnLabel}
@@ -420,12 +436,29 @@ const inputStyle: CSSProperties = {
 };
 
 const errorStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 8,
   fontSize: 11,
+  lineHeight: 1.45,
   color: "var(--threat)",
   background: "rgba(220,38,38,0.06)",
   border: "1px solid rgba(220,38,38,0.18)",
   borderRadius: 7,
-  padding: "8px 11px",
+  padding: "9px 11px",
+};
+
+const errorActionStyle: CSSProperties = {
+  alignSelf: "flex-start",
+  background: "none",
+  border: "none",
+  padding: 0,
+  color: "var(--threat)",
+  fontFamily: "var(--font-body)",
+  fontSize: 11,
+  fontWeight: 600,
+  textDecoration: "underline",
+  cursor: "pointer",
 };
 
 const submitBtnStyle = (disabled: boolean): CSSProperties => ({

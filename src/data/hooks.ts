@@ -88,7 +88,7 @@ export const useAgentsAppsMetrics = () =>
     api.fetchAgentsAppsMetrics,
     { topAgents: [], topApps: [], metrics: { totalInteractions: 0, totalThreats: 0, totalAgents: 0, totalApps: 0, avgReliability: 0 } },
   );
-export const useSeries = (range: "24h" | "7d") =>
+export const useSeries = (range: "24h" | "7d" | "30d") =>
   useAsync<TimeSeries>(() => api.fetchSeries(range), { total: [], safe: [], threats: [] }, [range]);
 export const useHeatmap = () => useAsync<HeatmapRow[]>(api.fetchHeatmap, []);
 
