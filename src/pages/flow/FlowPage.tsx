@@ -98,16 +98,16 @@ export function FlowPage() {
                 <div style={{ flexShrink: 0, borderBottom: "1px solid #e2e8f0", padding: "14px 16px 12px", background: "#ffffff" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                     <div>
-                      <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.02em", color: "#0f172a", marginBottom: 3 }}>
+                      <div style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: "-0.02em", color: "#0f172a", marginBottom: 2 }}>
                         Interaction Timeline
                       </div>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "#94a3b8" }}>
+                      <div style={{ fontSize: 5.25, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "#94a3b8" }}>
                         {N} Hop{N === 1 ? "" : "s"}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       {(() => { const threats = flow.steps.filter(s => s.verdict === "blocked").length; return threats > 0 ? (
-                        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#dc2626", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 20, padding: "3px 10px" }}>
+                        <span style={{ fontSize: 5.25, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#dc2626", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 20, padding: "2px 6px" }}>
                           {threats} Threat{threats > 1 ? "s" : ""}
                         </span>
                       ) : null; })()}
@@ -123,7 +123,7 @@ export function FlowPage() {
                   </div>
                 </div>
                 <div className="flow-steps" ref={stepsRef}>
-                  <div style={{ position: "relative", paddingLeft: 54 }}>
+                  <div style={{ position: "relative", paddingLeft: 40 }}>
                     {flow.steps.map((s, i) => {
                       const from = flow.nodeById[s.from];
                       const to = flow.nodeById[s.to];
@@ -136,29 +136,29 @@ export function FlowPage() {
                           key={i}
                           data-step={i}
                           onClick={() => jump(i)}
-                          style={{ position: "relative", marginBottom: isLast ? 4 : 14, cursor: "pointer" }}
+                          style={{ position: "relative", marginBottom: isLast ? 3 : 10, cursor: "pointer" }}
                         >
                           {/* Numbered timeline node + connector down to the next hop */}
                           <div style={{
                             position: "absolute",
-                            left: -54,
-                            top: 12,
-                            width: 38,
+                            left: -40,
+                            top: 9,
+                            width: 28,
                             display: "flex",
                             justifyContent: "center",
                           }}>
                             <span style={{
-                              width: 34,
-                              height: 34,
+                              width: 26,
+                              height: 26,
                               borderRadius: "50%",
                               background: "#ffffff",
-                              border: `2px solid ${accent}`,
-                              boxShadow: `0 0 0 4px ${blk ? "rgba(239,68,68,0.10)" : "rgba(34,197,94,0.12)"}`,
+                              border: `1.5px solid ${accent}`,
+                              boxShadow: `0 0 0 3px ${blk ? "rgba(239,68,68,0.10)" : "rgba(34,197,94,0.12)"}`,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               fontFamily: "var(--font-mono)",
-                              fontSize: 12,
+                              fontSize: 7.2,
                               fontWeight: 700,
                               color: accent,
                               boxSizing: "border-box",
@@ -169,11 +169,11 @@ export function FlowPage() {
                           {!isLast && (
                             <div style={{
                               position: "absolute",
-                              left: -36,
-                              top: 46,
-                              // Reaches past the 14px gap plus the next node's
-                              // 12px top offset so the rail reads as continuous.
-                              bottom: -26,
+                              left: -27,
+                              top: 35,
+                              // Reaches past the 10px gap plus the next node's
+                              // 9px top offset so the rail reads as continuous.
+                              bottom: -19,
                               width: 2,
                               background: accent,
                               opacity: 0.55,
@@ -183,48 +183,37 @@ export function FlowPage() {
 
                           {/* Card */}
                           <div style={{
-                            borderRadius: 12,
+                            borderRadius: 9,
                             border: `1.5px solid ${blk ? "#fecaca" : isActive ? "#86efac" : "#e2e8f0"}`,
                             background: blk ? "#fff8f8" : isActive ? "#f6fefa" : "#fbfcfe",
-                            padding: "12px 14px 4px",
+                            padding: "9px 10px 3px",
                             transition: "background 0.15s, border-color 0.15s",
                           }}>
-                            {/* Header row */}
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+                            {/* Status row — hop number lives on the timeline node, so
+                                the in-card "Hop NN" badge would just repeat it. */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, marginBottom: 7 }}>
                               <span style={{
-                                fontSize: 11,
-                                fontWeight: 800,
-                                letterSpacing: "0.07em",
-                                textTransform: "uppercase",
-                                color: blk ? "#b91c1c" : isActive ? "#15803d" : "#1e40af",
-                                background: blk ? "#fee2e2" : isActive ? "#dcfce7" : "#eef2ff",
-                                borderRadius: 8,
-                                padding: "6px 12px",
-                              }}>
-                                Hop {String(i + 1).padStart(2, "0")}
-                              </span>
-                              <span style={{
-                                fontSize: 11,
+                                fontSize: 6.6,
                                 fontWeight: 800,
                                 letterSpacing: "0.06em",
                                 textTransform: "uppercase",
                                 color: blk ? "#dc2626" : "#16a34a",
                                 background: blk ? "#fef2f2" : "#f0fdf4",
                                 border: `1px solid ${blk ? "#fca5a5" : "#bbf7d0"}`,
-                                borderRadius: 20,
-                                padding: "5px 12px",
+                                borderRadius: 15,
+                                padding: "4px 9px",
                                 display: "inline-flex",
                                 alignItems: "center",
-                                gap: 6,
+                                gap: 4,
                                 whiteSpace: "nowrap",
                               }}>
-                                <span style={{ width: 7, height: 7, borderRadius: "50%", background: blk ? "#dc2626" : "#22c55e" }} />
+                                <span style={{ width: 5, height: 5, borderRadius: "50%", background: blk ? "#dc2626" : "#22c55e" }} />
                                 {blk ? "Threat Detected" : "Allowed"}
                               </span>
                             </div>
 
                             <HopParty label="From" node={from} fallback={s.from} />
-                            <div style={{ height: 1, background: "#e9eef5", margin: "0 0 0 0" }} />
+                            <div style={{ height: 1, background: "#e9eef5" }} />
                             <HopParty label="To" node={to} fallback={s.to} />
                           </div>
                         </div>
@@ -362,22 +351,22 @@ function HopParty({ label, node, fallback }: { label: string; node?: FlowNode; f
   const name = node?.name || fallback;
   const did = node?.did || "";
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 0" }}>
       <span style={{
-        fontSize: 10,
+        fontSize: 6,
         fontWeight: 700,
         letterSpacing: "0.07em",
         textTransform: "uppercase",
         color: "#94a3b8",
-        width: 34,
+        width: 26,
         flexShrink: 0,
       }}>
         {label}
       </span>
 
       <span style={{
-        width: 30,
-        height: 30,
+        width: 22,
+        height: 22,
         borderRadius: "50%",
         background: "#e6ecfb",
         color: "#4b6bdd",
@@ -386,12 +375,12 @@ function HopParty({ label, node, fallback }: { label: string; node?: FlowNode; f
         justifyContent: "center",
         flexShrink: 0,
       }}>
-        <Icon name="user" size={15} />
+        <Icon name="user" size={11} />
       </span>
 
       <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, gap: 1 }}>
         <span style={{
-          fontSize: 12.5,
+          fontSize: 7.5,
           fontWeight: 700,
           color: "#0f172a",
           overflow: "hidden",
@@ -401,7 +390,7 @@ function HopParty({ label, node, fallback }: { label: string; node?: FlowNode; f
           {truncateMiddle(name, 22)}
         </span>
         {did && (
-          <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "#94a3b8", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 6.6, fontFamily: "var(--font-mono)", color: "#94a3b8", whiteSpace: "nowrap" }}>
             {truncateMiddle(did, 18)}
           </span>
         )}
@@ -440,20 +429,20 @@ function CopyButton({ text }: { text: string }) {
       title={copied ? "Copied!" : "Copy DID"}
       style={{
         flexShrink: 0,
-        width: 30,
-        height: 30,
+        width: 22,
+        height: 22,
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
         background: "#ffffff",
         border: "1px solid #e2e8f0",
-        borderRadius: 8,
+        borderRadius: 6,
         cursor: "pointer",
         color: copied ? "#16a34a" : "#64748b",
         transition: "color 120ms, border-color 120ms",
       }}
     >
-      <Icon name={copied ? "check" : "copy"} size={14} />
+      <Icon name={copied ? "check" : "copy"} size={11} />
     </button>
   );
 }
