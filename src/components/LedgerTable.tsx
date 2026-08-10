@@ -2,6 +2,7 @@ import type { Interaction } from "../types";
 import { useResolveName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { timeAgo } from "../lib/format";
+import { EntityLink } from "./EntityLink";
 
 const TD_STYLE = { padding: "14px 22px", borderBottom: "1px solid var(--line)", verticalAlign: "middle" } as const;
 
@@ -74,19 +75,35 @@ export function LedgerTable({
               onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = "")}
             >
               <td style={TD_STYLE}>
-                <span style={{ font: "600 13px var(--font-mono)", color: "var(--fg)" }}>
+                <span
+                  onClick={(e) => { e.stopPropagation(); onView(r); }}
+                  title={r.id}
+                  style={{ font: "600 13px var(--font-mono)", color: "var(--fg)", cursor: "pointer" }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLSpanElement).style.textDecoration = "underline")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLSpanElement).style.textDecoration = "none")}
+                >
                   {r.id.length > 12 ? r.id.slice(0, 4) + "…" + r.id.slice(-4) : r.id}
                 </span>
               </td>
               <td style={TD_STYLE}>
-                <span style={{ font: "600 13px var(--font-mono)", color: "var(--fg)" }}>
+                <EntityLink
+                  did={r.initiator.id}
+                  fallbackName={r.initiator.name}
+                  style={{ font: "600 13px var(--font-mono)" }}
+                  color="var(--fg)"
+                >
                   {resolveName(r.initiator.id, r.initiator.name)}
-                </span>
+                </EntityLink>
               </td>
               <td style={TD_STYLE}>
-                <span style={{ font: "500 13px var(--font-mono)", color: "var(--fg-dim, var(--fg-muted))" }}>
+                <EntityLink
+                  did={r.target.id}
+                  fallbackName={r.target.name}
+                  style={{ font: "500 13px var(--font-mono)" }}
+                  color="var(--fg-dim, var(--fg-muted))"
+                >
                   {resolveName(r.target.id, r.target.name)}
-                </span>
+                </EntityLink>
               </td>
               <td style={TD_STYLE}>
                 <IntentIdChip id={r.intent.id} style={{ font: "500 13px var(--font-mono)", color: "var(--accent)" }} />

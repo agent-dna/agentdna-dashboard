@@ -5,6 +5,9 @@ import { MetricTile } from "../components/MetricTile";
 import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell } from "../components/EntityCell";
+import { EntityLink } from "../components/EntityLink";
+import { entityPath } from "../lib/entityLinks";
+import { useResolveName } from "../context/DirectoryContext";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
 import { useIntent, useIntentInteractionsPaged, useIntentParticipants } from "../data/hooks";
@@ -22,6 +25,7 @@ export function IntentDetailPage() {
   const { intentId = "" } = useParams<{ intentId: string }>();
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
+  const resolve = useResolveName();
   const [tab, setTab] = useState<Tab>("interactions");
   const [interactionsPage, setInteractionsPage] = useState(1);
 
@@ -56,13 +60,32 @@ export function IntentDetailPage() {
   }
 
   const participantRows = participants.map((p) => ({ ...p, id: `${p.type}:${p.entity.id}` }));
+
+  /**
+   * Participants route to their own detail page when the directory knows what
+   * they are; apps without a resolvable kind still fall back to the drawer.
+   */
+  const openParticipant = (p: IntentParticipant) => {
+    const to = entityPath(resolve(p.entity.id).kind ?? (p.type === "agent" ? "agent" : undefined), p.entity.id);
+    if (to) navigate(to);
+    else openDrawer("tool", p.entity as unknown as Tool);
+  };
+
   const threatCount = interactions.filter((i: { threat: boolean }) => i.threat).length;
 
   const participantCols: DataTableColumn<IntentParticipant & { id: string }>[] = [
     {
       key: "name",
       label: "Name",
-      render: (r) => <EntityCell name={r.entity.name} sub={r.entity.id} paletteIx={r.entity.name.charCodeAt(0)} />,
+      render: (r) => (
+        <EntityCell
+          name={r.entity.name}
+          sub={r.entity.id}
+          nameNode={<EntityLink did={r.entity.id} fallbackName={r.entity.name} color="var(--fg)" />}
+          subNode={<EntityLink did={r.entity.id} color="var(--fg-muted)">{r.entity.id}</EntityLink>}
+          paletteIx={r.entity.name.charCodeAt(0)}
+        />
+      ),
     },
     {
       key: "count",
@@ -104,8 +127,7 @@ export function IntentDetailPage() {
             className="btn-mini"
             onClick={(e) => {
               e.stopPropagation();
-              if (r.type === "agent") navigate(`/agents/${r.entity.id}`);
-              else openDrawer("tool", r.entity as unknown as Tool);
+              openParticipant(r);
             }}
           >
             View
@@ -269,9 +291,7 @@ export function IntentDetailPage() {
           <DataTable
             rows={participantRows}
             columns={participantCols}
-            onRowClick={(r) =>
-              r.type === "agent" ? navigate(`/agents/${r.entity.id}`) : openDrawer("tool", r.entity as unknown as Tool)
-            }
+            onRowClick={(r) => openParticipant(r)}
             emptyText="No participants found."
           />
         )}

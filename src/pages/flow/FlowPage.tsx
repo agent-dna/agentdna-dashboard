@@ -96,21 +96,11 @@ export function FlowPage() {
               <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: "#ffffff", borderRadius: 10, overflow: "hidden", border: "1px solid #e2e8f0" }}>
                 {/* Sticky header */}
                 <div style={{ flexShrink: 0, borderBottom: "1px solid #e2e8f0", padding: "14px 16px 12px", background: "#ffffff" }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: "-0.02em", color: "#0f172a", marginBottom: 2 }}>
-                        Interaction Timeline
-                      </div>
-                      <div style={{ fontSize: 5.25, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "#94a3b8" }}>
-                        {N} Hop{N === 1 ? "" : "s"}
-                      </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ fontSize: 12.4, fontWeight: 800, letterSpacing: "-0.02em", color: "#0f172a" }}>
+                      Interaction Timeline
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      {(() => { const threats = flow.steps.filter(s => s.verdict === "blocked").length; return threats > 0 ? (
-                        <span style={{ fontSize: 5.25, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#dc2626", background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 20, padding: "2px 6px" }}>
-                          {threats} Threat{threats > 1 ? "s" : ""}
-                        </span>
-                      ) : null; })()}
                       <button
                         className="sl-data-btn"
                         title="Inspect trace data"
@@ -158,8 +148,8 @@ export function FlowPage() {
                               alignItems: "center",
                               justifyContent: "center",
                               fontFamily: "var(--font-mono)",
-                              fontSize: 7.2,
-                              fontWeight: 700,
+                              fontSize: 10,
+                              fontWeight: 800,
                               color: accent,
                               boxSizing: "border-box",
                             }}>
@@ -184,34 +174,14 @@ export function FlowPage() {
                           {/* Card */}
                           <div style={{
                             borderRadius: 9,
-                            border: `1.5px solid ${blk ? "#fecaca" : isActive ? "#86efac" : "#e2e8f0"}`,
-                            background: blk ? "#fff8f8" : isActive ? "#f6fefa" : "#fbfcfe",
+                            // Blue marks selection; red/green stay reserved for verdict.
+                            border: `1.5px solid ${blk ? "#fecaca" : isActive ? "#93c5fd" : "#e2e8f0"}`,
+                            background: blk ? "#fff8f8" : isActive ? "#f2f7ff" : "#fbfcfe",
                             padding: "9px 10px 3px",
                             transition: "background 0.15s, border-color 0.15s",
                           }}>
-                            {/* Status row — hop number lives on the timeline node, so
-                                the in-card "Hop NN" badge would just repeat it. */}
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, marginBottom: 7 }}>
-                              <span style={{
-                                fontSize: 6.6,
-                                fontWeight: 800,
-                                letterSpacing: "0.06em",
-                                textTransform: "uppercase",
-                                color: blk ? "#dc2626" : "#16a34a",
-                                background: blk ? "#fef2f2" : "#f0fdf4",
-                                border: `1px solid ${blk ? "#fca5a5" : "#bbf7d0"}`,
-                                borderRadius: 15,
-                                padding: "4px 9px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 4,
-                                whiteSpace: "nowrap",
-                              }}>
-                                <span style={{ width: 5, height: 5, borderRadius: "50%", background: blk ? "#dc2626" : "#22c55e" }} />
-                                {blk ? "Threat Detected" : "Allowed"}
-                              </span>
-                            </div>
-
+                            {/* No status pill — verdict reads from the node colour,
+                                the card border, and the header threat count. */}
                             <HopParty label="From" node={from} fallback={s.from} />
                             <div style={{ height: 1, background: "#e9eef5" }} />
                             <HopParty label="To" node={to} fallback={s.to} />
@@ -353,8 +323,8 @@ function HopParty({ label, node, fallback }: { label: string; node?: FlowNode; f
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 0" }}>
       <span style={{
-        fontSize: 6,
-        fontWeight: 700,
+        fontSize: 8.3,
+        fontWeight: 800,
         letterSpacing: "0.07em",
         textTransform: "uppercase",
         color: "#94a3b8",
@@ -380,8 +350,8 @@ function HopParty({ label, node, fallback }: { label: string; node?: FlowNode; f
 
       <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, gap: 1 }}>
         <span style={{
-          fontSize: 7.5,
-          fontWeight: 700,
+          fontSize: 10.3,
+          fontWeight: 800,
           color: "#0f172a",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -390,7 +360,7 @@ function HopParty({ label, node, fallback }: { label: string; node?: FlowNode; f
           {truncateMiddle(name, 22)}
         </span>
         {did && (
-          <span style={{ fontSize: 6.6, fontFamily: "var(--font-mono)", color: "#94a3b8", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 9.1, fontWeight: 600, fontFamily: "var(--font-mono)", color: "#8494ab", whiteSpace: "nowrap" }}>
             {truncateMiddle(did, 18)}
           </span>
         )}

@@ -11,7 +11,9 @@ import { LedgerTable } from "../components/LedgerTable";
 import { AppIcon } from "../components/AppIcon";
 
 export function HomePage() {
-  const [series, setSeries] = useState<"7d" | "30d">("7d");
+  // Fixed at 7d — the 30-day range is parked until /interactions/series
+  // stops 400ing on range=30d.
+  const series = "7d";
 
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
@@ -36,7 +38,7 @@ export function HomePage() {
   // Actual calendar dates for the trailing window, oldest → newest, matching the
   // bucket order the series comes back in. Weekday names were ambiguous — they
   // don't say which week, and they never moved with the data.
-  const dayCount = series === "7d" ? 7 : 30;
+  const dayCount = 7;
   const labels = useMemo(() => {
     const today = new Date();
     return Array.from({ length: dayCount }, (_, i) => {
@@ -176,22 +178,7 @@ export function HomePage() {
             <div>
               <h3>Interactions over time</h3>
               <div className="sub">
-                Safe vs threat-classified runs · Last {dayCount} days
-              </div>
-            </div>
-            <div className="actions">
-              <div className="seg">
-                {([["7d", "7 days"], ["30d", "30 days"]] as const).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={series === value ? "active" : undefined}
-                    aria-pressed={series === value}
-                    onClick={() => setSeries(value)}
-                  >
-                    {label}
-                  </button>
-                ))}
+                Safe vs threat-classified runs · Last 7 days
               </div>
             </div>
           </div>
@@ -206,9 +193,7 @@ export function HomePage() {
           <div className="chart-wrap">
             <Chart
               labels={labels}
-              // 30 daily bars in this width come out ~10px wide and read as
-              // noise, so the longer window switches to a line.
-              style={series === "7d" ? "bar" : "line"}
+              style="bar"
               height={272}
               formatY={(v) => (typeof v === "number" && v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)}
               series={[
