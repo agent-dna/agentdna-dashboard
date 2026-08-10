@@ -61,7 +61,10 @@ export function Chart({ series, labels, style = "area", height = 280, formatY = 
 
   const xFor = (i: number) => padL + (labels.length === 1 ? iw / 2 : (i / (labels.length - 1)) * iw);
   const yFor = (v: number) => padT + ih - (v / niceMax) * ih;
-  const xTickIxs = labels.map((_, i) => i).filter((i) => i % 4 === 0 || i === labels.length - 1);
+  // Thin the x-axis only when there are enough points to crowd it. A short
+  // window (a week or so) shows every label.
+  const tickStride = labels.length <= 8 ? 1 : 4;
+  const xTickIxs = labels.map((_, i) => i).filter((i) => i % tickStride === 0 || i === labels.length - 1);
 
   return (
     <div style={{ position: "relative" }}>
