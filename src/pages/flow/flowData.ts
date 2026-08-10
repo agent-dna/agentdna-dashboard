@@ -24,6 +24,8 @@ export interface FlowNode {
   kind: FlowNodeKind;
   name: string;
   label: string;
+  /** Raw DID this node was built from — `id` is a sanitized derivative. */
+  did?: string;
   /** normalized 0..1 — set by tierLayout */
   x: number;
   y: number;
@@ -296,6 +298,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       id,
       kind,
       name,
+      did,
       label: kind === "tool" ? "App" : "",
       x: 0,
       y: 0,
@@ -519,7 +522,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
   const ensureNode = (did: string, name: string, kind: FlowNodeKind, label: string): FlowNode => {
     const id = idForDid(did);
     if (!nodesById.has(id)) {
-      nodesById.set(id, { id, kind, name: name || shortDid(did), label, x: 0, y: 0 });
+      nodesById.set(id, { id, kind, name: name || shortDid(did), did, label, x: 0, y: 0 });
     }
     return nodesById.get(id)!;
   };

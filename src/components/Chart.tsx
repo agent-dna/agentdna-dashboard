@@ -34,13 +34,22 @@ function computeNiceMax(max: number, ticks: number): number {
 export function Chart({ series, labels, style = "area", height = 280, formatY = (v) => v }: ChartProps) {
   const [hover, setHover] = useState<number | null>(null);
 
-  if (!labels.length || !series.length) {
+  // A series can arrive shorter than the label window — or empty, when the API
+  // errors and `fetchSeries` degrades to []. Clamp the axis to the points that
+  // actually exist: without this, an empty series builds the path string "M "
+  // (invalid SVG) and a short one positions points off-canvas.
+  const pointCount = series.reduce((m, s) => Math.max(m, s.data.length), 0);
+  const count = Math.min(labels.length, pointCount);
+
+  if (!series.length || count === 0) {
     return (
       <div style={{ height, display: "grid", placeItems: "center", color: "var(--fg-muted)", fontSize: 13 }}>
         No data
       </div>
     );
   }
+
+  const axisLabels = labels.slice(0, count);
 
   const w = 800;
   const h = height;
@@ -51,7 +60,9 @@ export function Chart({ series, labels, style = "area", height = 280, formatY = 
   const iw = w - padL - padR;
   const ih = h - padT - padB;
 
-  const all = series.flatMap((s) => s.data);
+  // Scale only off points that are actually drawn, so an off-axis tail can't
+  // squash the visible bars against a ceiling it sets.
+  const all = series.flatMap((s) => s.data.slice(0, count));
   const max = Math.max(...all, 1);
   const ticks = 4;
   // Pick a Y-axis step that matches the data magnitude so bars use the full
@@ -59,13 +70,13 @@ export function Chart({ series, labels, style = "area", height = 280, formatY = 
   const niceMax = computeNiceMax(max, ticks);
   const yTicks = Array.from({ length: ticks + 1 }, (_, i) => Math.round((niceMax / ticks) * i));
 
-  const xFor = (i: number) => padL + (labels.length === 1 ? iw / 2 : (i / (labels.length - 1)) * iw);
+  const xFor = (i: number) => padL + (count === 1 ? iw / 2 : (i / (count - 1)) * iw);
   const yFor = (v: number) => padT + ih - (v / niceMax) * ih;
   // Thin the x-axis only when there are enough points to crowd it. A short
   // window (a week or so) shows every label.
-  const tickStride = labels.length <= 8 ? 1 : 4;
-  const lastIx = labels.length - 1;
-  const xTickIxs = labels.map((_, i) => i).filter((i) => i % tickStride === 0);
+  const tickStride = count <= 8 ? 1 : 4;
+  const lastIx = count - 1;
+  const xTickIxs = axisLabels.map((_, i) => i).filter((i) => i % tickStride === 0);
   // Always anchor the axis on the newest point, but only as an extra tick if it
   // won't collide with the one before it.
   if (xTickIxs[xTickIxs.length - 1] !== lastIx) {
@@ -107,17 +118,17 @@ export function Chart({ series, labels, style = "area", height = 280, formatY = 
 
         {xTickIxs.map((i) => (
           <text key={i} x={xFor(i)} y={h - 12} textAnchor="middle" fill="var(--fg-faint)" fontSize="10.5" fontFamily="var(--font-mono)">
-            {labels[i]}
+            {axisLabels[i]}
           </text>
         ))}
 
         {series.map((s, sx) => {
           if (style === "bar") {
             // Use 85% of the slot for the bar group so bars are visibly wide.
-            const bw = Math.max(3, ((iw / labels.length) * 0.85) / series.length);
+            const bw = Math.max(3, ((iw / count) * 0.85) / series.length);
             return (
               <g key={s.key}>
-                {s.data.map((v, i) => (
+                {s.data.slice(0, count).map((v, i) => (
                   <rect
                     key={i}
                     x={xFor(i) - (series.length * bw) / 2 + sx * bw}
@@ -132,9 +143,9 @@ export function Chart({ series, labels, style = "area", height = 280, formatY = 
               </g>
             );
           }
-          const pts = s.data.map((v, i) => [xFor(i), yFor(v)] as const);
+          const pts = s.data.slice(0, count).map((v, i) => [xFor(i), yFor(v)] as const);
           const pathD = "M " + pts.map((p) => p.join(",")).join(" L ");
-          const areaD = pathD + ` L ${xFor(labels.length - 1)},${yFor(0)} L ${xFor(0)},${yFor(0)} Z`;
+          const areaD = pathD + ` L ${xFor(count - 1)},${yFor(0)} L ${xFor(0)},${yFor(0)} Z`;
           return (
             <g key={s.key}>
               {style === "area" && <path d={areaD} fill={`url(#g-${s.key})`} />}
@@ -146,12 +157,12 @@ export function Chart({ series, labels, style = "area", height = 280, formatY = 
           );
         })}
 
-        {labels.map((_, i) => (
+        {axisLabels.map((_, i) => (
           <rect
             key={i}
-            x={xFor(i) - iw / labels.length / 2}
+            x={xFor(i) - iw / count / 2}
             y={padT}
-            width={iw / labels.length}
+            width={iw / count}
             height={ih}
             fill="transparent"
             onMouseEnter={() => setHover(i)}
@@ -181,7 +192,7 @@ export function Chart({ series, labels, style = "area", height = 280, formatY = 
             fontFamily: "var(--font-mono)",
           }}
         >
-          <div style={{ color: "var(--fg-muted)", fontSize: 11, marginBottom: 6 }}>{labels[hover]}</div>
+          <div style={{ color: "var(--fg-muted)", fontSize: 11, marginBottom: 6 }}>{axisLabels[hover]}</div>
           {series.map((s) => (
             <div key={s.key} style={{ display: "flex", justifyContent: "space-between", gap: 14 }}>
               <span style={{ color: "var(--fg-dim)", display: "inline-flex", alignItems: "center", gap: 6 }}>
