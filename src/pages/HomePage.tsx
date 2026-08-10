@@ -206,7 +206,9 @@ export function HomePage() {
           <div className="chart-wrap">
             <Chart
               labels={labels}
-              style="bar"
+              // 30 daily bars in this width come out ~10px wide and read as
+              // noise, so the longer window switches to a line.
+              style={series === "7d" ? "bar" : "line"}
               height={272}
               formatY={(v) => (typeof v === "number" && v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)}
               series={[
