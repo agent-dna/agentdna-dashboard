@@ -11,7 +11,7 @@ import { LedgerTable } from "../components/LedgerTable";
 import { AppIcon } from "../components/AppIcon";
 
 export function HomePage() {
-  const series = "7d";
+  const [series, setSeries] = useState<"7d" | "30d">("7d");
 
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
@@ -33,17 +33,18 @@ export function HomePage() {
   const threats = alertsState.data;
   const data = seriesState.data;
 
-  // Actual calendar dates for the trailing 7 days, oldest → newest, matching the
+  // Actual calendar dates for the trailing window, oldest → newest, matching the
   // bucket order the series comes back in. Weekday names were ambiguous — they
   // don't say which week, and they never moved with the data.
+  const dayCount = series === "7d" ? 7 : 30;
   const labels = useMemo(() => {
     const today = new Date();
-    return Array.from({ length: 7 }, (_, i) => {
+    return Array.from({ length: dayCount }, (_, i) => {
       const d = new Date(today);
-      d.setDate(today.getDate() - (6 - i));
+      d.setDate(today.getDate() - (dayCount - 1 - i));
       return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     });
-  }, []);
+  }, [dayCount]);
 
   const isEmpty = !homeState.loading && metrics.agentCount === 0;
 
@@ -174,7 +175,24 @@ export function HomePage() {
           <div className="card-head">
             <div>
               <h3>Interactions over time</h3>
-              <div className="sub">Safe vs threat-classified runs · Last 7 days</div>
+              <div className="sub">
+                Safe vs threat-classified runs · Last {dayCount} days
+              </div>
+            </div>
+            <div className="actions">
+              <div className="seg">
+                {([["7d", "7 days"], ["30d", "30 days"]] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={series === value ? "active" : undefined}
+                    aria-pressed={series === value}
+                    onClick={() => setSeries(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="chart-legend">
