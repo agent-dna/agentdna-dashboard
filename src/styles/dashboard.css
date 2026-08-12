@@ -954,7 +954,9 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .canvas-bar .cb-node { font: 600 12.5px var(--font-body); color: #EAF1FF; display: inline-block; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .canvas-bar .cb-arr { color: #5E7BB8; font-size: 14px; }
 .canvas-bar .cb-arr.ret { color: #38BDF8; }
-.canvas-bar .cb-title { font: 500 12.5px var(--font-body); color: #93A8D4; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 4px; border-left: 1px solid rgba(180,205,255,0.14); }
+/* cb-title (the "Delegate · X" / "Response · X" caption) was removed from the
+   bar; cb-pair now takes the free space it used to provide. */
+.canvas-bar .cb-pair { flex: 1; min-width: 0; }
 .canvas-bar .cb-checks { display: inline-flex; gap: 4px; }
 .canvas-bar .cb-chk { width: 19px; height: 19px; border-radius: 5px; display: grid; place-items: center; font: 600 10px var(--font-mono); color: #fff; background: rgba(56,130,246,0.85); }
 .canvas-bar .cb-chk.fail { background: #DC2626; }
@@ -972,7 +974,6 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .flow-canvas.compact .flow-node .nt .lb { font-size: 7.5px; }
 .flow-canvas.compact .flow-node.active .nv { transform: scale(1.1); }
 .flow-canvas.compact .canvas-bar { gap: 9px; padding: 0 12px; }
-.flow-canvas.compact .canvas-bar .cb-title { display: none; }
 .flow-canvas.compact .canvas-bar .cb-node { max-width: 88px; }
 .flow-canvas.compact .canvas-legend .lg:nth-child(n+3) { display: none; }
 
@@ -992,6 +993,14 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .flow-node.human .nv { border-radius: 50%; background: linear-gradient(135deg, #2B4FA0, #0A2240); }
 .flow-node.agent .nv { background: linear-gradient(135deg, #3B82F6, #2563EB); }
 .flow-node.tool .nv { background: linear-gradient(135deg, #0EA5E9, #0369A1); }
+/* Provenance ledger — outlined rather than filled, so it reads as the layer
+   the flow is written into rather than another participant in it. */
+.flow-node.provenance .nv {
+  background: linear-gradient(135deg, rgba(6,44,34,0.92), rgba(5,26,22,0.92));
+  border: 1.5px dashed rgba(52,211,153,0.60);
+  color: #6EE7B7;
+}
+.flow-node.provenance .nt .nm { color: #A7F3D0; }
 .flow-node .nt {
   position: absolute; top: calc(100% + 7px); left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 1px; white-space: nowrap;
@@ -999,6 +1008,10 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .flow-node .nt .nm { font: 600 11.5px var(--font-body); color: #DCE7FB; max-width: 116px; overflow: hidden; text-overflow: ellipsis; }
 .flow-node.tool .nt .nm { font-family: var(--font-mono); font-size: 10.5px; }
 .flow-node .nt .lb { font: 600 8.5px var(--font-mono); color: #7E97C8; text-transform: uppercase; letter-spacing: 0.08em; }
+/* Nodes that drop a seal edge straight down put their caption above instead,
+   so the dashed line doesn't run through the name. */
+.flow-node.label-above .nt { top: auto; bottom: calc(100% + 7px); }
+.flow-canvas.compact .flow-node.label-above .nt { top: auto; bottom: calc(100% + 5px); }
 
 /* node states */
 .flow-node.future { opacity: 0.6; }
@@ -1216,7 +1229,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   align-items: center;
   gap: 5px;
   /* Matches the "Interaction Timeline" heading it sits beside. */
-  font: 600 12.4px var(--font-body);
+  font: 600 13.6px var(--font-body);
   color: var(--accent);
   background: rgba(37,99,235,0.07);
   border: 1px solid rgba(37,99,235,0.20);
@@ -1349,3 +1362,12 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   font: 400 12.5px/1.6 var(--font-mono); color: var(--fg-dim); white-space: pre-wrap; word-break: break-word;
 }
 .ti-pre.json { color: #1C5BA6; background: #F4F8FD; }
+
+/* ============ Envelope JSON tree ============ */
+.agd-json-row {
+  border-radius: 5px;
+  transition: background 90ms;
+}
+.agd-json-row:hover {
+  background: rgba(125,211,252,0.07);
+}

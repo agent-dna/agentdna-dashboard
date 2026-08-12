@@ -15,7 +15,7 @@ import type { Intent, Interaction } from "../../types";
 import type { DiagramInteraction, IntentBlock, IntentDiagram } from "../../data/api";
 import type { useResolveName } from "../../context/DirectoryContext";
 
-export type FlowNodeKind = "human" | "agent" | "tool";
+export type FlowNodeKind = "human" | "agent" | "tool" | "provenance";
 export type FlowDirection = "request" | "response";
 export type FlowVerdict = "allowed" | "blocked";
 
@@ -50,6 +50,8 @@ export interface FlowStep {
    * same node pair more than once.
    */
   interactionID?: string;
+  /** Ordering stamp from /intent-diagram; equal values mean concurrent hops. */
+  epoch?: number;
 }
 
 export interface TraceSpan {
@@ -80,6 +82,18 @@ export interface FlowTrace {
   totalCost: number;
 }
 
+export interface SealEdge {
+  /** Node whose envelope is being written to the ledger. */
+  from: string;
+  to: string;
+  /** Empty for the closing seal — the drop itself carries the meaning. */
+  label: string;
+  /** True when this seal was triggered by a blocked hop rather than completion. */
+  threat: boolean;
+  /** Step that triggers this seal, so playback can light it at the right beat. */
+  stepIndex: number;
+}
+
 export interface Flow {
   intentId: string;
   intent: Intent;
@@ -87,6 +101,8 @@ export interface Flow {
   nodeById: Record<string, FlowNode>;
   /** unique directed edges (from > to). */
   edges: [string, string][];
+  /** Terminal edges into the provenance layer. */
+  sealEdges: SealEdge[];
   steps: FlowStep[];
   status: "halted" | "completed";
   trace: FlowTrace;
@@ -244,6 +260,98 @@ function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
   });
 
   return nodes;
+}
+
+
+/* ------- parallel rounds ------- */
+
+/**
+ * Group step indices into rounds that play together.
+ *
+ * A fan-out — one agent dispatching to several others at once — should light up
+ * as a single beat rather than a sequence. Consecutive request hops leaving the
+ * same node for different targets are treated as concurrent; when the diagram
+ * supplies epochs, they must match too, so genuinely sequential calls from the
+ * same source stay separate.
+ *
+ * Responses always stand alone: a reply is a distinct beat even when several
+ * arrive from a fan-out.
+ */
+export function groupParallelRounds(steps: FlowStep[]): number[][] {
+  const rounds: number[][] = [];
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    const open = rounds[rounds.length - 1];
+    const prev = open ? steps[open[open.length - 1]] : null;
+    const concurrent =
+      prev != null &&
+      s.dir === "request" &&
+      prev.dir === "request" &&
+      s.from === prev.from &&
+      s.to !== prev.to &&
+      (s.epoch == null || prev.epoch == null || s.epoch === prev.epoch);
+    if (concurrent && open) open.push(i);
+    else rounds.push([i]);
+  }
+  return rounds;
+}
+
+
+/* ------- provenance layer ------- */
+
+export const PROVENANCE_ID = "nd_provenance";
+
+/**
+ * Every flow terminates in the provenance layer.
+ *
+ * The last hop's envelope is sealed and stored; on top of that, any hop where a
+ * threat was detected writes its envelope immediately, so a halted flow still
+ * leaves a record at the point it was stopped.
+ *
+ * The node is positioned directly rather than by the layout pass — it isn't a
+ * participant in the call chain, it's the ledger the chain drops into, so it
+ * sits centred beneath the graph instead of taking a depth column.
+ */
+function attachProvenance(steps: FlowStep[], nodes: FlowNode[]): { node: FlowNode | null; sealEdges: SealEdge[] } {
+  if (steps.length === 0) return { node: null, sealEdges: [] };
+
+  const sealEdges: SealEdge[] = [];
+  const sealed = new Set<string>();
+
+  // The closing seal first, so if the final hop is itself blocked it reads as
+  // the full seal rather than a bare threat write.
+  const last = steps[steps.length - 1];
+  if (last) {
+    sealed.add(last.to);
+    sealEdges.push({
+      from: last.to,
+      to: PROVENANCE_ID,
+      label: "",
+      threat: last.verdict === "blocked",
+      stepIndex: steps.length - 1,
+    });
+  }
+
+  // Sit directly beneath the node that closes the flow, so the seal reads as a
+  // short drop from its source. Y is kept well inside the frame — the node's
+  // caption renders below it and would otherwise clip off the canvas.
+  const anchor = last ? nodes.find((n) => n.id === last.to) : undefined;
+  const node: FlowNode = {
+    id: PROVENANCE_ID,
+    kind: "provenance",
+    name: "Provenance Layer",
+    label: "",
+    x: anchor ? anchor.x : 0.5,
+    y: 0.82,
+  };
+
+  steps.forEach((s, i) => {
+    if (s.verdict !== "blocked" || sealed.has(s.to)) return;
+    sealed.add(s.to);
+    sealEdges.push({ from: s.to, to: PROVENANCE_ID, label: "Envelope stored", threat: true, stepIndex: i });
+  });
+
+  return { node, sealEdges };
 }
 
 /* ------- helpers ------- */
@@ -495,12 +603,17 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     spanId: stepSpan.get(`${s.from}>${s.to}`) || rootSpan.id,
   }));
 
+  // Appended after layout so the ledger keeps its fixed position.
+  const { node: provNode, sealEdges } = attachProvenance(steps, nodes);
+  if (provNode) nodes.push(provNode);
+
   return {
     intentId: intent.id,
     intent,
     nodes,
     nodeById: Object.fromEntries(nodes.map((n) => [n.id, n])),
     edges,
+    sealEdges,
     steps,
     status: halted ? "halted" : "completed",
     trace: flowTrace,
@@ -607,6 +720,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
       from: fromNodeId,
       to: toNodeId,
       interactionID: ix.interactionID,
+      epoch: ix.epoch,
       dir: isResponse ? "response" : "request",
       title: isResponse ? `Response · ${fromNode.name}` : `Delegate · ${toNode.name}`,
       summary: isBlocked
@@ -729,6 +843,10 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     spanId: (s.interactionID ? stepSpan.get(s.interactionID) : undefined) || rootSpan!.id,
   }));
 
+  // Appended after layout so the ledger keeps its fixed position.
+  const { node: provNode, sealEdges } = attachProvenance(steps, nodes);
+  if (provNode) nodes.push(provNode);
+
   const flowTrace: FlowTrace = {
     trace: rootSpan!,
     spanById,
@@ -747,6 +865,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     nodes,
     nodeById: Object.fromEntries(nodes.map((n) => [n.id, n])),
     edges,
+    sealEdges,
     steps,
     status: halted ? "halted" : "completed",
     trace: flowTrace,

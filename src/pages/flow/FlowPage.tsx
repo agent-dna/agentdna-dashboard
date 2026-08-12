@@ -1,20 +1,49 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon";
 import { TraceInspector } from "../../components/TraceInspector";
 import { useIntent, useIntentBlockData, useIntentDiagram, useIntentInteractions } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
 import { FlowCanvas } from "./FlowCanvas";
-import { buildFlowFromIntent, buildFlowFromDiagram, buildTraceFromBlocks, type Flow, type FlowNode } from "./flowData";
-import { flattenIntentBlocks } from "../../data/api";
+import { buildFlowFromIntent, buildFlowFromDiagram, buildTraceFromBlocks, groupParallelRounds, type Flow, type FlowNode } from "./flowData";
+import { fetchIntents, flattenIntentBlocks } from "../../data/api";
+import type { Intent } from "../../types";
 
-const STEP_MS = 2400;
+const STEP_MS = 2000;
 const STORAGE_KEY_STEP = "flow.step";
 
 export function FlowPage() {
   const { intentId: paramId } = useParams<{ intentId: string }>();
+  const navigate = useNavigate();
   const resolve = useResolveName();
   const activeId = paramId || "";
+
+  // Landing on /graph with no intent in the URL: fall through to the caller's
+  // most recent intent. /intent-list is scoped by the auth token, so a user and
+  // an admin each land on their own latest flow.
+  // Only ever set from an async callback — nothing is set synchronously here,
+  // so this doesn't cascade renders on mount.
+  const [noIntents, setNoIntents] = useState(false);
+
+  useEffect(() => {
+    if (paramId) return;
+    let cancelled = false;
+    fetchIntents(1)
+      .then((list) => {
+        if (cancelled) return;
+        // `started` is minutes-ago, so the smallest value is the newest intent.
+        const latest = list.reduce<Intent | null>(
+          (best, i) => (best === null || i.started < best.started ? i : best),
+          null,
+        );
+        if (latest) navigate(`/graph/${encodeURIComponent(latest.id)}`, { replace: true });
+        else setNoIntents(true);
+      })
+      .catch(() => {
+        if (!cancelled) setNoIntents(true);
+      });
+    return () => { cancelled = true; };
+  }, [paramId, navigate]);
 
   const { data: intent } = useIntent(activeId);
   const { data: interactions } = useIntentInteractions(activeId);
@@ -40,12 +69,27 @@ export function FlowPage() {
 
   const N = flow?.steps.length ?? 0;
 
+  // Concurrent hops play as one beat, so playback advances a round at a time.
+  // A final beat is appended for the provenance seal — the envelope travelling
+  // to the ledger is its own moment, after the last hop has landed. It uses the
+  // sentinel index N, which no real step occupies.
+  const SEAL_STEP = N;
+  const rounds = useMemo(() => {
+    const base = groupParallelRounds(flow?.steps ?? []);
+    if (base.length > 0 && (flow?.sealEdges?.length ?? 0) > 0) base.push([SEAL_STEP]);
+    return base;
+  }, [flow, SEAL_STEP]);
+  const roundOfStep = useMemo(() => {
+    const m = new Map<number, number>();
+    rounds.forEach((r, ri) => r.forEach((si) => m.set(si, ri)));
+    return m;
+  }, [rounds]);
+
   const [step, setStep] = useState<number>(() => {
     const raw = readStored(STORAGE_KEY_STEP);
     const n = raw ? parseInt(raw, 10) : NaN;
     return Number.isFinite(n) && n >= 0 ? n : 0;
   });
-  const [playing, setPlaying] = useState(false);
   const [inspectSpanId, setInspectSpanId] = useState<string | null>(null);
 
   // Clamp step when flow changes
@@ -58,14 +102,22 @@ export function FlowPage() {
     writeStored(STORAGE_KEY_STEP, String(step));
   }, [step]);
 
-  // Auto-play loop
+  const activeRound = roundOfStep.get(step) ?? 0;
+  const roundSteps = rounds[activeRound] ?? (N > 0 ? [step] : []);
+  const sealActive = roundSteps.includes(SEAL_STEP);
+  const activeSteps = roundSteps.filter((i) => i < N);
+
+  // Auto-advance a round at a time, looping back to the first.
+  // Re-armed on every `step` change, so clicking a hop restarts the dwell
+  // from there rather than cutting it short.
   useEffect(() => {
-    if (!playing || N === 0) return;
+    if (rounds.length <= 1) return;
     const t = window.setTimeout(() => {
-      setStep((s) => (s + 1) % N);
+      const next = rounds[(activeRound + 1) % rounds.length];
+      if (next) setStep(next[0]);
     }, STEP_MS);
     return () => clearTimeout(t);
-  }, [playing, step, N]);
+  }, [step, activeRound, rounds]);
 
   const stepsRef = useRef<HTMLDivElement>(null);
 
@@ -81,7 +133,6 @@ export function FlowPage() {
   }, [step]);
 
   const jump = (i: number) => {
-    setPlaying(false);
     setStep(i);
   };
 
@@ -97,7 +148,7 @@ export function FlowPage() {
                 {/* Sticky header */}
                 <div style={{ flexShrink: 0, borderBottom: "1px solid #e2e8f0", padding: "14px 16px 12px", background: "#ffffff" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                    <div style={{ fontSize: 12.4, fontWeight: 800, letterSpacing: "-0.02em", color: "#0f172a" }}>
+                    <div style={{ fontSize: 13.6, fontWeight: 800, letterSpacing: "-0.02em", color: "#0f172a" }}>
                       Interaction Timeline
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -118,9 +169,15 @@ export function FlowPage() {
                       const from = flow.nodeById[s.from];
                       const to = flow.nodeById[s.to];
                       const blk = s.verdict === "blocked";
-                      const isActive = i === step;
+                      const isActive = activeSteps.includes(i);
                       const isLast = i === flow.steps.length - 1;
-                      const accent = blk ? "#ef4444" : "#22c55e";
+                      // The node ring and connector take the card's own border
+                      // colour, so the rail reads as part of the block rather
+                      // than a separate green track.
+                      const railColor = blk ? "#fecaca" : isActive ? "#93c5fd" : "#e2e8f0";
+                      // Ring colour is too light for the numeral, so the digits
+                      // use a readable tone of the same hue.
+                      const numColor = blk ? "#dc2626" : isActive ? "#2563eb" : "#94a3b8";
                       return (
                         <div
                           key={i}
@@ -142,15 +199,17 @@ export function FlowPage() {
                               height: 26,
                               borderRadius: "50%",
                               background: "#ffffff",
-                              border: `1.5px solid ${accent}`,
-                              boxShadow: `0 0 0 3px ${blk ? "rgba(239,68,68,0.10)" : "rgba(34,197,94,0.12)"}`,
+                              border: `1.5px solid ${railColor}`,
+                              // Glow ring plus a small drop shadow, so the node
+                              // sits above the rail like the cards do.
+                              boxShadow: `0 0 0 3px ${blk ? "rgba(239,68,68,0.09)" : isActive ? "rgba(37,99,235,0.10)" : "rgba(15,32,70,0.05)"}, 0 2px 6px rgba(15,32,70,0.28)`,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               fontFamily: "var(--font-mono)",
-                              fontSize: 10,
+                              fontSize: 11,
                               fontWeight: 800,
-                              color: accent,
+                              color: numColor,
                               boxSizing: "border-box",
                             }}>
                               {String(i + 1).padStart(2, "0")}
@@ -165,8 +224,7 @@ export function FlowPage() {
                               // 9px top offset so the rail reads as continuous.
                               bottom: -19,
                               width: 2,
-                              background: accent,
-                              opacity: 0.55,
+                              background: railColor,
                               borderRadius: 2,
                             }} />
                           )}
@@ -178,7 +236,17 @@ export function FlowPage() {
                             border: `1.5px solid ${blk ? "#fecaca" : isActive ? "#93c5fd" : "#e2e8f0"}`,
                             background: blk ? "#fff8f8" : isActive ? "#f2f7ff" : "#fbfcfe",
                             padding: "9px 10px 3px",
-                            transition: "background 0.15s, border-color 0.15s",
+                            // Layered shadow for depth: a tight contact shadow, a
+                            // softer ambient one, and an inset top highlight so the
+                            // card reads as lifted rather than just outlined. The
+                            // active card lifts further and tints its shadow.
+                            boxShadow: blk
+                              ? "inset 0 1px 0 rgba(255,255,255,0.7), 0 1px 3px rgba(120,20,20,0.20), 0 5px 14px rgba(120,20,20,0.18)"
+                              : isActive
+                              ? "inset 0 1px 0 rgba(255,255,255,0.9), 0 2px 5px rgba(37,99,235,0.26), 0 9px 22px rgba(37,99,235,0.24)"
+                              : "inset 0 1px 0 rgba(255,255,255,0.9), 0 1px 3px rgba(15,32,70,0.16), 0 5px 14px rgba(15,32,70,0.14)",
+                            transform: isActive ? "translateY(-1px)" : "translateY(0)",
+                            transition: "background 0.15s, border-color 0.15s, box-shadow 0.18s, transform 0.18s",
                           }}>
                             {/* No status pill — verdict reads from the node colour,
                                 the card border, and the header threat count. */}
@@ -198,18 +266,25 @@ export function FlowPage() {
             </>
           )}
           {!flow && (
-            <div style={{ color: "var(--fg-muted)", fontSize: 13, padding: "20px 4px" }}>
-              No intent selected.
+            <div style={{ color: "var(--fg-muted)", fontSize: 14.3, padding: "20px 4px" }}>
+              {noIntents ? "No intents recorded yet." : "Loading intent…"}
             </div>
           )}
         </div>
 
         {/* Canvas */}
         {flow ? (
-          <FlowCanvas flow={flow} step={Math.min(step, Math.max(0, N - 1))} />
+          <FlowCanvas
+            flow={flow}
+            step={Math.min(step, Math.max(0, N - 1))}
+            activeSteps={activeSteps}
+            sealActive={sealActive}
+          />
         ) : (
           <div className="flow-canvas">
-            <div className="flow-empty">Pick an intent to visualize.</div>
+            <div className="flow-empty">
+              {noIntents ? "No intents to visualize yet." : "Loading intent…"}
+            </div>
           </div>
         )}
       </div>
@@ -323,7 +398,7 @@ function HopParty({ label, node, fallback }: { label: string; node?: FlowNode; f
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 0" }}>
       <span style={{
-        fontSize: 8.3,
+        fontSize: 9.1,
         fontWeight: 800,
         letterSpacing: "0.07em",
         textTransform: "uppercase",
@@ -350,7 +425,7 @@ function HopParty({ label, node, fallback }: { label: string; node?: FlowNode; f
 
       <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, gap: 1 }}>
         <span style={{
-          fontSize: 10.3,
+          fontSize: 11.3,
           fontWeight: 800,
           color: "#0f172a",
           overflow: "hidden",
@@ -360,7 +435,7 @@ function HopParty({ label, node, fallback }: { label: string; node?: FlowNode; f
           {truncateMiddle(name, 22)}
         </span>
         {did && (
-          <span style={{ fontSize: 9.1, fontWeight: 600, fontFamily: "var(--font-mono)", color: "#8494ab", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 10, fontWeight: 600, fontFamily: "var(--font-mono)", color: "#8494ab", whiteSpace: "nowrap" }}>
             {truncateMiddle(did, 18)}
           </span>
         )}
