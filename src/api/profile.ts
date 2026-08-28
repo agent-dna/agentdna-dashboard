@@ -42,9 +42,10 @@ export interface UpdateProfileBody {
   email?: string;
 }
 
-export function updateUserProfile(body: UpdateProfileBody): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>("/update-profile", {
-    method: "PATCH",
+/** Sends exactly one of { name } or { email }. `data` is always null — nothing to read on success. */
+export function updateUserProfile(body: UpdateProfileBody): Promise<null> {
+  return apiRequest<null>("/update-profile", {
+    method: "POST",
     body,
     auth: true,
   });

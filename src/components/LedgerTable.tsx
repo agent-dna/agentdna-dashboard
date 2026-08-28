@@ -10,10 +10,13 @@ export function LedgerTable({
   rows,
   emptyText = "No interactions",
   onView,
+  showIntent = true,
 }: {
   rows: Interaction[];
   emptyText?: string;
   onView: (r: Interaction) => void;
+  /** Hide the Intent column where every row shares one — e.g. an intent's own page. */
+  showIntent?: boolean;
 }) {
   const resolve = useResolveName();
 
@@ -56,7 +59,7 @@ export function LedgerTable({
             <TH>Interaction ID</TH>
             <TH>Initiator</TH>
             <TH>Interacted with</TH>
-            <TH>Intent</TH>
+            {showIntent && <TH>Intent</TH>}
             <TH>Threat</TH>
             <TH right>Time</TH>
             <TH right>{""}</TH>
@@ -105,9 +108,11 @@ export function LedgerTable({
                   {resolveName(r.target.id, r.target.name)}
                 </EntityLink>
               </td>
-              <td style={TD_STYLE}>
-                <IntentIdChip id={r.intent.id} style={{ font: "500 13px var(--font-mono)", color: "var(--accent)" }} />
-              </td>
+              {showIntent && (
+                <td style={TD_STYLE}>
+                  <IntentIdChip id={r.intent.id} style={{ font: "500 13px var(--font-mono)", color: "var(--accent)" }} />
+                </td>
+              )}
               <td style={TD_STYLE}>
                 {r.threat ? (
                   <span style={{ font: "600 11.5px var(--font-mono)", letterSpacing: "0.06em", padding: "3px 9px", borderRadius: 5, color: "var(--threat)", background: "rgba(220,38,38,0.10)" }}>

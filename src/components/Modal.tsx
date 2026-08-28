@@ -29,7 +29,10 @@ export function Modal({ open, title, onClose, children, footer, width = 480 }: M
         inset: 0,
         background: "rgba(10, 34, 64, 0.32)",
         backdropFilter: "blur(2px)",
-        zIndex: 70,
+        // Modal instances render nested inside `.app`'s stacking context, so this
+        // has to clear every other z-index used there (topbar: 100, drawer: 200/201)
+        // or those elements paint above the dimmed backdrop instead of under it.
+        zIndex: 300,
         display: "grid",
         placeItems: "center",
       }}

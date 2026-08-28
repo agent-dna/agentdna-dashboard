@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Icon, type IconName } from "./components/Icon";
+import { initials } from "./lib/format";
 import logoMark from "./assets/agentdna-logo.png";
 import { Drawer } from "./components/Drawer";
 // import { TweaksPanel } from "./components/TweaksPanel";
@@ -25,7 +26,7 @@ interface NavEntry {
 export function App() {
   const { tweaks, setTweak } = useTweaks();
   const { drawer, closeDrawer } = useDrawer();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const [pendingCount, setPendingCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,7 +64,6 @@ export function App() {
     { to: "/dashboard", label: "Home", icon: "home" },
     { to: "/intents", label: "Intents", icon: "intents" },
     { to: "/agents", label: "Agents & Apps", icon: "agents" },
-    { to: "/graph", label: "Flow", icon: "activity" },
     { to: "/requests", label: "Requests", icon: "box", badge: pendingCount > 0 ? pendingCount : undefined },
     { to: "/interactions", label: "Interactions", icon: "interactions" },
   ];
@@ -109,20 +109,32 @@ export function App() {
 
           <div className="sb-bottom">
             <div className="sb-section">Account</div>
-            <NavLink
-              to="/profile"
-              className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
-              title="Profile"
+            <button
+              type="button"
+              className="sb-item"
+              onClick={logout}
+              title="Sign out"
+              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(220,38,38,0.12)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(220,38,38,0.06)"; }}
+              style={{
+                background: "rgba(220,38,38,0.06)",
+                border: "1px solid rgba(220,38,38,0.2)",
+                width: "100%",
+                textAlign: "left",
+                color: "var(--threat)",
+                cursor: "pointer",
+              }}
             >
-              <Icon className="icon" name="user" size={18} />
-              <span className="label">Profile</span>
-            </NavLink>
-            <div className="sb-foot">
+              <Icon className="icon" name="arrowRight" size={18} />
+              <span className="label">Sign out</span>
+            </button>
+            <NavLink to="/profile" className="sb-foot" title="Profile" style={{ textDecoration: "none" }}>
+              <div className="avatar">{initials(user ? (user.name || user.email) : "Guest")}</div>
               <div className="who">
                 {user ? (user.name || (user.is_admin ? user.email : user.email.split("@")[0])) : "Guest"}
                 <div className="sub">{user?.org_id || ""}</div>
               </div>
-            </div>
+            </NavLink>
           </div>
         </nav>
       </aside>

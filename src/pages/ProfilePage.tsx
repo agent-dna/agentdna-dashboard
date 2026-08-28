@@ -14,7 +14,7 @@ function maskKey(key: string) {
 const SUPPORT_EMAIL = "support@agentdna.ai";
 
 export function ProfilePage() {
-  const { user, patchUser, logout } = useAuth();
+  const { user, patchUser } = useAuth();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
@@ -243,7 +243,7 @@ export function ProfilePage() {
             </div>
 
             {/* Password row */}
-            <div style={{ borderBottom: "1px solid var(--line)", paddingBottom: 16, marginBottom: 16 }}>
+            <div>
               {!pwOpen ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
@@ -280,28 +280,6 @@ export function ProfilePage() {
                   Password updated successfully.
                 </div>
               )}
-            </div>
-
-            {/* 2FA row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--line)", paddingBottom: 16, marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>Two-factor authentication</div>
-                <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>Add an extra layer of security to your account</div>
-              </div>
-              <button className="btn" disabled style={{ fontSize: 12, padding: "6px 12px", opacity: 0.4 }}>
-                Enable
-              </button>
-            </div>
-
-            {/* Sessions row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>Active sessions</div>
-                <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>Manage devices logged into your account</div>
-              </div>
-              <button className="btn" disabled style={{ fontSize: 12, padding: "6px 12px", opacity: 0.4 }}>
-                View
-              </button>
             </div>
           </div>
 
@@ -422,6 +400,19 @@ export function ProfilePage() {
                 </div>
               </>
             )}
+
+            {/* Total tokens — not wired up yet, shown disabled */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginTop: 14, opacity: 0.4 }}>
+              {[
+                { label: "Total Tokens", value: "—" },
+                { label: "Total Tokens Remaining", value: "—" },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 9, cursor: "not-allowed" }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.88)", marginBottom: 4 }}>{value}</div>
+                  <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.35)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Contact support */}
@@ -453,30 +444,6 @@ export function ProfilePage() {
           </div>
         </div>
       </div>
-
-      {/* ── Danger zone ── */}
-      <div style={{ marginTop: 20, padding: "20px 24px", borderRadius: 12, border: "1px solid rgba(220,38,38,0.18)", background: "rgba(220,38,38,0.03)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-       <div>
-  <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--fg)", marginBottom: 2 }}>
-    Session
-  </div>
-  <div style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-    Sign out securely from your account.
-  </div>
-</div>
-        <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
-          <button className="btn" onClick={logout}
-            style={{ color: "var(--threat)", borderColor: "rgba(220,38,38,0.3)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Icon name="arrowRight" size={13} />
-            Sign out
-          </button>
-          {/* <button className="btn" disabled
-            style={{ color: "rgba(220,38,38,0.4)", borderColor: "rgba(220,38,38,0.15)", display: "inline-flex", alignItems: "center", gap: 6, opacity: 0.5 }}>
-            Delete account
-          </button> */}
-        </div>
-      </div>
-
     </div>
   );
 }

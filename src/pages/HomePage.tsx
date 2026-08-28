@@ -4,11 +4,17 @@ import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 
 import { Chart } from "../components/Chart";
-import { useHomeMetrics, useInteractionsPaged, useAlerts, useSeries, useAgentsAppsMetrics } from "../data/hooks";
+import { useHomeMetrics, useIntentsPaged, useAlerts, useSeries, useAgentsAppsMetrics } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { LedgerTable } from "../components/LedgerTable";
 import { AppIcon } from "../components/AppIcon";
+import { DataTable, type DataTableColumn } from "../components/DataTable";
+import { IntentIdChip } from "../context/IntentNumbersContext";
+import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { ThreatPill } from "../components/ThreatPill";
+import { timeAgo } from "../lib/format";
+import type { Intent } from "../types";
 
 export function HomePage() {
   // Fixed at 7d — the 30-day range is parked until /interactions/series
@@ -17,21 +23,22 @@ export function HomePage() {
 
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
+  const resolve = useResolveName();
 
-  const [bottomTab, setBottomTab] = useState<"interactions" | "threats">("interactions");
-  const [interactionsPage, setInteractionsPage] = useState(1);
+  const [bottomTab, setBottomTab] = useState<"intents" | "threats">("intents");
+  const [intentsPage, setIntentsPage] = useState(1);
   const [volumeTab, setVolumeTab] = useState<"agents" | "apps">("agents");
 
   const homeState = useHomeMetrics();
-  const interactionsState = useInteractionsPaged(interactionsPage);
+  const intentsState = useIntentsPaged(intentsPage);
   const alertsState = useAlerts();
   const seriesState = useSeries(series);
   const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
 
   const metrics = homeState.data;
-  const interactions = interactionsState.data.interactions;
-  const interactionsTotal = interactionsState.data.total;
-  const interactionsTotalPages = interactionsState.data.totalPages;
+  const intents = intentsState.data.items;
+  const intentsTotal = intentsState.data.total;
+  const intentsTotalPages = intentsState.data.totalPages;
   const threats = alertsState.data;
   const data = seriesState.data;
 
@@ -49,6 +56,75 @@ export function HomePage() {
   }, [dayCount]);
 
   const isEmpty = !homeState.loading && metrics.agentCount === 0;
+
+  const intentCols: DataTableColumn<Intent>[] = [
+    {
+      key: "id",
+      label: "Intent",
+      render: (r) => (
+        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)" }} />
+      ),
+    },
+    {
+      key: "name",
+      label: "Status",
+      render: (r) => {
+        const s = (r.name || "").toLowerCase();
+        const chipClass =
+          s === "completed" ? "safe" : s === "running" ? "info" : s === "failed" ? "threat" : s === "pending" ? "warn" : "";
+        return (
+          <span className={`chip ${chipClass}`} style={{ textTransform: "capitalize" }}>
+            {r.name || "—"}
+          </span>
+        );
+      },
+    },
+    {
+      key: "initiator",
+      label: "Initiator",
+      render: (r) => (
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{resolveDisplayName(resolve, r.initiator)}</span>
+      ),
+    },
+    {
+      key: "interactions",
+      label: "Interactions",
+      align: "right",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactionsCount}</span>,
+    },
+    {
+      key: "threats",
+      label: "Threats",
+      render: (r) => <ThreatPill threat={r.threats > 0} />,
+    },
+    {
+      key: "time",
+      label: "Time",
+      align: "right",
+      render: (r) => (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>{timeAgo(r.started)}</span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "",
+      align: "right",
+      width: 60,
+      render: (r) => (
+        <div className="row-actions">
+          <button
+            className="btn-mini"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/intents/${r.id}`);
+            }}
+          >
+            View
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   function handleExport() {
     const rows: string[][] = [
@@ -359,7 +435,7 @@ export function HomePage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            {(["interactions", "threats"] as const).map((t) => (
+            {(["intents", "threats"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setBottomTab(t)}
@@ -371,27 +447,32 @@ export function HomePage() {
                   textTransform: "capitalize",
                 }}
               >
-                {t === "interactions" ? "Interactions" : "Threats"}
+                {t === "intents" ? "Intents" : "Threats"}
                 <span style={{
                   marginLeft: 6, fontSize: 11, fontFamily: "var(--font-mono)",
                   background: bottomTab === t ? "rgba(37,99,235,0.12)" : "var(--surface-raised)",
                   color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
                   padding: "1px 6px", borderRadius: 99,
                 }}>
-                  {t === "interactions" ? interactionsTotal : threats.length}
+                  {t === "intents" ? intentsTotal : threats.length}
                 </span>
               </button>
             ))}
           </div>
-          {bottomTab === "interactions" && (
-            <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} inline onChange={setInteractionsPage} />
+          {bottomTab === "intents" && (
+            <Pagination page={intentsPage} totalPages={intentsTotalPages} total={intentsTotal} pageSize={10} inline onChange={setIntentsPage} />
           )}
         </div>
-        <LedgerTable
-          rows={bottomTab === "interactions" ? interactions : threats}
-          emptyText={bottomTab === "interactions" ? "No interactions yet" : "No threats detected"}
-          onView={(r) => openDrawer("interaction", r)}
-        />
+        {bottomTab === "intents" ? (
+          <DataTable
+            rows={intents}
+            columns={intentCols}
+            onRowClick={(r) => navigate(`/intents/${r.id}`)}
+            emptyText="No intents yet"
+          />
+        ) : (
+          <LedgerTable rows={threats} emptyText="No threats detected" onView={(r) => openDrawer("interaction", r)} />
+        )}
       </div>
     </div>
   );

@@ -7,7 +7,10 @@ export interface Agent {
   created: number;
   interactions: number;
   threats: number;
+  /** Distinct count of apps interacted with. From /agent-info's `appsInteracted`; 0 for endpoints that don't return it. */
   connected: number;
+  /** Names of the apps counted in `connected`. Only populated by /agent-info. */
+  appsList?: string[];
   status: Status;
   env: string;
   owner: string;
@@ -43,6 +46,8 @@ export interface Intent {
   status: Status;
   provenanceRecordID: string;
   signature?: string;
+  /** Distinct apps/tools this intent's interactions touched. Only populated where explicitly computed (e.g. an agent's own intents list). */
+  appsInteracted?: EntityRef[];
 }
 
 export type EntityRef = Pick<Agent | Tool, "id" | "name">;

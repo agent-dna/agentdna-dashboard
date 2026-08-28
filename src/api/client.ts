@@ -56,7 +56,7 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 }
 
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, query, auth = true, skipLogoutOn401 = true } = opts;
+  const { method = "GET", body, query, auth = true, skipLogoutOn401 = false } = opts;
 
   if (isDummyMode()) {
     const out = dummyRespond(path, query, method);

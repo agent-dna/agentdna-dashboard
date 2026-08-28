@@ -230,15 +230,26 @@ export function AgentsToolsPage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
         <TopAgentsList
-          rows={agentsAppsMetrics.topAgents.map((a) => ({
-            id: a.name,
-            name: a.name,
-            interactions: a.totalInteractions,
-            threats: a.totalThreats,
-          }))}
-          totalAgents={agentsAppsMetrics.metrics.totalAgents}
+          rows={
+            // /agents-apps-metrics' topAgents is org-wide — fine for admins, but a
+            // regular user should only see their own agents here, so derive the
+            // ranking from their own (already access-scoped) /agents-list instead.
+            isAdmin
+              ? agentsAppsMetrics.topAgents.map((a) => ({
+                  id: a.name,
+                  name: a.name,
+                  interactions: a.totalInteractions,
+                  threats: a.totalThreats,
+                }))
+              : agents
+                  .slice()
+                  .sort((a, b) => b.interactions - a.interactions)
+                  .slice(0, 5)
+                  .map((a) => ({ id: a.id, name: a.name, interactions: a.interactions, threats: a.threats }))
+          }
+          totalAgents={isAdmin ? agentsAppsMetrics.metrics.totalAgents : homeMetrics.agentCount}
           onRowClick={(r) => {
-            const match = agents.find((a) => a.name === r.name);
+            const match = agents.find((a) => a.id === r.id) || agents.find((a) => a.name === r.name);
             if (match) navigate(`/agents/${match.id}`);
           }}
           onViewAll={() => navigate("/agents", { state: { tab: "agents" } })}

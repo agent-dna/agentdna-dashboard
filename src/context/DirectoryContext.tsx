@@ -96,3 +96,21 @@ export function useResolveName(): (did: string) => { name: string; kind?: "agent
     return { name: shortDid(did) };
   };
 }
+
+/**
+ * Best display name for an { id, name } entity (e.g. an intent's initiator).
+ *
+ * The list endpoints (/intent-list, /agent-intents, /intent-info, …) only
+ * sometimes resolve a display name server-side — when they don't, the mapper
+ * fills `name` with the same shortened-DID fallback `shortDid` produces here,
+ * so a naive `entity.name || "—"` still shows a DID. Try the directory (which
+ * covers the whole org, not just what one endpoint joined) before giving up.
+ */
+export function resolveDisplayName(
+  resolve: (did: string) => { name: string; kind?: "agent" | "tool" | "user" },
+  entity: { id: string; name: string },
+): string {
+  const backendName = entity.name?.trim();
+  if (backendName && backendName !== shortDid(entity.id)) return backendName;
+  return resolve(entity.id).name;
+}

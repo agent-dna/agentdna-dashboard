@@ -4,16 +4,20 @@ import { useNavigate } from "react-router-dom";
 import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { Pagination } from "../components/Pagination";
-import { useIntentsPaged } from "../data/hooks";
+import { useAgentsAppsMetrics, useIntentsPaged } from "../data/hooks";
 
 import { timeAgo } from "../lib/format";
 import { IntentIdChip } from "../context/IntentNumbersContext";
+import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { ThreatPill } from "../components/ThreatPill";
 import type { Intent } from "../types";
 
 export function IntentsPage() {
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
   const [page, setPage] = useState(1);
+  const resolve = useResolveName();
   const { data: paged } = useIntentsPaged(page);
+  const { data: agentsApps } = useAgentsAppsMetrics();
   const intents = paged.items;
   const totalPages = paged.totalPages || 1;
   const total = paged.total || intents.length;
@@ -25,8 +29,19 @@ export function IntentsPage() {
   if (filter === "threats") rows = rows.filter((r) => r.threats > 0);
   if (filter === "safe") rows = rows.filter((r) => r.threats === 0);
 
-  const totalAgents = intents.reduce((a, x) => a + x.agentsInteracted, 0);
-  const totalTools = intents.reduce((a, x) => a + x.toolsInteracted, 0);
+  // Distinct participants org-wide, from /agents-apps-metrics.
+  //
+  // Summing `agentsInteracted` across intents counted the same agent once per
+  // intent it appeared in, and only over the current page — /intent-list carries
+  // per-intent counts, not identities, so a distinct total can't be derived
+  // from it.
+  //
+  // /agents-apps-metrics is org-wide and isn't scoped to which intents this
+  // user can actually see, so it kept showing non-zero engagement figures
+  // for users with zero intents. There's nothing to have "engaged" anything
+  // when the user has no intents at all, so floor both to 0 in that case.
+  const totalAgents = total === 0 ? 0 : agentsApps.metrics.totalAgents;
+  const totalTools = total === 0 ? 0 : agentsApps.metrics.totalApps;
   const totalThreats = intents.reduce((a, x) => a + x.threats, 0);
 
   const cols: DataTableColumn<Intent>[] = [
@@ -59,7 +74,7 @@ export function IntentsPage() {
       sortFn: (a, b) => a.initiator.name.localeCompare(b.initiator.name),
       render: (r) => (
         <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>
-          {r.initiator.name || "—"}
+          {resolveDisplayName(resolve, r.initiator)}
         </span>
       ),
     },
@@ -75,13 +90,8 @@ export function IntentsPage() {
     {
       key: "threats",
       label: "Threats",
-      align: "right",
       sortFn: (a, b) => a.threats - b.threats,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: r.threats > 0 ? "var(--threat)" : "var(--fg-faint)" }}>
-          {r.threats}
-        </span>
-      ),
+      render: (r) => <ThreatPill threat={r.threats > 0} />,
     },
     {
       key: "time",

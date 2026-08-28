@@ -7,7 +7,7 @@ import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell } from "../components/EntityCell";
 import { EntityLink } from "../components/EntityLink";
 import { entityPath } from "../lib/entityLinks";
-import { useResolveName } from "../context/DirectoryContext";
+import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
 import { useIntent, useIntentInteractionsPaged, useIntentParticipants } from "../data/hooks";
@@ -186,7 +186,7 @@ export function IntentDetailPage() {
                     wordBreak: "break-word",
                   }}
                 >
-                  {intent.initiator.name || "—"}
+                  {resolveDisplayName(resolve, intent.initiator)}
                 </div>
                 {intent.provenanceRecordID ? (
                   <a
@@ -282,6 +282,8 @@ export function IntentDetailPage() {
               rows={interactions}
               emptyText={interactionsLoading ? "Loading…" : "No interactions recorded for this intent yet."}
               onView={(r) => openDrawer("interaction", r)}
+              // Every row here belongs to this intent — the column repeats the page.
+              showIntent={false}
             />
             <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} loading={interactionsLoading} onChange={setInteractionsPage} />
           </>

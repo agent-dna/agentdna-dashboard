@@ -31,6 +31,16 @@ function shortDid(did: string): string {
   return did.length > 24 ? `${did.slice(0, 12)}…${did.slice(-6)}` : did;
 }
 
+/**
+ * Interactions carry no explicit participant-type field from the backend
+ * (mapInteraction always stubs `targetType: "agent"`), so this DID-shape
+ * heuristic — already used elsewhere to split agents from tools — is the
+ * only reliable way to tell them apart client-side.
+ */
+function isAgentId(id: string): boolean {
+  return id.trim().toLowerCase().startsWith("bafy");
+}
+
 interface ApiInteraction {
   interactionID: string;
   from: string;
@@ -482,6 +492,10 @@ interface ApiAgentInfo {
   totalInteractions: number;
   totalThreats: number;
   score: number;
+  /** Distinct count of apps this agent has interacted with. */
+  appsInteracted?: number;
+  /** Names of the apps counted in `appsInteracted`. */
+  appsList?: string[];
 }
 
 export async function fetchAgent(id: string): Promise<Agent | null> {
@@ -494,7 +508,8 @@ export async function fetchAgent(id: string): Promise<Agent | null> {
       created: isoToMinutesAgo(r.createdAt),
       interactions: r.totalInteractions,
       threats: r.totalThreats,
-      connected: 0,
+      connected: r.appsInteracted ?? 0,
+      appsList: r.appsList || [],
       status: r.totalThreats > 5 ? "warn" : "safe",
       env: r.orgID || "",
       owner: r.deployerDID || "",
@@ -544,7 +559,6 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
   const initiatorDID = (r.initiatorDID ?? "").trim().toLowerCase();
   const agentDids = new Set<string>();
   const toolDids = new Set<string>();
-  const isAgentId = (id: string) => id.trim().toLowerCase().startsWith("bafy");
   for (const ix of allInteractions) {
     const fromId = ix.initiator.id.trim().toLowerCase();
     const toId = ix.target.id.trim().toLowerCase();
@@ -592,10 +606,32 @@ export async function fetchAgentInteractions(id: string, page = 1): Promise<Inte
   }
 }
 
+/**
+ * /agent-intents doesn't reliably populate each intent's `interactionsCount`
+ * (it comes back 0 far more often than an intent actually has interactions),
+ * so recompute it — and the apps this agent touched under that intent — from
+ * the intent's own interaction list, the same authoritative source the intent
+ * detail page uses.
+ */
+async function enrichAgentIntent(intent: Intent): Promise<Intent> {
+  try {
+    const firstPage = await fetchIntentInteractionsPaged(intent.id, 1);
+    const apps = new Map<string, { id: string; name: string }>();
+    for (const ix of firstPage.interactions) {
+      if (!isAgentId(ix.initiator.id)) apps.set(ix.initiator.id, ix.initiator);
+      if (!isAgentId(ix.target.id)) apps.set(ix.target.id, ix.target);
+    }
+    return { ...intent, interactionsCount: firstPage.total, appsInteracted: Array.from(apps.values()) };
+  } catch {
+    return intent;
+  }
+}
+
 export async function fetchAgentIntents(id: string, page = 1): Promise<Intent[]> {
   try {
     const res = await apiRequest<PagedIntents>("/agent-intents", { query: { agentDID: id, page } });
-    return (res.intentsList || []).map(mapIntent);
+    const intents = (res.intentsList || []).map(mapIntent);
+    return await Promise.all(intents.map(enrichAgentIntent));
   } catch {
     return [];
   }
