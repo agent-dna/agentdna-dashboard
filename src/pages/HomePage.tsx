@@ -435,28 +435,15 @@ export function HomePage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            {(["intents", "threats"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setBottomTab(t)}
-                style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  padding: "6px 14px", fontSize: 13, fontWeight: 600,
-                  color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
-                  borderBottom: bottomTab === t ? "2px solid var(--accent)" : "2px solid transparent",
-                  textTransform: "capitalize",
-                }}
+            {([{ key: "intents", label: "Intents", count: intentsTotal }, { key: "threats", label: "Threats", count: threats.length }] as const).map((t) => (
+              <div
+                key={t.key}
+                className={`tab ${bottomTab === t.key ? "active" : ""}`}
+                onClick={() => setBottomTab(t.key)}
               >
-                {t === "intents" ? "Intents" : "Threats"}
-                <span style={{
-                  marginLeft: 6, fontSize: 11, fontFamily: "var(--font-mono)",
-                  background: bottomTab === t ? "rgba(37,99,235,0.12)" : "var(--surface-raised)",
-                  color: bottomTab === t ? "var(--accent)" : "var(--fg-muted)",
-                  padding: "1px 6px", borderRadius: 99,
-                }}>
-                  {t === "intents" ? intentsTotal : threats.length}
-                </span>
-              </button>
+                {t.label}
+                <span className="pill">{t.count}</span>
+              </div>
             ))}
           </div>
           {bottomTab === "intents" && (
