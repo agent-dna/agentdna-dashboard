@@ -66,20 +66,6 @@ export function HomePage() {
       ),
     },
     {
-      key: "name",
-      label: "Status",
-      render: (r) => {
-        const s = (r.name || "").toLowerCase();
-        const chipClass =
-          s === "completed" ? "safe" : s === "running" ? "info" : s === "failed" ? "threat" : s === "pending" ? "warn" : "";
-        return (
-          <span className={`chip ${chipClass}`} style={{ textTransform: "capitalize" }}>
-            {r.name || "—"}
-          </span>
-        );
-      },
-    },
-    {
       key: "initiator",
       label: "Initiator",
       render: (r) => (
@@ -89,8 +75,27 @@ export function HomePage() {
     {
       key: "interactions",
       label: "Interactions",
-      align: "right",
       render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactionsCount}</span>,
+    },
+    {
+      key: "apps",
+      label: "App interacted",
+      render: (r) => {
+        const apps = r.appsInteracted || [];
+        if (apps.length === 0) {
+          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
+        }
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {apps.slice(0, 3).map((app) => (
+              <AppIcon key={app.id} name={resolveDisplayName(resolve, app)} size={20} />
+            ))}
+            {apps.length > 3 && (
+              <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>+{apps.length - 3}</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "threats",

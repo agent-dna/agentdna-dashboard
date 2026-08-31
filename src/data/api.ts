@@ -378,8 +378,9 @@ export interface PagedIntentsResult {
 
 export async function fetchIntentsPaged(page = 1): Promise<PagedIntentsResult> {
   const res = await apiRequest<PagedIntents>("/intent-list", { query: { page } });
+  const items = await Promise.all((res.intentsList || []).map(mapIntent).map(enrichIntentApps));
   return {
-    items: (res.intentsList || []).map(mapIntent),
+    items,
     total: res.total || 0,
     page: res.page || page,
     totalPages: res.totalPages || 1,
@@ -607,13 +608,13 @@ export async function fetchAgentInteractions(id: string, page = 1): Promise<Inte
 }
 
 /**
- * /agent-intents doesn't reliably populate each intent's `interactionsCount`
- * (it comes back 0 far more often than an intent actually has interactions),
- * so recompute it — and the apps this agent touched under that intent — from
- * the intent's own interaction list, the same authoritative source the intent
- * detail page uses.
+ * List endpoints don't return which apps an intent touched, and /agent-intents
+ * specifically doesn't reliably populate `interactionsCount` either (it comes
+ * back 0 far more often than an intent actually has interactions). Recompute
+ * both from the intent's own interaction list — the same authoritative source
+ * the intent detail page uses — so every intent table agrees with it.
  */
-async function enrichAgentIntent(intent: Intent): Promise<Intent> {
+async function enrichIntentApps(intent: Intent): Promise<Intent> {
   try {
     const firstPage = await fetchIntentInteractionsPaged(intent.id, 1);
     const apps = new Map<string, { id: string; name: string }>();
@@ -631,7 +632,7 @@ export async function fetchAgentIntents(id: string, page = 1): Promise<Intent[]>
   try {
     const res = await apiRequest<PagedIntents>("/agent-intents", { query: { agentDID: id, page } });
     const intents = (res.intentsList || []).map(mapIntent);
-    return await Promise.all(intents.map(enrichAgentIntent));
+    return await Promise.all(intents.map(enrichIntentApps));
   } catch {
     return [];
   }
