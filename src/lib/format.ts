@@ -38,6 +38,7 @@ export function interactionRawData(i: Interaction) {
     blockType: i.blockType,
     threat: i.threat,
     threatID: i.threatID,
+    message: i.message,
     created: i.created,
     runtime: i.runtime,
     targetType: i.targetType,

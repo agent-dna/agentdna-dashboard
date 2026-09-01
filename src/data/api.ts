@@ -15,6 +15,7 @@ import type {
   IntentParticipant,
   HomeMetrics,
   PublicMetrics,
+  EntityRef,
 } from "../types";
 
 // ============ Helpers (API → internal type mappers) ============
@@ -310,6 +311,87 @@ export async function fetchThreatByID(threatId: string): Promise<ThreatByID | nu
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * The actual "list of threats" endpoint — flagged interactions (new_interactions
+ * where threat = 1), each already carrying its resolved message. Role-scoped
+ * server-side: admins see the whole org, non-admins see only their own DID.
+ * Distinct from /threat-events (which this replaced as the Home page's Threats
+ * table source) and from /threat-detail (the threat-code catalog).
+ */
+export interface ThreatListItem {
+  /** Same value as interactionID — DataTable rows key off `id`. */
+  id: string;
+  interactionID: string;
+  intentID: string;
+  initiator: EntityRef;
+  target: EntityRef;
+  type: string;
+  threatID: string;
+  message: string;
+  /** Minutes ago. */
+  time: number;
+}
+
+interface ApiThreatListItem {
+  interactionID: string;
+  from: string;
+  fromName?: string;
+  to: string;
+  toName?: string;
+  type: string;
+  direction?: string;
+  threat: boolean;
+  threatID: string;
+  intentID: string;
+  time: string;
+  message: string;
+}
+
+function mapThreatListItem(t: ApiThreatListItem): ThreatListItem {
+  return {
+    id: t.interactionID,
+    interactionID: t.interactionID,
+    intentID: t.intentID,
+    initiator: { id: t.from, name: t.fromName?.trim() || shortDid(t.from) },
+    target: { id: t.to, name: t.toName?.trim() || shortDid(t.to) },
+    type: t.type,
+    threatID: t.threatID,
+    message: t.message,
+    time: isoToMinutesAgo(t.time),
+  };
+}
+
+export interface PagedThreatsList {
+  items: ThreatListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface ApiPagedThreatsList {
+  threatsList: ApiThreatListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function fetchThreatsList(page = 1): Promise<PagedThreatsList> {
+  try {
+    const res = await apiRequest<ApiPagedThreatsList>("/threats-list", { query: { page } });
+    return {
+      items: (res.threatsList || []).map(mapThreatListItem),
+      total: res.total || 0,
+      page: res.page || page,
+      pageSize: res.pageSize || 10,
+      totalPages: res.totalPages || 1,
+    };
+  } catch {
+    return { items: [], total: 0, page, pageSize: 10, totalPages: 1 };
   }
 }
 

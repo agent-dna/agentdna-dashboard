@@ -65,6 +65,8 @@ export interface Interaction {
   blockType?: string;
   /** Non-empty only when `threat` is true — pass to GET /threat-by-id for the full message. */
   threatID?: string;
+  /** Resolved threat message, when the caller already has it (e.g. from /threats-list) — skips the GET /threat-by-id lookup in the drawer. */
+  message?: string;
 }
 
 export interface TimeSeries {

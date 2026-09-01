@@ -4,17 +4,38 @@ import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 
 import { Chart } from "../components/Chart";
-import { useHomeMetrics, useIntentsPaged, useThreatEventsPaged, useTopThreats, useSeries, useAgentsAppsMetrics } from "../data/hooks";
+import { Modal } from "../components/Modal";
+import { useHomeMetrics, useIntentsPaged, useThreatsListPaged, useTopThreats, useSeries, useAgentsAppsMetrics } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { AppIcon } from "../components/AppIcon";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { IdCell } from "../components/EntityCell";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { useDrawer } from "../context/DrawerContext";
 import { ThreatPill } from "../components/ThreatPill";
 import { timeAgo } from "../lib/format";
-import type { Intent } from "../types";
-import type { ThreatEvent } from "../data/api";
+import type { Intent, Interaction } from "../types";
+import type { ThreatListItem } from "../data/api";
+
+/**
+ * A threats-list row is already interaction-shaped — convert it so the
+ * drawer can show it directly, with `message` inline (no GET /threat-by-id
+ * round trip, and no risk of it showing something different from this table).
+ */
+function threatToInteraction(t: ThreatListItem): Interaction {
+  return {
+    id: t.interactionID,
+    initiator: t.initiator,
+    target: t.target,
+    targetType: "agent",
+    intent: { id: t.intentID, name: "" },
+    runtime: 0,
+    threat: true,
+    created: t.time,
+    threatID: t.threatID,
+    message: t.message,
+  };
+}
 
 export function HomePage() {
   // Fixed at 7d — the 30-day range is parked until /interactions/series
@@ -22,6 +43,7 @@ export function HomePage() {
   const series = "7d";
 
   const navigate = useNavigate();
+  const { openDrawer } = useDrawer();
   const resolve = useResolveName();
 
   const [bottomTab, setBottomTab] = useState<"intents" | "threats">("intents");
@@ -29,10 +51,11 @@ export function HomePage() {
   const [threatsPage, setThreatsPage] = useState(1);
   const [volumeTab, setVolumeTab] = useState<"agents" | "apps">("agents");
   const [chartTab, setChartTab] = useState<"graph" | "threats">("graph");
+  const [threatMessage, setThreatMessage] = useState<ThreatListItem | null>(null);
 
   const homeState = useHomeMetrics();
   const intentsState = useIntentsPaged(intentsPage);
-  const threatEventsState = useThreatEventsPaged(threatsPage);
+  const threatsListState = useThreatsListPaged(threatsPage);
   const { data: topThreats } = useTopThreats();
   const seriesState = useSeries(series);
   const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
@@ -41,9 +64,9 @@ export function HomePage() {
   const intents = intentsState.data.items;
   const intentsTotal = intentsState.data.total;
   const intentsTotalPages = intentsState.data.totalPages;
-  const threatEvents = threatEventsState.data.items;
-  const threatEventsTotal = threatEventsState.data.total;
-  const threatEventsTotalPages = threatEventsState.data.totalPages;
+  const threatsList = threatsListState.data.items;
+  const threatsListTotal = threatsListState.data.total;
+  const threatsListTotalPages = threatsListState.data.totalPages;
   const data = seriesState.data;
 
   // Actual calendar dates for the trailing window, oldest → newest, matching the
@@ -135,20 +158,49 @@ export function HomePage() {
     },
   ];
 
-  const threatEventCols: DataTableColumn<ThreatEvent>[] = [
-    {
-      key: "code",
-      label: "Threat Code",
-      render: (r) => (
-        <span className="chip threat" style={{ fontFamily: "var(--font-mono)" }}>{r.threatCode}</span>
-      ),
-    },
+  const threatsListCols: DataTableColumn<ThreatListItem>[] = [
     {
       key: "message",
       label: "Message",
+      width: 260,
       render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)" }}>{r.message}</span>
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            setThreatMessage(r);
+          }}
+          title="View full message"
+          style={{
+            fontSize: 13,
+            color: "var(--fg)",
+            cursor: "pointer",
+            display: "block",
+            maxWidth: 260,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {r.message}
+        </span>
       ),
+    },
+    {
+      key: "initiator",
+      label: "Initiator",
+      render: (r) => (
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{resolveDisplayName(resolve, r.initiator)}</span>
+      ),
+    },
+    {
+      key: "target",
+      label: "Interacted with",
+      render: (r) =>
+        r.initiator.id === r.target.id ? (
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-faint)" }}>—</span>
+        ) : (
+          <span style={{ fontSize: 13, color: "var(--fg-dim)" }}>{resolveDisplayName(resolve, r.target)}</span>
+        ),
     },
     {
       key: "intent",
@@ -156,11 +208,6 @@ export function HomePage() {
       render: (r) => (
         <IntentIdChip id={r.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--fg)" }} />
       ),
-    },
-    {
-      key: "interaction",
-      label: "Interaction",
-      render: (r) => <IdCell id={r.interactionID} truncate truncateLength={12} />,
     },
     {
       key: "time",
@@ -181,7 +228,7 @@ export function HomePage() {
             className="btn-mini"
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/intents/${r.intentID}`);
+              openDrawer("interaction", threatToInteraction(r));
             }}
           >
             View
@@ -548,7 +595,7 @@ export function HomePage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            {([{ key: "intents", label: "Intents", count: intentsTotal }, { key: "threats", label: "Threats", count: threatEventsTotal }] as const).map((t) => (
+            {([{ key: "intents", label: "Intents", count: intentsTotal }, { key: "threats", label: "Threats", count: threatsListTotal }] as const).map((t) => (
               <div
                 key={t.key}
                 className={`tab ${bottomTab === t.key ? "active" : ""}`}
@@ -563,7 +610,7 @@ export function HomePage() {
             <Pagination page={intentsPage} totalPages={intentsTotalPages} total={intentsTotal} pageSize={10} inline onChange={setIntentsPage} />
           )}
           {bottomTab === "threats" && (
-            <Pagination page={threatsPage} totalPages={threatEventsTotalPages} total={threatEventsTotal} pageSize={10} inline onChange={setThreatsPage} />
+            <Pagination page={threatsPage} totalPages={threatsListTotalPages} total={threatsListTotal} pageSize={10} inline onChange={setThreatsPage} />
           )}
         </div>
         {bottomTab === "intents" ? (
@@ -575,13 +622,60 @@ export function HomePage() {
           />
         ) : (
           <DataTable
-            rows={threatEvents}
-            columns={threatEventCols}
-            onRowClick={(r) => navigate(`/intents/${r.intentID}`)}
+            rows={threatsList}
+            columns={threatsListCols}
+            onRowClick={(r) => openDrawer("interaction", threatToInteraction(r))}
             emptyText="No threats detected"
           />
         )}
       </div>
+
+      <Modal
+        open={!!threatMessage}
+        title="Threat message"
+        onClose={() => setThreatMessage(null)}
+        width={560}
+        footer={
+          <button type="button" className="btn primary" onClick={() => setThreatMessage(null)}>
+            Close
+          </button>
+        }
+      >
+        {threatMessage && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div
+              style={{
+                background: "var(--bg-2)",
+                border: "1px solid var(--line)",
+                borderRadius: 10,
+                padding: "14px 16px",
+                fontSize: 13.5,
+                color: "var(--fg)",
+                lineHeight: 1.6,
+                wordBreak: "break-word",
+              }}
+            >
+              {threatMessage.message}
+            </div>
+            <div className="kv" style={{ fontSize: 12.5 }}>
+              <div className="k">Initiator</div>
+              <div className="v">{resolveDisplayName(resolve, threatMessage.initiator)}</div>
+              {threatMessage.initiator.id !== threatMessage.target.id && (
+                <>
+                  <div className="k">Interacted with</div>
+                  <div className="v">{resolveDisplayName(resolve, threatMessage.target)}</div>
+                </>
+              )}
+              <div className="k">Intent</div>
+              <div className="v">
+                <IntentIdChip id={threatMessage.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }} />
+              </div>
+              <div className="k">Time</div>
+              <div className="v">{timeAgo(threatMessage.time)}</div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

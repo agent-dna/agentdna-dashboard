@@ -19,7 +19,13 @@ export function InteractionDetail({ interaction: i }: Props) {
   const navigate = useNavigate();
   const resolve = useResolveName();
   const intentLabel = useIntentLabel();
-  const { data: threatDetail, loading: threatLoading } = useThreatByID(i.threat ? i.threatID : undefined);
+  // Callers that already have the message (e.g. from /threats-list) pass it
+  // straight through — skip the GET /threat-by-id round trip entirely so the
+  // sidebar shows exactly what the threat table showed, with no extra fetch.
+  const { data: threatDetail, loading: threatLoading } = useThreatByID(
+    i.threat && !i.message ? i.threatID : undefined,
+  );
+  const threatMessage = i.message || threatDetail?.message;
 
   const openIntent = () => {
     if (!i.intent?.id) return;
@@ -190,27 +196,34 @@ export function InteractionDetail({ interaction: i }: Props) {
             <div className="v" style={{ color: i.threat ? "var(--threat)" : "var(--safe)" }}>
               {i.threat ? "true" : "false"}
             </div>
-            {i.threat && i.threatID && (
+            {i.threat && (i.threatID || i.message) && (
               <>
-                <div className="k">Threat</div>
-                <div className="v">
-                  {threatLoading ? (
-                    <span style={{ color: "var(--fg-muted)" }}>Loading…</span>
-                  ) : threatDetail ? (
-                    <span style={{ color: "var(--threat)" }}>
-                      {threatDetail.title}{" "}
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-muted)" }}>
-                        (code {threatDetail.threatCode})
-                      </span>
-                    </span>
-                  ) : (
-                    <span style={{ color: "var(--fg-muted)" }}>Unable to load threat details</span>
-                  )}
-                </div>
-                {threatDetail?.message && (
+                {(threatLoading || threatDetail) && (
+                  <>
+                    <div className="k">Threat</div>
+                    <div className="v">
+                      {threatLoading ? (
+                        <span style={{ color: "var(--fg-muted)" }}>Loading…</span>
+                      ) : (
+                        <span style={{ color: "var(--threat)" }}>
+                          {threatDetail!.title}{" "}
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-muted)" }}>
+                            (code {threatDetail!.threatCode})
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+                {threatMessage ? (
                   <>
                     <div className="k">Threat message</div>
-                    <div className="v" style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{threatDetail.message}</div>
+                    <div className="v" style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{threatMessage}</div>
+                  </>
+                ) : !threatLoading && (
+                  <>
+                    <div className="k">Threat message</div>
+                    <div className="v" style={{ color: "var(--fg-muted)" }}>Unable to load threat details</div>
                   </>
                 )}
               </>
@@ -274,7 +287,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                 <div className="line" />
                 <div className="body">
                   <div className="nm">Threat detected</div>
-                  <div className="desc">{threatDetail?.message || "Interaction flagged for review"}</div>
+                  <div className="desc">{threatMessage || "Interaction flagged for review"}</div>
                 </div>
               </div>
             )}
