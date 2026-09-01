@@ -1,9 +1,12 @@
 import { dummyRespond, isDummyMode } from "../data/dummyRouter";
 
+// No localhost fallback here on purpose — a deployed build with a missing/misconfigured
+// VITE_API_BASE_URL should fail loudly (see the guard in apiRequest/apiUpload below),
+// not silently start firing requests at whoever's machine happens to be running it.
 const BASE = (
   (window as unknown as Record<string, Record<string, string>>).__ENV__?.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_BASE_URL ||
-  "http://localhost:9000"
+  ""
 ).replace(/\/$/, "");
 const DEV_TOKEN: string | undefined = import.meta.env.VITE_DEV_TOKEN;
 
@@ -64,6 +67,13 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
       console.log(`[DUMMY ${method} ${path}]`, query || {}, "→", out);
       return out as T;
     }
+  }
+
+  if (!BASE) {
+    throw new ApiError(
+      "API base URL is not configured (VITE_API_BASE_URL is missing) — nothing to send this request to.",
+      0,
+    );
   }
 
   const url = new URL(BASE + path);
@@ -147,6 +157,13 @@ export async function apiUpload<T>(
       console.log(`[DUMMY ${method} ${path}] (multipart)`, "→", out);
       return out as T;
     }
+  }
+
+  if (!BASE) {
+    throw new ApiError(
+      "API base URL is not configured (VITE_API_BASE_URL is missing) — nothing to send this request to.",
+      0,
+    );
   }
 
   const headers: Record<string, string> = { Accept: "application/json" };
