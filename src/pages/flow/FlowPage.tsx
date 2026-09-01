@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon";
 import { TraceInspector } from "../../components/TraceInspector";
-import { useIntent, useIntentBlockData, useIntentDiagram, useIntentInteractions } from "../../data/hooks";
+import { useIntent, useIntentBlockData, useIntentInteractions } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
 import { FlowCanvas } from "./FlowCanvas";
-import { buildFlowFromIntent, buildFlowFromDiagram, buildTraceFromBlocks, groupParallelRounds, type Flow, type FlowNode } from "./flowData";
+import { buildFlowFromIntent, buildTraceFromBlocks, groupParallelRounds, type Flow, type FlowNode } from "./flowData";
 import { fetchIntents, flattenIntentBlocks } from "../../data/api";
 import type { Intent } from "../../types";
 
@@ -48,24 +48,21 @@ export function FlowPage() {
   const { data: intent } = useIntent(activeId);
   const { data: interactions } = useIntentInteractions(activeId);
   const { data: blocks } = useIntentBlockData(activeId);
-  const { data: diagram } = useIntentDiagram(activeId);
 
   const flow: Flow | null = useMemo(() => {
     if (!intent) return null;
 
-    // Diagram endpoint takes priority — it has real messages and correct tree structure.
-    // Do NOT override its trace with blocks; blocks use fake placeholder messages.
-    if (diagram) {
-      return buildFlowFromDiagram(intent, diagram);
-    }
-    // Fallback: build from interactions list.
+    // Always build from the interactions list — it's the only path that
+    // classifies participants against the org directory (agent/user/tool)
+    // instead of just assuming "intent initiator = human, everyone else =
+    // agent" the way the /intent-diagram-based builder used to.
     const base = buildFlowFromIntent({ intent, interactions, resolve });
     if (blocks) {
       const flat = flattenIntentBlocks(blocks);
       if (flat.length > 0) base.trace = buildTraceFromBlocks(intent, flat);
     }
     return base;
-  }, [intent, interactions, blocks, diagram, resolve]);
+  }, [intent, interactions, blocks, resolve]);
 
   const N = flow?.steps.length ?? 0;
 
