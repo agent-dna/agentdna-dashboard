@@ -4,34 +4,36 @@ import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 
 import { Chart } from "../components/Chart";
-import { useHomeMetrics, useIntentsPaged, useAlerts, useSeries, useAgentsAppsMetrics } from "../data/hooks";
+import { useHomeMetrics, useIntentsPaged, useThreatEventsPaged, useTopThreats, useSeries, useAgentsAppsMetrics } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
-import { useDrawer } from "../context/DrawerContext";
-import { LedgerTable } from "../components/LedgerTable";
 import { AppIcon } from "../components/AppIcon";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
+import { IdCell } from "../components/EntityCell";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
 import { ThreatPill } from "../components/ThreatPill";
 import { timeAgo } from "../lib/format";
 import type { Intent } from "../types";
+import type { ThreatEvent } from "../data/api";
 
 export function HomePage() {
   // Fixed at 7d — the 30-day range is parked until /interactions/series
   // stops 400ing on range=30d.
   const series = "7d";
 
-  const { openDrawer } = useDrawer();
   const navigate = useNavigate();
   const resolve = useResolveName();
 
   const [bottomTab, setBottomTab] = useState<"intents" | "threats">("intents");
   const [intentsPage, setIntentsPage] = useState(1);
+  const [threatsPage, setThreatsPage] = useState(1);
   const [volumeTab, setVolumeTab] = useState<"agents" | "apps">("agents");
+  const [chartTab, setChartTab] = useState<"graph" | "threats">("graph");
 
   const homeState = useHomeMetrics();
   const intentsState = useIntentsPaged(intentsPage);
-  const alertsState = useAlerts();
+  const threatEventsState = useThreatEventsPaged(threatsPage);
+  const { data: topThreats } = useTopThreats();
   const seriesState = useSeries(series);
   const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
 
@@ -39,7 +41,9 @@ export function HomePage() {
   const intents = intentsState.data.items;
   const intentsTotal = intentsState.data.total;
   const intentsTotalPages = intentsState.data.totalPages;
-  const threats = alertsState.data;
+  const threatEvents = threatEventsState.data.items;
+  const threatEventsTotal = threatEventsState.data.total;
+  const threatEventsTotalPages = threatEventsState.data.totalPages;
   const data = seriesState.data;
 
   // Actual calendar dates for the trailing window, oldest → newest, matching the
@@ -122,6 +126,62 @@ export function HomePage() {
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/intents/${r.id}`);
+            }}
+          >
+            View
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const threatEventCols: DataTableColumn<ThreatEvent>[] = [
+    {
+      key: "code",
+      label: "Threat Code",
+      render: (r) => (
+        <span className="chip threat" style={{ fontFamily: "var(--font-mono)" }}>{r.threatCode}</span>
+      ),
+    },
+    {
+      key: "message",
+      label: "Message",
+      render: (r) => (
+        <span style={{ fontSize: 13, color: "var(--fg)" }}>{r.message}</span>
+      ),
+    },
+    {
+      key: "intent",
+      label: "Intent",
+      render: (r) => (
+        <IntentIdChip id={r.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--fg)" }} />
+      ),
+    },
+    {
+      key: "interaction",
+      label: "Interaction",
+      render: (r) => <IdCell id={r.interactionID} truncate truncateLength={12} />,
+    },
+    {
+      key: "time",
+      label: "Time",
+      align: "right",
+      render: (r) => (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>{timeAgo(r.time)}</span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "",
+      align: "right",
+      width: 60,
+      render: (r) => (
+        <div className="row-actions">
+          <button
+            className="btn-mini"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/intents/${r.intentID}`);
             }}
           >
             View
@@ -255,34 +315,88 @@ export function HomePage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr", gap: 16, marginBottom: 20 }}>
         <div className="card">
-          <div className="card-head">
+          <div className="card-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <h3>Interactions over time</h3>
+              <h3>{chartTab === "graph" ? "Interactions over time" : "Top 5 threats"}</h3>
               <div className="sub">
-                Safe vs threat-classified runs · Last 7 days
+                {chartTab === "graph" ? "Safe vs threat-classified runs · Last 7 days" : "By volume, most frequent codes"}
               </div>
             </div>
+            <div style={{ display: "flex", background: "var(--bg-3)", borderRadius: 6, padding: 2 }}>
+              {([{ key: "graph", label: "Graph" }, { key: "threats", label: "Threats" }] as const).map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setChartTab(t.key)}
+                  style={{
+                    background: chartTab === t.key ? "var(--surface)" : "transparent",
+                    border: "none",
+                    borderRadius: 5,
+                    padding: "4px 10px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: chartTab === t.key ? "var(--fg)" : "var(--fg-muted)",
+                    cursor: "pointer",
+                    boxShadow: chartTab === t.key ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
+                    transition: "all 120ms",
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="chart-legend">
-            <span className="it">
-              <span className="sw" style={{ background: "#2563EB" }} /> Interactions
-            </span>
-            <span className="it">
-              <span className="sw" style={{ background: "#DC2626" }} /> Threats
-            </span>
-          </div>
-          <div className="chart-wrap">
-            <Chart
-              labels={labels}
-              style="bar"
-              height={272}
-              formatY={(v) => (typeof v === "number" && v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)}
-              series={[
-                { key: "interactions", label: "Interactions", color: "#2563EB", data: data.total },
-                { key: "threats", label: "Threats", color: "#DC2626", data: data.threats },
-              ]}
-            />
-          </div>
+
+          {chartTab === "graph" ? (
+            <>
+              <div className="chart-legend">
+                <span className="it">
+                  <span className="sw" style={{ background: "#2563EB" }} /> Interactions
+                </span>
+                <span className="it">
+                  <span className="sw" style={{ background: "#DC2626" }} /> Threats
+                </span>
+              </div>
+              <div className="chart-wrap">
+                <Chart
+                  labels={labels}
+                  style="bar"
+                  height={272}
+                  formatY={(v) => (typeof v === "number" && v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)}
+                  series={[
+                    { key: "interactions", label: "Interactions", color: "#2563EB", data: data.total },
+                    { key: "threats", label: "Threats", color: "#DC2626", data: data.threats },
+                  ]}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 110px 90px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)", marginTop: 8 }}>
+                {["#", "THREAT", "CODE", "COUNT"].map((h, i) => (
+                  <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
+                ))}
+              </div>
+              {topThreats.length === 0 && (
+                <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>No threats detected</div>
+              )}
+              {topThreats.map((t, i) => (
+                <div key={t.threatCode} style={{ display: "grid", gridTemplateColumns: "44px 1fr 110px 90px", alignItems: "center", padding: "10px 20px", borderBottom: "1px solid var(--line)" }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, background: i === 0 ? "#0a2240" : "var(--bg-3)", color: i === 0 ? "#fff" : "var(--fg-muted)" }}>
+                    {String(i + 1).padStart(2, "0")}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.title}</div>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", background: "var(--bg-2)", padding: "2px 8px", borderRadius: 4 }}>
+                      {t.threatCode}
+                    </span>
+                  </div>
+                  <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
+                    {t.count.toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
 
         <div
@@ -333,8 +447,8 @@ export function HomePage() {
           {/* Agents view */}
           {volumeTab === "agents" && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)" }}>
-                {["#", "AGENT", "IXNS", "THREATS"].map((h, i) => (
+              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)" }}>
+                {["#", "AGENT", "IXNS"].map((h, i) => (
                   <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
               </div>
@@ -346,12 +460,11 @@ export function HomePage() {
                 )}
                 {(() => {
                   return metrics.agentList.map((a, i) => {
-                    const threats = a.totalThreats ?? 0;
                     return (
                       <div
                         key={a.agentID}
                         onClick={() => navigate(`/agents/${a.agentID}`)}
-                        style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", alignItems: "center", padding: "10px 20px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
+                        style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px", alignItems: "center", padding: "10px 20px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
                         onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)")}
                         onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
                       >
@@ -363,11 +476,6 @@ export function HomePage() {
                         </div>
                         <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
                           {a.totalInteractions.toLocaleString()}
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, background: threats > 0 ? "rgba(220,38,38,0.1)" : "var(--bg-3)", color: threats > 0 ? "#dc2626" : "var(--fg-muted)", padding: "2px 8px", borderRadius: 4 }}>
-                            {threats.toLocaleString()}
-                          </span>
                         </div>
                       </div>
                     );
@@ -440,7 +548,7 @@ export function HomePage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            {([{ key: "intents", label: "Intents", count: intentsTotal }, { key: "threats", label: "Threats", count: threats.length }] as const).map((t) => (
+            {([{ key: "intents", label: "Intents", count: intentsTotal }, { key: "threats", label: "Threats", count: threatEventsTotal }] as const).map((t) => (
               <div
                 key={t.key}
                 className={`tab ${bottomTab === t.key ? "active" : ""}`}
@@ -454,6 +562,9 @@ export function HomePage() {
           {bottomTab === "intents" && (
             <Pagination page={intentsPage} totalPages={intentsTotalPages} total={intentsTotal} pageSize={10} inline onChange={setIntentsPage} />
           )}
+          {bottomTab === "threats" && (
+            <Pagination page={threatsPage} totalPages={threatEventsTotalPages} total={threatEventsTotal} pageSize={10} inline onChange={setThreatsPage} />
+          )}
         </div>
         {bottomTab === "intents" ? (
           <DataTable
@@ -463,7 +574,12 @@ export function HomePage() {
             emptyText="No intents yet"
           />
         ) : (
-          <LedgerTable rows={threats} emptyText="No threats detected" onView={(r) => openDrawer("interaction", r)} />
+          <DataTable
+            rows={threatEvents}
+            columns={threatEventCols}
+            onRowClick={(r) => navigate(`/intents/${r.intentID}`)}
+            emptyText="No threats detected"
+          />
         )}
       </div>
     </div>

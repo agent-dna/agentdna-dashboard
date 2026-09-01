@@ -54,6 +54,8 @@ interface ApiInteraction {
   time: string;
   /** Backend-supplied block type (chain block category / classification). */
   blockType?: string;
+  /** Non-empty only when `threat` is true — pass to GET /threat-by-id for the full message. */
+  threatID?: string;
 }
 
 function mapInteraction(i: ApiInteraction): Interaction {
@@ -69,6 +71,7 @@ function mapInteraction(i: ApiInteraction): Interaction {
     threat: !!i.threat,
     created: isoToMinutesAgo(i.time),
     blockType: i.blockType,
+    threatID: i.threatID || undefined,
   };
 }
 
@@ -144,10 +147,170 @@ export async function fetchInteractionsPaged(page = 1): Promise<PagedInteraction
   }
 }
 
+/** Used only by the unrouted legacy AlertsPage — HomePage uses fetchThreatEvents below. */
 export async function fetchAlerts(page = 1): Promise<Interaction[]> {
   // No dedicated alerts endpoint — filter the org's interactions client-side.
   const res = await apiRequest<PagedInteractions>("/interactions-list", { query: { page } });
   return (res.interactionList || []).map(mapInteraction).filter((i) => i.threat);
+}
+
+// ============ Threat events ============
+
+export interface ThreatEvent {
+  id: string;
+  intentID: string;
+  interactionID: string;
+  /** Minutes ago, same convention as everywhere else in this file. */
+  time: number;
+  threatCode: number;
+  message: string;
+}
+
+interface ApiThreatEvent {
+  id: string;
+  intent_id: string;
+  interaction_id: string;
+  time: string;
+  threat_code: number;
+  message: string;
+}
+
+function mapThreatEvent(t: ApiThreatEvent): ThreatEvent {
+  return {
+    id: t.id,
+    intentID: t.intent_id,
+    interactionID: t.interaction_id,
+    time: isoToMinutesAgo(t.time),
+    threatCode: t.threat_code,
+    message: t.message,
+  };
+}
+
+export interface PagedThreatEvents {
+  items: ThreatEvent[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface ApiPagedThreatEvents {
+  threats: ApiThreatEvent[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export async function fetchThreatEvents(page = 1, limit = 10): Promise<PagedThreatEvents> {
+  try {
+    const res = await apiRequest<ApiPagedThreatEvents>("/threat-events", { query: { page, limit } });
+    const pageSize = res.limit || limit;
+    return {
+      items: (res.threats || []).map(mapThreatEvent),
+      total: res.total || 0,
+      page: res.page || page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil((res.total || 0) / pageSize)),
+    };
+  } catch {
+    return { items: [], total: 0, page, pageSize: limit, totalPages: 1 };
+  }
+}
+
+/** One entry in the top-5-most-frequent-threats list. */
+export interface TopThreat {
+  threatCode: number;
+  title: string;
+  count: number;
+}
+
+interface ApiTopThreat {
+  threat_code: number;
+  title: string;
+  count: number;
+}
+
+export async function fetchTopThreats(): Promise<TopThreat[]> {
+  try {
+    const res = await apiRequest<ApiTopThreat[]>("/top-threats");
+    return (res || []).map((t) => ({ threatCode: t.threat_code, title: t.title, count: t.count }));
+  } catch {
+    return [];
+  }
+}
+
+export interface ThreatDetail {
+  threatCode: number;
+  title: string;
+  description: string;
+  count: number;
+  events: ThreatEvent[];
+}
+
+interface ApiThreatDetail {
+  threat_code: number;
+  title: string;
+  description: string;
+  count: number;
+  threats: ApiThreatEvent[];
+}
+
+/** Not currently wired into any page — available for a future "view threat" drawer/page. */
+export async function fetchThreatDetail(threatCode: number): Promise<ThreatDetail | null> {
+  try {
+    const res = await apiRequest<ApiThreatDetail>("/threat-detail", { query: { threat_code: threatCode } });
+    return {
+      threatCode: res.threat_code,
+      title: res.title,
+      description: res.description,
+      count: res.count,
+      events: (res.threats || []).map(mapThreatEvent),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** One specific threat event, looked up by its threatID (e.g. an interaction's `threatID`). */
+export interface ThreatByID {
+  id: string;
+  intentID: string;
+  interactionID: string;
+  time: number;
+  threatCode: number;
+  title: string;
+  description: string;
+  message: string;
+}
+
+interface ApiThreatByID {
+  id: string;
+  intent_id: string;
+  interaction_id: string;
+  time: string;
+  threat_code: number;
+  title: string;
+  description: string;
+  message: string;
+}
+
+export async function fetchThreatByID(threatId: string): Promise<ThreatByID | null> {
+  if (!threatId) return null;
+  try {
+    const res = await apiRequest<ApiThreatByID>("/threat-by-id", { query: { threat_id: threatId } });
+    return {
+      id: res.id,
+      intentID: res.intent_id,
+      interactionID: res.interaction_id,
+      time: isoToMinutesAgo(res.time),
+      threatCode: res.threat_code,
+      title: res.title,
+      description: res.description,
+      message: res.message,
+    };
+  } catch {
+    return null;
+  }
 }
 
 interface ApiAgent {
@@ -638,6 +801,137 @@ export async function fetchAgentIntents(id: string, page = 1): Promise<Intent[]>
   }
 }
 
+// ============ Agent ↔ Tool links (PROPOSED — endpoint not live yet) ============
+
+/** A policy file governing one agent's use of one tool. Either raw text or a hosted file (e.g. PDF). */
+export interface ToolPolicyFile {
+  filename?: string;
+  /** Raw .md/.txt content, when the policy is plain text. */
+  content?: string;
+  /** Hosted file URL (e.g. a PDF) to view/download, when the policy isn't plain text. */
+  url?: string;
+  uploadedAt?: string;
+}
+
+/** One row of an agent's "Tools" tab — this agent's relationship with one app it has interacted with. */
+export interface AgentToolLink {
+  /** Same value as toolID — DataTable rows key off `id`. */
+  id: string;
+  toolID: string;
+  toolName: string;
+  /** Trust score for this agent↔tool pairing, 0-100. */
+  trustScore: number;
+  policyFile?: ToolPolicyFile;
+  /** Minutes since this agent last interacted with the tool. */
+  lastInteracted: number;
+}
+
+export interface PagedAgentTools {
+  items: AgentToolLink[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface ApiAgentToolLink {
+  toolID: string;
+  toolName: string;
+  /** Guessed wire key for the trust score — endpoint not live yet, confirm the real name. */
+  lhiScore?: number;
+  policyFilename?: string;
+  policyContent?: string;
+  policyURL?: string;
+  policyUploadedAt?: string;
+  lastInteractedAt?: string;
+}
+
+interface ApiPagedAgentTools {
+  toolsList: ApiAgentToolLink[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
+}
+
+function mapAgentToolLink(t: ApiAgentToolLink): AgentToolLink {
+  const hasPolicy = t.policyContent || t.policyURL || t.policyFilename;
+  return {
+    id: t.toolID,
+    toolID: t.toolID,
+    toolName: t.toolName,
+    trustScore: t.lhiScore ?? 0,
+    policyFile: hasPolicy
+      ? {
+          filename: t.policyFilename,
+          content: t.policyContent,
+          url: t.policyURL,
+          uploadedAt: t.policyUploadedAt,
+        }
+      : undefined,
+    lastInteracted: isoToMinutesAgo(t.lastInteractedAt),
+  };
+}
+
+/**
+ * PROPOSED — endpoint isn't live yet; path/shape here is a best guess to be
+ * confirmed once the backend contract lands. Fails soft to an empty page so
+ * the Tools tab just shows "no apps yet" rather than erroring the whole page.
+ */
+export async function fetchAgentTools(id: string, page = 1): Promise<PagedAgentTools> {
+  try {
+    const res = await apiRequest<ApiPagedAgentTools>("/agent-tools", { query: { agentDID: id, page } });
+    return {
+      items: (res.toolsList || []).map(mapAgentToolLink),
+      total: res.total || 0,
+      page: res.page || page,
+      pageSize: res.pageSize || 10,
+      totalPages: res.totalPages || 1,
+    };
+  } catch {
+    return { items: [], total: 0, page, pageSize: 10, totalPages: 1 };
+  }
+}
+
+/** The "More details" destination for one agent↔tool pairing. */
+export interface AgentToolDetail extends AgentToolLink {
+  interactions: Interaction[];
+  interactionsTotal: number;
+  interactionsTotalPages: number;
+}
+
+interface ApiAgentToolInfo extends ApiAgentToolLink {
+  interactionsList?: ApiInteraction[];
+  interactionsTotal?: number;
+  interactionsTotalPages?: number;
+}
+
+/**
+ * PROPOSED — endpoint isn't live yet; path/shape here is a best guess to be
+ * confirmed once the backend contract lands. Returns null on failure so the
+ * page falls back to its "not found / coming soon" state, same as
+ * fetchUserInfo/fetchToolInfo do today.
+ */
+export async function fetchAgentToolInfo(
+  agentId: string,
+  toolId: string,
+  page = 1,
+): Promise<AgentToolDetail | null> {
+  try {
+    const r = await apiRequest<ApiAgentToolInfo>("/agent-tool-info", {
+      query: { agentDID: agentId, toolDID: toolId, page },
+    });
+    return {
+      ...mapAgentToolLink(r),
+      interactions: (r.interactionsList || []).map(mapInteraction),
+      interactionsTotal: r.interactionsTotal || 0,
+      interactionsTotalPages: r.interactionsTotalPages || 1,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchIntentInteractions(id: string): Promise<Interaction[]> {
   const r = await fetchIntentInfo(id);
   return (r?.interactions || []).map(mapInteraction);
@@ -840,6 +1134,8 @@ interface ApiToolInteraction {
   signature?: string;
   provenanceRecordID?: string;
   time: string;
+  /** Non-empty only when `threat` is true — pass to GET /threat-by-id for the full message. */
+  threatID?: string;
 }
 
 interface ApiToolIntent {
@@ -908,6 +1204,7 @@ function mapToolInteraction(i: ApiToolInteraction): Interaction {
     runtime: 0,
     threat: !!i.threat,
     created: isoToMinutesAgo(i.time),
+    threatID: i.threatID || undefined,
   };
 }
 

@@ -6,6 +6,7 @@ import { DrawerSection } from "./DrawerSection";
 import { useDrawer } from "../../context/DrawerContext";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useIntentLabel } from "../../context/IntentNumbersContext";
+import { useThreatByID } from "../../data/hooks";
 import {  timeAgo } from "../../lib/format";
 import type { Interaction } from "../../types";
 
@@ -18,6 +19,7 @@ export function InteractionDetail({ interaction: i }: Props) {
   const navigate = useNavigate();
   const resolve = useResolveName();
   const intentLabel = useIntentLabel();
+  const { data: threatDetail, loading: threatLoading } = useThreatByID(i.threat ? i.threatID : undefined);
 
   const openIntent = () => {
     if (!i.intent?.id) return;
@@ -34,8 +36,11 @@ export function InteractionDetail({ interaction: i }: Props) {
   const pickName = (did: string, apiName: string | undefined) => {
     const hit = resolve(did);
     if (hit.kind && hit.name) return { name: hit.name, kind: hit.kind };
-    if (apiName && apiName.trim() && !apiName.includes("…")) return { name: apiName.trim(), kind: hit.kind };
-    return { name: hit.name || did, kind: hit.kind };
+    // apiName is sometimes just the raw DID with no resolved name behind it
+    // (backend had nothing to join) — truncate anything DID-length so it
+    // doesn't overflow the drawer's fixed width.
+    if (apiName && apiName.trim() && !apiName.includes("…")) return { name: truncateId(apiName.trim()), kind: hit.kind };
+    return { name: truncateId(hit.name || did), kind: hit.kind };
   };
 
   const initiator = pickName(i.initiator.id, i.initiator.name);
@@ -157,6 +162,31 @@ export function InteractionDetail({ interaction: i }: Props) {
             <div className="v" style={{ color: i.threat ? "var(--threat)" : "var(--safe)" }}>
               {i.threat ? "true" : "false"}
             </div>
+            {i.threat && i.threatID && (
+              <>
+                <div className="k">Threat</div>
+                <div className="v">
+                  {threatLoading ? (
+                    <span style={{ color: "var(--fg-muted)" }}>Loading…</span>
+                  ) : threatDetail ? (
+                    <span style={{ color: "var(--threat)" }}>
+                      {threatDetail.title}{" "}
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-muted)" }}>
+                        (code {threatDetail.threatCode})
+                      </span>
+                    </span>
+                  ) : (
+                    <span style={{ color: "var(--fg-muted)" }}>Unable to load threat details</span>
+                  )}
+                </div>
+                {threatDetail?.message && (
+                  <>
+                    <div className="k">Threat message</div>
+                    <div className="v" style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{threatDetail.message}</div>
+                  </>
+                )}
+              </>
+            )}
             <div className="k">Intent ID</div>
             <div className="v" style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {i.intent?.id ? (
@@ -216,7 +246,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                 <div className="line" />
                 <div className="body">
                   <div className="nm">Threat detected</div>
-                  <div className="desc">Interaction flagged for review</div>
+                  <div className="desc">{threatDetail?.message || "Interaction flagged for review"}</div>
                 </div>
               </div>
             )}
@@ -250,6 +280,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                 id: i.id,
                 blockType: i.blockType,
                 threat: i.threat,
+                threatID: i.threatID,
                 created: i.created,
                 runtime: i.runtime,
                 targetType: i.targetType,

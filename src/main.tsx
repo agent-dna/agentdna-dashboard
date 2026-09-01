@@ -7,6 +7,7 @@ import { HomePage } from "./pages/HomePage";
 import { IntentsPage } from "./pages/IntentsPage";
 import { AgentsToolsPage } from "./pages/AgentsToolsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
+import { AgentToolDetailPage } from "./pages/AgentToolDetailPage";
 import { ToolDetailPage } from "./pages/ToolDetailPage";
 import { UserDetailPage } from "./pages/UserDetailPage";
 import { IntentDetailPage } from "./pages/IntentDetailPage";
@@ -47,6 +48,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="intents/:intentId" element={<IntentDetailPage />} />
                 <Route path="agents" element={<AgentsToolsPage />} />
                 <Route path="agents/:agentId" element={<AgentDetailPage />} />
+                <Route path="agents/:agentId/tools/:toolId" element={<AgentToolDetailPage />} />
                 <Route path="tools/:toolId" element={<ToolDetailPage />} />
                 <Route path="users/:userId" element={<UserDetailPage />} />
                 <Route path="requests" element={<RequestsPage />} />

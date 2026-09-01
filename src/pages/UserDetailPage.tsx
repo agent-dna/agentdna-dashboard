@@ -13,7 +13,7 @@ import { fmtRuntime, initials, timeAgo } from "../lib/format";
 import { ScoreBar } from "../components/ScoreBar";
 import { useUserInfo } from "../data/hooks";
 import type { DeployedAgent } from "../data/api";
-import type { Interaction, Intent } from "../types";
+import type { Intent } from "../types";
 
 type Tab = "interactions" | "intents" | "threats" | "agents";
 

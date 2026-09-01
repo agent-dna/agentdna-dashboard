@@ -63,6 +63,8 @@ export interface Interaction {
   created: number;
   /** Backend-supplied block type (e.g. on-chain block category). Optional. */
   blockType?: string;
+  /** Non-empty only when `threat` is true — pass to GET /threat-by-id for the full message. */
+  threatID?: string;
 }
 
 export interface TimeSeries {

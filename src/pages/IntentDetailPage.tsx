@@ -10,7 +10,7 @@ import { entityPath } from "../lib/entityLinks";
 import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
-import { useIntent, useIntentInteractionsPaged, useIntentParticipants } from "../data/hooks";
+import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useThreatByID } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
@@ -35,6 +35,8 @@ export function IntentDetailPage() {
   const interactionsTotal = interactionsPaged.total;
   const interactionsTotalPages = interactionsPaged.totalPages;
   const { data: participants } = useIntentParticipants(intentId);
+  const firstThreatID = interactions.find((i) => i.threat && i.threatID)?.threatID;
+  const { data: threatSummary, loading: threatSummaryLoading } = useThreatByID(firstThreatID);
   if (loading) {
     return (
       <div className="page">
@@ -255,6 +257,45 @@ export function IntentDetailPage() {
             </button>
           </div>
         </div>
+
+        {threatCount > 0 && (
+          <div
+            style={{
+              marginTop: 18,
+              paddingTop: 16,
+              borderTop: "1px solid var(--line)",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+            }}
+          >
+            <Icon name="shield" size={15} style={{ color: "var(--threat)", flexShrink: 0, marginTop: 1 }} />
+            <div style={{ minWidth: 0 }}>
+              {threatSummaryLoading ? (
+                <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Loading threat details…</span>
+              ) : threatSummary ? (
+                <>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--threat)" }}>{threatSummary.title}</span>
+                  <span style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--fg-muted)", marginLeft: 8 }}>
+                    code {threatSummary.threatCode}
+                  </span>
+                  {threatSummary.message && (
+                    <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 3 }}>{threatSummary.message}</div>
+                  )}
+                  {threatCount > 1 && (
+                    <div style={{ fontSize: 11.5, color: "var(--fg-faint)", marginTop: 3 }}>
+                      +{threatCount - 1} more threat{threatCount - 1 === 1 ? "" : "s"} in this intent
+                    </div>
+                  )}
+                </>
+              ) : (
+                <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+                  {threatCount} threat{threatCount === 1 ? "" : "s"} detected in this intent
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Activity metrics */}
