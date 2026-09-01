@@ -7,7 +7,7 @@ import { useDrawer } from "../../context/DrawerContext";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { useThreatByID } from "../../data/hooks";
-import {  timeAgo } from "../../lib/format";
+import { timeAgo, interactionRawData } from "../../lib/format";
 import type { Interaction } from "../../types";
 
 interface Props {
@@ -304,18 +304,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                 maxHeight: 360,
                 overflowY: "auto",
               }}
-              dangerouslySetInnerHTML={{ __html: colorizeJson(JSON.stringify({
-                id: i.id,
-                blockType: i.blockType,
-                threat: i.threat,
-                threatID: i.threatID,
-                created: i.created,
-                runtime: i.runtime,
-                targetType: i.targetType,
-                initiator: { id: i.initiator.id, name: i.initiator.name },
-                target: { id: i.target.id, name: i.target.name },
-                intent: { id: i.intent?.id, name: i.intent?.name },
-              }, null, 2)) }}
+              dangerouslySetInnerHTML={{ __html: colorizeJson(JSON.stringify(interactionRawData(i), null, 2)) }}
             />
           </div>
         </DrawerSection>

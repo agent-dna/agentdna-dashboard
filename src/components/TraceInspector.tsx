@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { FlowTrace, TraceSpan } from "../pages/flow/flowData";
+import { interactionRawData } from "../lib/format";
+import type { Interaction } from "../types";
 
 const KIND_COLOR: Record<string, string> = {
   chain: "#7C3AED",
@@ -185,9 +187,13 @@ interface TraceInspectorProps {
   openSpanId?: string;
   onClose: () => void;
   rawData?: unknown;
+  /** Span id → the real Interaction it came from, when one exists — lets the
+   * "Span data" panel show exactly what the interaction drawer shows instead
+   * of a generic trace/block blob. */
+  interactionBySpanId?: Record<string, Interaction>;
 }
 
-export function TraceInspector({ trace, openSpanId, onClose, rawData }: TraceInspectorProps) {
+export function TraceInspector({ trace, openSpanId, onClose, rawData, interactionBySpanId }: TraceInspectorProps) {
   const [selId, setSelId] = useState(openSpanId || trace.trace.id);
   const [copiedJson, setCopiedJson] = useState(false);
 
@@ -206,8 +212,14 @@ export function TraceInspector({ trace, openSpanId, onClose, rawData }: TraceIns
   const sKind = spanKind(sel);
   const sColor = KIND_COLOR[sKind] || "#5F73A0";
 
+  // The selected span's own interaction, when it has one — same JSON shape
+  // as the interaction drawer's Raw data panel. Falls back to the generic
+  // trace/block payload for synthetic spans (root, provenance seal, …).
+  const matchedInteraction = interactionBySpanId?.[selId];
+  const jsonValue = matchedInteraction ? interactionRawData(matchedInteraction) : (rawData ?? trace.trace);
+
   const copyJson = () => {
-    try { navigator.clipboard.writeText(JSON.stringify(rawData ?? trace.trace, null, 2)); } catch {}
+    try { navigator.clipboard.writeText(JSON.stringify(jsonValue, null, 2)); } catch {}
     setCopiedJson(true);
     setTimeout(() => setCopiedJson(false), 1500);
   };
@@ -284,7 +296,7 @@ export function TraceInspector({ trace, openSpanId, onClose, rawData }: TraceIns
                   <span style={{
                     fontFamily: "'JetBrains Mono',monospace", fontSize: 10, fontWeight: 600,
                     letterSpacing: "0.14em", textTransform: "uppercase", color: "#8595B5",
-                  }}>Span data</span>
+                  }}>{matchedInteraction ? "Interaction data" : "Span data"}</span>
                   <button onClick={copyJson} style={{
                     display: "inline-flex", alignItems: "center", gap: 6,
                     fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600,
@@ -298,7 +310,7 @@ export function TraceInspector({ trace, openSpanId, onClose, rawData }: TraceIns
                   border: "1px solid rgba(255,255,255,0.07)", overflowY: "auto",
                   fontFamily: "'JetBrains Mono',monospace", fontSize: 13, lineHeight: 1.65,
                 }}>
-                  <JsonNode value={rawData ?? trace.trace} defaultOpen={true} />
+                  <JsonNode value={jsonValue} defaultOpen={true} />
                 </div>
               </div>
 

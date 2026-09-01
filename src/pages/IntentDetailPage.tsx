@@ -75,6 +75,15 @@ export function IntentDetailPage() {
 
   const threatCount = interactions.filter((i: { threat: boolean }) => i.threat).length;
 
+  // Interaction IDs end in "-<n>", the sequence number within the intent's
+  // block chain — list them in that order (1, 2, 3, …) rather than however
+  // the backend happened to return the page.
+  const interactionSeq = (id: string): number => {
+    const m = id.match(/-(\d+)$/);
+    return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+  };
+  const sortedInteractions = [...interactions].sort((a, b) => interactionSeq(a.id) - interactionSeq(b.id));
+
   const participantCols: DataTableColumn<IntentParticipant & { id: string }>[] = [
     {
       key: "name",
@@ -320,7 +329,7 @@ export function IntentDetailPage() {
         {tab === "interactions" && (
           <>
             <LedgerTable
-              rows={interactions}
+              rows={sortedInteractions}
               emptyText={interactionsLoading ? "Loading…" : "No interactions recorded for this intent yet."}
               onView={(r) => openDrawer("interaction", r)}
               // Every row here belongs to this intent — the column repeats the page.

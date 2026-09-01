@@ -186,33 +186,11 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
   }, [steps, step]);
 
   /**
-   * How far each step's arc should bow, signed: negative bows one way, positive
-   * the other. Repeated hops between the same two nodes are spread symmetrically
-   * around the straight line — with two interactions, one arcs above and one
-   * below by the same amount, so the pair stays visually balanced.
-   *
-   * A lone hop keeps bow 1, i.e. exactly the curvature it had before.
+   * Repeated hops between the same two nodes trace the same line rather than
+   * each drawing their own arc — once a pair's edge exists, every later
+   * interaction on that pair reuses it instead of piling up parallel lines.
    */
-  const bowForStep = useMemo(() => {
-    const groups = new Map<string, number[]>();
-    steps.forEach((s, i) => {
-      const key = `${s.from}>${s.to}`;
-      const g = groups.get(key);
-      if (g) g.push(i);
-      else groups.set(key, [i]);
-    });
-    const out = new Map<number, number>();
-    for (const indices of groups.values()) {
-      const n = indices.length;
-      // Spacing keeps the outermost lanes at ±1 whatever the count, so a busy
-      // pair fans tighter rather than sprawling across the canvas.
-      const spacing = n > 1 ? 2 / (n - 1) : 0;
-      indices.forEach((stepIx, lane) => {
-        out.set(stepIx, n === 1 ? 1 : (lane - (n - 1) / 2) * spacing);
-      });
-    }
-    return out;
-  }, [steps]);
+  const EDGE_BOW = 1;
 
   /**
    * Edges into the provenance layer. These aren't timed hops — they're always
@@ -242,17 +220,24 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
 
   const activeEdges = useMemo(() => {
     if (!ready) return [];
+    // A fan-out beat can hold several active steps, but two of them landing
+    // on the same A→B pair still share one line — dedupe so it doesn't
+    // double-draw.
+    const seenPairs = new Set<string>();
     return active.flatMap((si) => {
       const st = steps[si];
       if (!st) return [];
+      const pairKey = `${st.from}>${st.to}`;
+      if (seenPairs.has(pairKey)) return [];
+      seenPairs.add(pairKey);
       const a0 = pts[st.from];
       const b0 = pts[st.to];
       if (!a0 || !b0) return [];
-      const c = ctrlFor(a0, b0, bowForStep.get(si) ?? 1);
+      const c = ctrlFor(a0, b0, EDGE_BOW);
       const { a, b } = trimEnds(a0, c, b0, 20, 36);
       return [{ key: si, a, b, c, blocked: st.verdict === "blocked" }];
     });
-  }, [ready, active, steps, pts, bowForStep]);
+  }, [ready, active, steps, pts]);
 
   // Gradients are defined once against the first active edge.
   const activeEdge = activeEdges[0] ?? null;
@@ -325,20 +310,25 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
               </marker>
             </defs>
 
-            {/* One path per interaction, not per unique node pair — two hops
-                between the same two nodes must draw as two arrows. */}
-            {steps.map((s, i) => {
-              const a0 = pts[s.from];
-              const b0 = pts[s.to];
+            {/* One path per unique A→B pair — repeated interactions between
+                the same two nodes trace over the same line instead of each
+                drawing their own. */}
+            {flow.edges.map(([from, to]) => {
+              const a0 = pts[from];
+              const b0 = pts[to];
               if (!a0 || !b0) return null;
-              const c = ctrlFor(a0, b0, bowForStep.get(i) ?? 1);
+              const c = ctrlFor(a0, b0, EDGE_BOW);
               const { a, b } = trimEnds(a0, c, b0, 20, 34);
-              // Active hops are drawn separately, highlighted.
-              if (activeSet.has(i)) return null;
-              const done = i < doneBefore;
+              // Active this beat → drawn separately, highlighted.
+              const isActive = active.some((si) => steps[si]?.from === from && steps[si]?.to === to);
+              if (isActive) return null;
+              // Lit as soon as this pair's first interaction has played — it
+              // stays "done" from then on, however many more reuse the line.
+              const firstIx = steps.findIndex((s) => s.from === from && s.to === to);
+              const done = firstIx !== -1 && firstIx < doneBefore;
               return (
                 <path
-                  key={i}
+                  key={`${from}>${to}`}
                   d={`M${a.x},${a.y} Q${c.x},${c.y} ${b.x},${b.y}`}
                   fill="none"
                   stroke={done ? "rgba(96,165,250,0.5)" : "rgba(150,180,255,0.13)"}

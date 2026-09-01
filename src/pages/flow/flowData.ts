@@ -439,6 +439,9 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       verdict: isBlocked ? "blocked" : "allowed",
       checks: { identity: true, trust: true, scope: !isBlocked },
       latency: Math.max(40, Math.floor(ixn.runtime || Math.floor(60 + Math.random() * 400))),
+      // Links this step back to the real Interaction record, so the trace
+      // inspector can show the exact same raw data as the interaction drawer.
+      interactionID: ixn.id,
     });
     // Only the target — the entity where the threat was detected — gets the
     // red box. The initiator (`fromNode`) is the culprit, not the victim, so

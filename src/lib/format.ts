@@ -1,3 +1,5 @@
+import type { Interaction } from "../types";
+
 export function timeAgo(mins: number): string {
   if (mins < 1) return "just now";
   if (mins < 60) return `${Math.floor(mins)}m ago`;
@@ -23,4 +25,24 @@ export function initials(name: string): string {
     .slice(0, 2)
     .map((s) => s[0].toUpperCase())
     .join("");
+}
+
+/**
+ * Canonical shape of an interaction's "Raw data" JSON — used by the drawer's
+ * Raw data panel and the Flow page's trace inspector so they never drift
+ * apart and always show identical data for the same interaction.
+ */
+export function interactionRawData(i: Interaction) {
+  return {
+    id: i.id,
+    blockType: i.blockType,
+    threat: i.threat,
+    threatID: i.threatID,
+    created: i.created,
+    runtime: i.runtime,
+    targetType: i.targetType,
+    initiator: { id: i.initiator.id, name: i.initiator.name },
+    target: { id: i.target.id, name: i.target.name },
+    intent: { id: i.intent?.id, name: i.intent?.name },
+  };
 }

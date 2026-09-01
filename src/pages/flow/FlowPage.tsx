@@ -7,7 +7,7 @@ import { useResolveName } from "../../context/DirectoryContext";
 import { FlowCanvas } from "./FlowCanvas";
 import { buildFlowFromIntent, buildTraceFromBlocks, groupParallelRounds, type Flow, type FlowNode } from "./flowData";
 import { fetchIntents, flattenIntentBlocks } from "../../data/api";
-import type { Intent } from "../../types";
+import type { Intent, Interaction } from "../../types";
 
 const STEP_MS = 2000;
 const STORAGE_KEY_STEP = "flow.step";
@@ -63,6 +63,22 @@ export function FlowPage() {
     }
     return base;
   }, [intent, interactions, blocks, resolve]);
+
+  // Maps each step's spanId to the original Interaction record it came from,
+  // so the trace inspector's raw-data panel can show the exact same JSON the
+  // interaction drawer shows for that interaction, instead of a generic blob.
+  const interactionBySpanId = useMemo(() => {
+    if (!flow) return {};
+    const byId = new Map(interactions.map((ix) => [ix.id, ix]));
+    const map: Record<string, Interaction> = {};
+    for (const s of flow.steps) {
+      if (s.interactionID) {
+        const match = byId.get(s.interactionID);
+        if (match) map[s.spanId] = match;
+      }
+    }
+    return map;
+  }, [flow, interactions]);
 
   const N = flow?.steps.length ?? 0;
 
@@ -292,6 +308,7 @@ export function FlowPage() {
           openSpanId={inspectSpanId}
           onClose={() => setInspectSpanId(null)}
           rawData={blocks}
+          interactionBySpanId={interactionBySpanId}
         />
       )}
     </div>
