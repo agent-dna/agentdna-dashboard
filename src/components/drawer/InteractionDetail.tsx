@@ -46,6 +46,7 @@ export function InteractionDetail({ interaction: i }: Props) {
   const initiator = pickName(i.initiator.id, i.initiator.name);
   const target = pickName(i.target.id, i.target.name);
   const targetKind = target.kind || i.targetType;
+  const isSelfInteraction = i.initiator.id === i.target.id;
   return (
     <>
       <div className="drawer-head">
@@ -93,52 +94,79 @@ export function InteractionDetail({ interaction: i }: Props) {
               padding: 16,
             }}
           >
-            <div>
+            {isSelfInteraction ? (
               <div
                 style={{
-                  fontSize: 11,
-                  color: "var(--fg-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  marginBottom: 6,
-                  fontWeight: 600,
+                  border: "1px solid var(--accent)",
+                  borderRadius: 8,
+                  padding: "10px 10px 12px",
+                  background: "rgba(37,99,235,0.06)",
                 }}
               >
-                Initiator
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--accent)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    marginBottom: 6,
+                    fontWeight: 600,
+                  }}
+                >
+                  Initiator &amp; Target
+                </div>
+                <EntityCell name={initiator.name} paletteIx={initiator.name.charCodeAt(0)} />
               </div>
-              <EntityCell name={initiator.name} paletteIx={initiator.name.charCodeAt(0)} />
-            </div>
+            ) : (
+              <>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--fg-muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      marginBottom: 6,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Initiator
+                  </div>
+                  <EntityCell name={initiator.name} paletteIx={initiator.name.charCodeAt(0)} />
+                </div>
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                color: "var(--accent)",
-                paddingLeft: 12,
-              }}
-            >
-              <Icon name="arrowRight" size={16} style={{ transform: "rotate(90deg)" }} />
-              {/* <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
-                {fmtRuntime(i.runtime)}
-              </span> */}
-            </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    color: "var(--accent)",
+                    paddingLeft: 12,
+                  }}
+                >
+                  <Icon name="arrowRight" size={16} style={{ transform: "rotate(90deg)" }} />
+                  {/* <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
+                    {fmtRuntime(i.runtime)}
+                  </span> */}
+                </div>
 
-            <div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--fg-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  marginBottom: 6,
-                  fontWeight: 600,
-                }}
-              >
-                Target · {targetKind === "tool" ? "app" : targetKind}
-              </div>
-              <EntityCell name={target.name} paletteIx={(target.name.charCodeAt(2) || 0)} />
-            </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--fg-muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      marginBottom: 6,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Target · {targetKind === "tool" ? "app" : targetKind}
+                  </div>
+                  <EntityCell name={target.name} paletteIx={(target.name.charCodeAt(2) || 0)} />
+                </div>
+              </>
+            )}
           </div>
         </DrawerSection>
 

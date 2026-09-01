@@ -99,14 +99,18 @@ export function LedgerTable({
                 </EntityLink>
               </td>
               <td style={TD_STYLE}>
-                <EntityLink
-                  did={r.target.id}
-                  fallbackName={r.target.name}
-                  style={{ font: "500 13px var(--font-mono)" }}
-                  color="var(--fg-dim, var(--fg-muted))"
-                >
-                  {resolveName(r.target.id, r.target.name)}
-                </EntityLink>
+                {r.initiator.id === r.target.id ? (
+                  <span style={{ font: "500 13px var(--font-mono)", color: "var(--fg-faint)" }}>—</span>
+                ) : (
+                  <EntityLink
+                    did={r.target.id}
+                    fallbackName={r.target.name}
+                    style={{ font: "500 13px var(--font-mono)" }}
+                    color="var(--fg-dim, var(--fg-muted))"
+                  >
+                    {resolveName(r.target.id, r.target.name)}
+                  </EntityLink>
+                )}
               </td>
               {showIntent && (
                 <td style={TD_STYLE}>
