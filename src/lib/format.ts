@@ -18,6 +18,11 @@ export function fmtRuntime(ms: number): string {
   return `${m}m ${s}s`;
 }
 
+/** Uppercases just the first character — leaves the rest of the string untouched. */
+export function capitalizeFirst(s: string): string {
+  return s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
 export function initials(name: string): string {
   return name
     .split(/[\s.]/)

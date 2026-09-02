@@ -1,28 +1,58 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-// import { Icon } from "../components/Icon";
+import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { Pagination } from "../components/Pagination";
 import { useAgentsAppsMetrics, useIntentsPaged } from "../data/hooks";
+import { fetchAllIntents, updateIntentStatus } from "../data/api";
+import { ApiError } from "../api/client";
 
 import { timeAgo } from "../lib/format";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { useIntentReview } from "../context/IntentReviewContext";
 import { ThreatPill } from "../components/ThreatPill";
-import type { Intent } from "../types";
+import { AppIcon } from "../components/AppIcon";
+import type { Intent, IntentReviewStatus } from "../types";
+
+const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
+  Ongoing: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
+  Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
+  Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
+};
 
 export function IntentsPage() {
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
   const [page, setPage] = useState(1);
   const resolve = useResolveName();
-  const { data: paged } = useIntentsPaged(page);
+  const { refetch: refetchIntentReview } = useIntentReview();
+  const [acking, setAcking] = useState(false);
+  const [ackError, setAckError] = useState<string | null>(null);
+  const intentsState = useIntentsPaged(page);
+  const { data: paged } = intentsState;
   const { data: agentsApps } = useAgentsAppsMetrics();
   const intents = paged.items;
   const totalPages = paged.totalPages || 1;
   const total = paged.total || intents.length;
   const pageSize = paged.pageSize || 10;
   const navigate = useNavigate();
+
+  const acknowledgeAll = async () => {
+    setAcking(true);
+    setAckError(null);
+    try {
+      const all = await fetchAllIntents();
+      const toAck = all.filter((i) => i.reviewStatus !== "Acknowledged");
+      await Promise.all(toAck.map((i) => updateIntentStatus(i.id, "Acknowledged")));
+      intentsState.refetch();
+      refetchIntentReview();
+    } catch (e) {
+      setAckError(e instanceof ApiError ? e.message : "Failed to acknowledge all intents");
+    } finally {
+      setAcking(false);
+    }
+  };
 
 
   let rows = intents;
@@ -54,21 +84,6 @@ export function IntentsPage() {
       ),
     },
     {
-      key: "name",
-      label: "Status",
-      sortFn: (a, b) => a.name.localeCompare(b.name),
-      render: (r) => {
-        const s = (r.name || "").toLowerCase();
-        const chipClass =
-          s === "completed" ? "safe" : s === "running" ? "info" : s === "failed" ? "threat" : s === "pending" ? "warn" : "";
-        return (
-          <span className={`chip ${chipClass}`} style={{ textTransform: "capitalize" }}>
-            {r.name || "—"}
-          </span>
-        );
-      },
-    },
-    {
       key: "initiator",
       label: "Initiator",
       sortFn: (a, b) => a.initiator.name.localeCompare(b.initiator.name),
@@ -88,10 +103,49 @@ export function IntentsPage() {
       ),
     },
     {
+      key: "apps",
+      label: "App interacted",
+      render: (r) => {
+        const apps = r.appsInteracted || [];
+        if (apps.length === 0) {
+          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
+        }
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {apps.slice(0, 3).map((app) => (
+              <AppIcon key={app.id} name={resolveDisplayName(resolve, app)} size={20} />
+            ))}
+            {apps.length > 3 && (
+              <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>+{apps.length - 3}</span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       key: "threats",
       label: "Threats",
       sortFn: (a, b) => a.threats - b.threats,
       render: (r) => <ThreatPill threat={r.threats > 0} />,
+    },
+    {
+      key: "reviewStatus",
+      label: "Review",
+      sortFn: (a, b) => a.reviewStatus.localeCompare(b.reviewStatus),
+      render: (r) => (
+        <span
+          style={{
+            fontSize: 11.5,
+            fontWeight: 700,
+            padding: "3px 9px",
+            borderRadius: 999,
+            color: REVIEW_STATUS_STYLE[r.reviewStatus].color,
+            background: REVIEW_STATUS_STYLE[r.reviewStatus].bg,
+          }}
+        >
+          {r.reviewStatus}
+        </span>
+      ),
     },
     {
       key: "time",
@@ -132,7 +186,12 @@ export function IntentsPage() {
           <h1>Intents</h1>
           <div className="sub">High-level goals being executed across the agent network</div>
         </div>
-        <div className="right">
+        <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {ackError && <span style={{ fontSize: 12.5, color: "var(--threat)" }}>{ackError}</span>}
+          <button className="btn primary" onClick={acknowledgeAll} disabled={acking}>
+            <Icon name="check" size={14} />
+            {acking ? "Acknowledging…" : "Acknowledge all"}
+          </button>
         </div>
       </div>
 

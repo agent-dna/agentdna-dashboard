@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
@@ -13,11 +13,22 @@ import { InfoStat } from "../components/InfoStat";
 import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useThreatByID } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
+import { useIntentReview } from "../context/IntentReviewContext";
 import { timeAgo } from "../lib/format";
 import { LedgerTable } from "../components/LedgerTable";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
+import { updateIntentStatus } from "../data/api";
+import { ApiError } from "../api/client";
 import { IntentIdChip } from "../context/IntentNumbersContext";
-import type { IntentParticipant, Tool } from "../types";
+import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
+
+const REVIEW_STATUSES: IntentReviewStatus[] = ["Ongoing", "Acknowledged", "Flagged"];
+
+const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
+  Ongoing: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
+  Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
+  Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
+};
 
 type Tab = "interactions" | "participants";
 
@@ -26,10 +37,44 @@ export function IntentDetailPage() {
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
   const resolve = useResolveName();
+  const { refetch: refetchIntentReview } = useIntentReview();
   const [tab, setTab] = useState<Tab>("interactions");
   const [interactionsPage, setInteractionsPage] = useState(1);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const statusBtnRef = useRef<HTMLButtonElement>(null);
+  const statusMenuRef = useRef<HTMLDivElement>(null);
+  const [statusMenuPos, setStatusMenuPos] = useState({ top: 0, right: 0 });
 
-  const { data: intent, loading } = useIntent(intentId);
+  // Fixed positioning (computed from the button's own rect) so the menu
+  // isn't clipped by the hero card's `overflow: hidden` the way an
+  // absolutely-positioned child would be.
+  useEffect(() => {
+    if (!statusMenuOpen) return;
+    const update = () => {
+      const rect = statusBtnRef.current?.getBoundingClientRect();
+      if (rect) setStatusMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    };
+    update();
+    const onOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!statusBtnRef.current?.contains(target) && !statusMenuRef.current?.contains(target)) {
+        setStatusMenuOpen(false);
+      }
+    };
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    document.addEventListener("mousedown", onOutside);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+      document.removeEventListener("mousedown", onOutside);
+    };
+  }, [statusMenuOpen]);
+
+  const intentState = useIntent(intentId);
+  const { data: intent, loading } = intentState;
   const { data: interactionsPaged, loading: interactionsLoading } = useIntentInteractionsPaged(intentId, interactionsPage);
   const interactions = interactionsPaged.interactions;
   const interactionsTotal = interactionsPaged.total;
@@ -62,6 +107,22 @@ export function IntentDetailPage() {
   }
 
   const participantRows = participants.map((p) => ({ ...p, id: `${p.type}:${p.entity.id}` }));
+
+  const changeStatus = async (next: IntentReviewStatus) => {
+    if (next === intent.reviewStatus) { setStatusMenuOpen(false); return; }
+    setStatusSaving(true);
+    setStatusError(null);
+    try {
+      await updateIntentStatus(intent.id, next);
+      intentState.refetch();
+      refetchIntentReview();
+      setStatusMenuOpen(false);
+    } catch (e) {
+      setStatusError(e instanceof ApiError ? e.message : "Failed to update status");
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   /**
    * Participants route to their own detail page when the directory knows what
@@ -170,7 +231,7 @@ export function IntentDetailPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
+                gridTemplateColumns: "repeat(5, 1fr)",
                 gap: 24,
               }}
             >
@@ -185,7 +246,7 @@ export function IntentDetailPage() {
                     fontWeight: 600,
                   }}
                 >
-                  Initiator
+                  Owner
                 </div>
                 <div
                   style={{
@@ -241,6 +302,24 @@ export function IntentDetailPage() {
               />
               <InfoStat label="Started" value={timeAgo(intent.started)} />
               <InfoStat
+                label="Status"
+                value={
+                  <span
+                    style={{
+                      display: "inline-block",
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      padding: "3px 10px",
+                      borderRadius: 999,
+                      color: REVIEW_STATUS_STYLE[intent.reviewStatus].color,
+                      background: REVIEW_STATUS_STYLE[intent.reviewStatus].bg,
+                    }}
+                  >
+                    {intent.reviewStatus}
+                  </span>
+                }
+              />
+              <InfoStat
                 label="Threat detected"
                 value={
                   <span style={{ color: threatCount > 0 ? "var(--threat)" : "var(--fg)", fontWeight: 600 }}>
@@ -252,7 +331,7 @@ export function IntentDetailPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, position: "relative" }}>
             <button className="btn primary" onClick={() => navigate(`/graph/${intent.id}`)}>
               <Icon name="flow" size={14} />
               View Flow
@@ -264,6 +343,59 @@ export function IntentDetailPage() {
               <Icon name="download" size={14} />
               Export
             </button>
+            <button ref={statusBtnRef} className="btn" onClick={() => setStatusMenuOpen((o) => !o)} disabled={statusSaving}>
+              <Icon name="settings" size={14} />
+              {statusSaving ? "Saving…" : "Change status"}
+            </button>
+            {statusMenuOpen && (
+              <div
+                ref={statusMenuRef}
+                style={{
+                  position: "fixed",
+                  top: statusMenuPos.top,
+                  right: statusMenuPos.right,
+                  background: "var(--bg-1)",
+                  border: "1px solid var(--line-strong)",
+                  borderRadius: 10,
+                  boxShadow: "0 12px 32px rgba(10,34,64,0.16)",
+                  padding: 6,
+                  minWidth: 160,
+                  zIndex: 300,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}
+              >
+                {REVIEW_STATUSES.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => changeStatus(s)}
+                    disabled={statusSaving}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      background: s === intent.reviewStatus ? "var(--bg-2)" : "transparent",
+                      border: "none",
+                      borderRadius: 7,
+                      padding: "7px 10px",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "var(--fg)",
+                      cursor: statusSaving ? "default" : "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    {s}
+                    {s === intent.reviewStatus && <Icon name="check" size={13} style={{ color: "var(--accent)" }} />}
+                  </button>
+                ))}
+              </div>
+            )}
+            {statusError && (
+              <div style={{ fontSize: 11.5, color: "var(--threat)", maxWidth: 160 }}>{statusError}</div>
+            )}
           </div>
         </div>
 

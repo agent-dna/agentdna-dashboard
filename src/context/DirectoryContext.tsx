@@ -1,12 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchAllAgents, fetchAllTools } from "../data/api";
 import { listAllUsers, type OrgUser } from "../api/users";
+import { setDirectorySnapshot, type DirectoryEntry } from "../data/directoryCache";
 import type { Agent, Tool } from "../types";
 
-export interface DirectoryEntry {
-  name: string;
-  kind: "agent" | "tool" | "user";
-}
+export type { DirectoryEntry };
 
 interface DirectoryContextValue {
   map: Map<string, DirectoryEntry>;
@@ -16,13 +14,11 @@ interface DirectoryContextValue {
 const Ctx = createContext<DirectoryContextValue | null>(null);
 
 /**
- * Fetches the org's agents and tools once and exposes a DID → { name, kind }
- * lookup. Used by interaction tables (and anywhere we render counterparty info)
- * to display real names instead of raw DIDs.
- *
- * NOTE: only page 1 of /agents-list and /tools-list (10 each) is loaded. Larger
- * orgs will see fallback shortened DIDs for un-cached entries until the backend
- * either (a) returns enough rows or (b) starts joining names into interactions.
+ * Fetches the org's agents and tools once (walking every page via
+ * fetchAllAgents/fetchAllTools) and exposes a DID → { name, kind } lookup.
+ * Used by interaction tables (and anywhere we render counterparty info) to
+ * display real names instead of raw DIDs — and, via directoryCache, as the
+ * source of truth for agent-vs-tool classification in api.ts.
  */
 export function DirectoryProvider({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -70,6 +66,11 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
     users.forEach((u) => m.set(u.userID, { name: u.userName, kind: "user" }));
     return m;
   }, [agents, tools, users]);
+
+  // Mirror into the plain (non-React) cache api.ts reads from, so its
+  // agent-vs-tool classification can use the real directory instead of
+  // guessing from DID shape.
+  useEffect(() => setDirectorySnapshot(map), [map]);
 
   const value = useMemo<DirectoryContextValue>(() => ({ map, loading }), [map, loading]);
 

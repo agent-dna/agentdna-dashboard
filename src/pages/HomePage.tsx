@@ -13,9 +13,18 @@ import { IntentIdChip } from "../context/IntentNumbersContext";
 import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
 import { useDrawer } from "../context/DrawerContext";
 import { ThreatPill } from "../components/ThreatPill";
-import { timeAgo } from "../lib/format";
+import { SeverityPill } from "../components/SeverityPill";
+import { getThreatSeverity } from "../lib/threatSeverity";
+import { timeAgo, capitalizeFirst } from "../lib/format";
 import type { Intent, Interaction } from "../types";
 import type { ThreatListItem } from "../data/api";
+import type { CSSProperties } from "react";
+
+/** Reddish tint + left accent for any row that represents/carries a threat. */
+const THREAT_ROW_STYLE: CSSProperties = {
+  background: "rgba(220,38,38,0.045)",
+  boxShadow: "inset 3px 0 0 var(--threat)",
+};
 
 /**
  * A threats-list row is already interaction-shaped — convert it so the
@@ -56,7 +65,7 @@ export function HomePage() {
   const homeState = useHomeMetrics();
   const intentsState = useIntentsPaged(intentsPage);
   const threatsListState = useThreatsListPaged(threatsPage);
-  const { data: topThreats } = useTopThreats();
+  const { data: topThreats, error: topThreatsError } = useTopThreats();
   const seriesState = useSeries(series);
   const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
 
@@ -96,7 +105,7 @@ export function HomePage() {
       key: "initiator",
       label: "Initiator",
       render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{resolveDisplayName(resolve, r.initiator)}</span>
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(resolveDisplayName(resolve, r.initiator))}</span>
       ),
     },
     {
@@ -160,6 +169,21 @@ export function HomePage() {
 
   const threatsListCols: DataTableColumn<ThreatListItem>[] = [
     {
+      key: "title",
+      label: "Title",
+      render: (r) => (
+        <span style={{ fontSize: 13, color: r.threatTitle ? "var(--fg)" : "var(--fg-faint)", fontWeight: r.threatTitle ? 600 : 400 }}>
+          {r.threatTitle ? capitalizeFirst(r.threatTitle) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "severity",
+      label: "Severity",
+      // /threats-list carries no threat_code, only the title — fall back to matching on that.
+      render: (r) => <SeverityPill severity={getThreatSeverity(undefined, r.threatTitle)} />,
+    },
+    {
       key: "message",
       label: "Message",
       width: 260,
@@ -181,7 +205,7 @@ export function HomePage() {
             textOverflow: "ellipsis",
           }}
         >
-          {r.message}
+          {capitalizeFirst(r.message)}
         </span>
       ),
     },
@@ -189,7 +213,7 @@ export function HomePage() {
       key: "initiator",
       label: "Initiator",
       render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{resolveDisplayName(resolve, r.initiator)}</span>
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(resolveDisplayName(resolve, r.initiator))}</span>
       ),
     },
     {
@@ -199,7 +223,7 @@ export function HomePage() {
         r.initiator.id === r.target.id ? (
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-faint)" }}>—</span>
         ) : (
-          <span style={{ fontSize: 13, color: "var(--fg-dim)" }}>{resolveDisplayName(resolve, r.target)}</span>
+          <span style={{ fontSize: 13, color: "var(--fg-dim)" }}>{capitalizeFirst(resolveDisplayName(resolve, r.target))}</span>
         ),
     },
     {
@@ -214,7 +238,7 @@ export function HomePage() {
       label: "Time",
       align: "right",
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>{timeAgo(r.time)}</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>{capitalizeFirst(timeAgo(r.time))}</span>
       ),
     },
     {
@@ -418,20 +442,27 @@ export function HomePage() {
             </>
           ) : (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 110px 90px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)", marginTop: 8 }}>
-                {["#", "THREAT", "CODE", "COUNT"].map((h, i) => (
+              <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 90px 70px 70px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)", marginTop: 8 }}>
+                {["#", "THREAT", "SEVERITY", "CODE", "COUNT"].map((h, i) => (
                   <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
               </div>
-              {topThreats.length === 0 && (
+              {topThreatsError ? (
+                <div style={{ padding: 28, color: "var(--threat)", fontSize: 13, textAlign: "center" }}>
+                  Failed to load top threats — {topThreatsError.message}
+                </div>
+              ) : topThreats.length === 0 && (
                 <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>No threats detected</div>
               )}
-              {topThreats.map((t, i) => (
-                <div key={t.threatCode} style={{ display: "grid", gridTemplateColumns: "44px 1fr 110px 90px", alignItems: "center", padding: "10px 20px", borderBottom: "1px solid var(--line)" }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, background: i === 0 ? "#0a2240" : "var(--bg-3)", color: i === 0 ? "#fff" : "var(--fg-muted)" }}>
+              {!topThreatsError && topThreats.map((t, i) => (
+                <div key={t.threatCode} style={{ display: "grid", gridTemplateColumns: "32px 1fr 90px 70px 70px", alignItems: "center", padding: "10px 20px", borderBottom: "1px solid var(--line)" }}>
+                  <div style={{ width: 24, height: 24, borderRadius: 7, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 700, background: i === 0 ? "#0a2240" : "var(--bg-3)", color: i === 0 ? "#fff" : "var(--fg-muted)" }}>
                     {String(i + 1).padStart(2, "0")}
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.title}</div>
+                  <div style={{ textAlign: "right" }}>
+                    <SeverityPill severity={getThreatSeverity(t.threatCode, t.title)} />
+                  </div>
                   <div style={{ textAlign: "right" }}>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", background: "var(--bg-2)", padding: "2px 8px", borderRadius: 4 }}>
                       {t.threatCode}
@@ -619,13 +650,16 @@ export function HomePage() {
             columns={intentCols}
             onRowClick={(r) => navigate(`/intents/${r.id}`)}
             emptyText="No intents yet"
+            rowStyle={(r) => (r.threats > 0 ? THREAT_ROW_STYLE : undefined)}
           />
         ) : (
           <DataTable
             rows={threatsList}
             columns={threatsListCols}
             onRowClick={(r) => openDrawer("interaction", threatToInteraction(r))}
-            emptyText="No threats detected"
+            emptyText={threatsListState.error ? `Failed to load threats — ${threatsListState.error.message}` : "No threats detected"}
+            // Every row here is a threat by definition.
+            rowStyle={() => THREAT_ROW_STYLE}
           />
         )}
       </div>
@@ -655,15 +689,15 @@ export function HomePage() {
                 wordBreak: "break-word",
               }}
             >
-              {threatMessage.message}
+              {capitalizeFirst(threatMessage.message)}
             </div>
             <div className="kv" style={{ fontSize: 12.5 }}>
               <div className="k">Initiator</div>
-              <div className="v">{resolveDisplayName(resolve, threatMessage.initiator)}</div>
+              <div className="v">{capitalizeFirst(resolveDisplayName(resolve, threatMessage.initiator))}</div>
               {threatMessage.initiator.id !== threatMessage.target.id && (
                 <>
                   <div className="k">Interacted with</div>
-                  <div className="v">{resolveDisplayName(resolve, threatMessage.target)}</div>
+                  <div className="v">{capitalizeFirst(resolveDisplayName(resolve, threatMessage.target))}</div>
                 </>
               )}
               <div className="k">Intent</div>
@@ -671,7 +705,7 @@ export function HomePage() {
                 <IntentIdChip id={threatMessage.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }} />
               </div>
               <div className="k">Time</div>
-              <div className="v">{timeAgo(threatMessage.time)}</div>
+              <div className="v">{capitalizeFirst(timeAgo(threatMessage.time))}</div>
             </div>
           </div>
         )}

@@ -14,7 +14,7 @@ export interface LoginResponse {
 }
 
 export function login(email: string, password: string): Promise<LoginResponse> {
-  return apiRequest<LoginResponse>("/login", {
+  return apiRequest<LoginResponse>("agent-admin/v1/login", {
     method: "POST",
     body: { email, password },
     auth: false,
@@ -26,9 +26,12 @@ export function login(email: string, password: string): Promise<LoginResponse> {
 //   POST /login           → { status, message, data: <jwt string> }
 //   POST /register-admin  → { status, message, data: null }  (message = DID)
 
+// No localhost fallback on purpose — same reasoning as BASE in client.ts: a
+// deployed build with a missing VITE_ADMIN_API_BASE_URL should fail loudly
+// (see the guard in adminFetch below), not silently point at whoever's
+// machine happens to be running the browser.
 const ADMIN_BASE = (
-  (import.meta.env.VITE_ADMIN_API_BASE_URL as string | undefined) ||
-  "http://localhost:8000/agent-admin/v1"
+  (import.meta.env.VITE_ADMIN_API_BASE_URL as string | undefined) || ""
 ).replace(/\/$/, "");
 
 interface AdminRawResponse {
@@ -38,6 +41,12 @@ interface AdminRawResponse {
 }
 
 async function adminFetch(path: string, body: unknown): Promise<AdminRawResponse> {
+  if (!ADMIN_BASE) {
+    throw new ApiError(
+      "Admin API base URL is not configured (VITE_ADMIN_API_BASE_URL is missing) — nothing to send this request to.",
+      0,
+    );
+  }
   const res = await fetch(`${ADMIN_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

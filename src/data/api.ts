@@ -3,6 +3,7 @@
 
 import { apiRequest } from "../api/client";
 import { isDummyMode } from "./dummyRouter";
+import { getDirectorySnapshot } from "./directoryCache";
 import dummy from "./dummy.json";
 import type {
   Agent,
@@ -35,11 +36,21 @@ function shortDid(did: string): string {
 /**
  * Interactions carry no explicit participant-type field from the backend
  * (mapInteraction always stubs `targetType: "agent"`), so this DID-shape
- * heuristic — already used elsewhere to split agents from tools — is the
- * only reliable way to tell them apart client-side.
+ * heuristic was the fallback for telling them apart client-side. It doesn't
+ * actually work in production, though — real tool/app DIDs use the same
+ * "bafy…" CID format as agent DIDs, so it silently misclassified real tools
+ * (e.g. a "Github MCP" app) as agents. Kept only as a last resort for a DID
+ * the org directory hasn't resolved at all.
  */
 function isAgentId(id: string): boolean {
   return id.trim().toLowerCase().startsWith("bafy");
+}
+
+/** Agent-vs-tool classification for one DID, directory-first. */
+function classifyParticipant(id: string): "agent" | "tool" {
+  const hit = getDirectorySnapshot().get(id);
+  if (hit) return hit.kind === "tool" ? "tool" : "agent";
+  return isAgentId(id) ? "agent" : "tool";
 }
 
 interface ApiInteraction {
@@ -232,12 +243,11 @@ interface ApiTopThreat {
 }
 
 export async function fetchTopThreats(): Promise<TopThreat[]> {
-  try {
-    const res = await apiRequest<ApiTopThreat[]>("/top-threats");
-    return (res || []).map((t) => ({ threatCode: t.threat_code, title: t.title, count: t.count }));
-  } catch {
-    return [];
-  }
+  // No try/catch — let a real failure propagate to useAsync's `.error` so the
+  // UI can tell "the request failed" apart from "there are genuinely no
+  // threats", instead of both looking like a silent empty list.
+  const res = await apiRequest<ApiTopThreat[]>("/top-threats");
+  return (res || []).map((t) => ({ threatCode: t.threat_code, title: t.title, count: t.count }));
 }
 
 export interface ThreatDetail {
@@ -330,6 +340,7 @@ export interface ThreatListItem {
   target: EntityRef;
   type: string;
   threatID: string;
+  threatTitle: string;
   message: string;
   /** Minutes ago. */
   time: number;
@@ -345,6 +356,7 @@ interface ApiThreatListItem {
   direction?: string;
   threat: boolean;
   threatID: string;
+  threatTitle?: string;
   intentID: string;
   time: string;
   message: string;
@@ -359,6 +371,7 @@ function mapThreatListItem(t: ApiThreatListItem): ThreatListItem {
     target: { id: t.to, name: t.toName?.trim() || shortDid(t.to) },
     type: t.type,
     threatID: t.threatID,
+    threatTitle: t.threatTitle?.trim() || "",
     message: t.message,
     time: isoToMinutesAgo(t.time),
   };
@@ -381,18 +394,15 @@ interface ApiPagedThreatsList {
 }
 
 export async function fetchThreatsList(page = 1): Promise<PagedThreatsList> {
-  try {
-    const res = await apiRequest<ApiPagedThreatsList>("/threats-list", { query: { page } });
-    return {
-      items: (res.threatsList || []).map(mapThreatListItem),
-      total: res.total || 0,
-      page: res.page || page,
-      pageSize: res.pageSize || 10,
-      totalPages: res.totalPages || 1,
-    };
-  } catch {
-    return { items: [], total: 0, page, pageSize: 10, totalPages: 1 };
-  }
+  // No try/catch here either, for the same reason as fetchTopThreats above.
+  const res = await apiRequest<ApiPagedThreatsList>("/threats-list", { query: { page } });
+  return {
+    items: (res.threatsList || []).map(mapThreatListItem),
+    total: res.total || 0,
+    page: res.page || page,
+    pageSize: res.pageSize || 10,
+    totalPages: res.totalPages || 1,
+  };
 }
 
 interface ApiAgent {
@@ -557,6 +567,8 @@ interface ApiIntent {
   /** Distinct tools touched by this intent. */
   toolsCount?: number;
   provenanceRecordID?: string;
+  /** Human review state — separate from `status` (the pipeline state). Defaults to "Ongoing" server-side. */
+  reviewStatus?: string;
 }
 
 interface PagedIntents {
@@ -582,6 +594,10 @@ function stubAgent(did: string, name?: string): Agent {
   };
 }
 
+function toReviewStatus(s: string | undefined): Intent["reviewStatus"] {
+  return s === "Acknowledged" || s === "Flagged" ? s : "Ongoing";
+}
+
 function mapIntent(i: ApiIntent): Intent {
   // Runtime is the gap between startedAt and endedAt (if ended), in ms.
   let runtime = 0;
@@ -605,12 +621,30 @@ function mapIntent(i: ApiIntent): Intent {
     score: 0,
     status: i.threatDetected ? "threat" : "safe",
     provenanceRecordID: i.provenanceRecordID ?? "",
+    reviewStatus: toReviewStatus(i.reviewStatus),
   };
 }
 
 export async function fetchIntents(page = 1): Promise<Intent[]> {
   const res = await apiRequest<PagedIntents>("/intent-list", { query: { page } });
   return (res.intentsList || []).map(mapIntent);
+}
+
+interface ApiUpdateIntentStatusResult {
+  intentID: string;
+  reviewStatus: string;
+}
+
+/** POST /update-intent-status. Not enforced one-directional server-side — any of the three values can be set at any time. */
+export async function updateIntentStatus(
+  intentID: string,
+  status: Intent["reviewStatus"],
+): Promise<{ intentID: string; reviewStatus: Intent["reviewStatus"] }> {
+  const res = await apiRequest<ApiUpdateIntentStatusResult>("/update-intent-status", {
+    method: "POST",
+    body: { intentID, status },
+  });
+  return { intentID: res.intentID, reviewStatus: toReviewStatus(res.reviewStatus) };
 }
 
 export interface PagedIntentsResult {
@@ -775,6 +809,7 @@ interface ApiIntentInfo {
   status: string;
   threatDetected: boolean;
   provenanceRecordID?: string;
+  reviewStatus?: string;
   interactions?: ApiInteraction[];
 }
 
@@ -809,11 +844,11 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     const fromId = ix.initiator.id.trim().toLowerCase();
     const toId = ix.target.id.trim().toLowerCase();
     if (fromId && fromId !== initiatorDID) {
-      if (isAgentId(fromId)) agentDids.add(ix.initiator.id);
+      if (classifyParticipant(ix.initiator.id) === "agent") agentDids.add(ix.initiator.id);
       else toolDids.add(ix.initiator.id);
     }
     if (toId && toId !== initiatorDID) {
-      if (isAgentId(toId)) agentDids.add(ix.target.id);
+      if (classifyParticipant(ix.target.id) === "agent") agentDids.add(ix.target.id);
       else toolDids.add(ix.target.id);
     }
   }
@@ -830,6 +865,7 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     toolsCount: toolDids.size,
     interactionsCount: firstPage.total,
     provenanceRecordID: r.provenanceRecordID ?? "",
+    reviewStatus: r.reviewStatus,
   });
 }
 
@@ -864,8 +900,8 @@ async function enrichIntentApps(intent: Intent): Promise<Intent> {
     const firstPage = await fetchIntentInteractionsPaged(intent.id, 1);
     const apps = new Map<string, { id: string; name: string }>();
     for (const ix of firstPage.interactions) {
-      if (!isAgentId(ix.initiator.id)) apps.set(ix.initiator.id, ix.initiator);
-      if (!isAgentId(ix.target.id)) apps.set(ix.target.id, ix.target);
+      if (classifyParticipant(ix.initiator.id) === "tool") apps.set(ix.initiator.id, ix.initiator);
+      if (classifyParticipant(ix.target.id) === "tool") apps.set(ix.target.id, ix.target);
     }
     return { ...intent, interactionsCount: firstPage.total, appsInteracted: Array.from(apps.values()) };
   } catch {
@@ -1304,6 +1340,7 @@ function mapToolIntent(i: ApiToolIntent): Intent {
     score: i.threatDetected ? 0 : 100,
     status: (i.status as Agent["status"]) || "safe",
     provenanceRecordID: "",
+    reviewStatus: "Ongoing",
   };
 }
 
@@ -1327,6 +1364,7 @@ interface ApiUserIntent {
   executor?: string;
   firstInteractionAt?: string | null;
   lastInteractionAt?: string | null;
+  reviewStatus?: string;
 }
 
 function mapUserIntent(i: ApiUserIntent): Intent {
@@ -1343,6 +1381,7 @@ function mapUserIntent(i: ApiUserIntent): Intent {
     score: i.threatDetected ? 0 : 100,
     status: (i.status as Agent["status"]) || "safe",
     provenanceRecordID: "",
+    reviewStatus: toReviewStatus(i.reviewStatus),
   };
 }
 

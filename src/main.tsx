@@ -23,6 +23,7 @@ import { TweaksProvider } from "./context/TweaksContext";
 import { AuthProvider } from "./context/AuthContext";
 import { DirectoryProvider } from "./context/DirectoryContext";
 import { IntentNumbersProvider } from "./context/IntentNumbersContext";
+import { IntentReviewProvider } from "./context/IntentReviewContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 createRoot(document.getElementById("root")!).render(
@@ -31,6 +32,7 @@ createRoot(document.getElementById("root")!).render(
       <AuthProvider>
         <DirectoryProvider>
         <IntentNumbersProvider>
+        <IntentReviewProvider>
         <TweaksProvider>
           <DrawerProvider>
             <Routes>
@@ -62,6 +64,7 @@ createRoot(document.getElementById("root")!).render(
             </Routes>
           </DrawerProvider>
         </TweaksProvider>
+        </IntentReviewProvider>
         </IntentNumbersProvider>
         </DirectoryProvider>
       </AuthProvider>

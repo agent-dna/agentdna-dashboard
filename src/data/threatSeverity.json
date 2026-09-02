@@ -1,0 +1,33 @@
+[ 
+  
+  
+  
+  { "code": 2001, "title": "COCA Verification Failed (Light)", "severity": null },
+  { "code": 2003, "title": "COCA Verification Failed (Boundary)", "severity": null },
+
+
+  { "code": 3001, "title": "Guard: Intended Action Empty", "severity": null },
+  { "code": 3002, "title": "Guard: Policy Lookup Failed", "severity": null },
+  { "code": 3003, "title": "Guard: No Policy Available", "severity": null },
+  { "code": 3004, "title": "Guard: Policy Index Failed", "severity": null },
+  { "code": 3005, "title": "Guard: Policy No Content", "severity": null },
+
+  { "code": 3101, "title": "Check 1: Drift Deny", "severity": null },
+
+  { "code": 3201, "title": "Tier 1: Gap Allow", "severity": null },
+  { "code": 3202, "title": "Tier 1: Gap Deny", "severity": null },
+
+  { "code": 3301, "title": "Tier 2: No Allowed Chunks", "severity": null },
+  { "code": 3302, "title": "Tier 2: Entailment Allow", "severity": null },
+  { "code": 3303, "title": "Tier 2: Contradiction Deny", "severity": null },
+
+  { "code": 3401, "title": "Tier 3: No Backend Advise", "severity": null },
+  { "code": 3402, "title": "Tier 3: LLM Error Advise", "severity": null },
+  { "code": 3403, "title": "Tier 3: LLM Keyword Deny", "severity": null },
+  { "code": 3404, "title": "Tier 3: LLM Keyword Allow", "severity": null },
+  { "code": 3405, "title": "Tier 3: LLM Inconclusive Advise", "severity": null },
+  { "code": 3406, "title": "Tier 3: LLM Allow", "severity": null },
+  { "code": 3407, "title": "Tier 3: LLM Deny", "severity": null },
+  { "code": 3408, "title": "Tier 3: LLM Advise", "severity": null },
+  { "code": 3409, "title": "Tier 3: LLM Malformed Advise", "severity": null }
+]

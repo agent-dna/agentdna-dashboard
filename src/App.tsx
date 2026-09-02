@@ -12,6 +12,7 @@ import { SearchDropdown } from "./components/SearchDropdown";
 import { useDrawer } from "./context/DrawerContext";
 import { useTweaks } from "./context/TweaksContext";
 import { useAuth } from "./context/AuthContext";
+import { useIntentReview } from "./context/IntentReviewContext";
 import { listAgentCreationRequests, listAccessRequestsForOrg } from "./api/requests";
 import { fetchSearch, type SearchResults } from "./data/api";
 import type { Agent, Tool, Intent, Interaction } from "./types";
@@ -28,6 +29,7 @@ export function App() {
   const { drawer, closeDrawer } = useDrawer();
   const { user, logout } = useAuth();
   const location = useLocation();
+  const { unacknowledgedCount } = useIntentReview();
   const [pendingCount, setPendingCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
@@ -62,7 +64,7 @@ export function App() {
 
   const NAV_WORKSPACE: NavEntry[] = [
     { to: "/dashboard", label: "Home", icon: "home" },
-    { to: "/intents", label: "Intents", icon: "intents" },
+    { to: "/intents", label: "Intents", icon: "intents", badge: unacknowledgedCount > 0 ? unacknowledgedCount : undefined },
     { to: "/agents", label: "Agents & Apps", icon: "agents" },
     { to: "/requests", label: "Requests", icon: "box", badge: pendingCount > 0 ? pendingCount : undefined },
     { to: "/interactions", label: "Interactions", icon: "interactions" },

@@ -515,6 +515,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 
 .cell-name {
   display: flex; align-items: center; gap: 10px;
+  min-width: 0;
 }
 .cell-name .av {
   width: 28px; height: 28px;
@@ -533,7 +534,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .cell-name .av.a3 { background: linear-gradient(135deg, rgba(14,165,233,0.14), rgba(14,165,233,0.03)); color: var(--accent-3); border-color: rgba(14,165,233,0.18); }
 .cell-name .av.a4 { background: linear-gradient(135deg, rgba(217,119,6,0.12), rgba(217,119,6,0.03)); color: var(--warn); border-color: rgba(217,119,6,0.18); }
 .cell-name .av.a5 { background: linear-gradient(135deg, rgba(5,150,105,0.12), rgba(5,150,105,0.03)); color: var(--safe); border-color: rgba(5,150,105,0.18); }
-.cell-name .nm { line-height: 1.25; color: var(--fg); font-weight: 600; font-size: 13.5px; }
+.cell-name .nm { line-height: 1.25; color: var(--fg); font-weight: 600; font-size: 13.5px; min-width: 0; overflow-wrap: anywhere; }
 .cell-name .nm .sub { color: var(--fg-muted); font-size: 12px; font-weight: 500; margin-top: 1px; }
 
 .score-bar {
@@ -661,7 +662,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   display: grid; place-items: center;
 }
 .drawer-head .close:hover { color: var(--fg); background: var(--bg-2); }
-.drawer-body { padding: 22px 24px; overflow: auto; flex: 1; }
+.drawer-body { padding: 22px 24px; overflow-y: auto; overflow-x: hidden; flex: 1; }
 .drawer-section { margin-bottom: 24px; }
 .drawer-section .title {
   font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
@@ -671,17 +672,20 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 }
 .kv {
   display: grid;
-  grid-template-columns: 130px 1fr;
+  /* minmax(0, 1fr), not bare 1fr — a grid track otherwise won't shrink below
+     its content's intrinsic width (e.g. an unbroken hash/DID), which is what
+     was forcing the drawer to scroll horizontally. */
+  grid-template-columns: 130px minmax(0, 1fr);
   gap: 10px 14px;
   font-size: 13px;
 }
-.kv .k { color: var(--fg-muted); }
-.kv .v { color: var(--fg); font-family: var(--font-mono); font-size: 12.5px; }
+.kv .k { color: var(--fg-muted); min-width: 0; }
+.kv .v { color: var(--fg); font-family: var(--font-mono); font-size: 12.5px; min-width: 0; overflow-wrap: anywhere; }
 
 .timeline { display: flex; flex-direction: column; gap: 12px; }
 .tl-item {
   display: grid;
-  grid-template-columns: 16px 1fr auto;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: flex-start;
   position: relative;
@@ -702,8 +706,9 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   background: var(--line-strong);
 }
 .tl-item:last-child .line { display: none; }
+.tl-item .body { min-width: 0; }
 .tl-item .body .nm { font-size: 13px; color: var(--fg); margin-bottom: 2px; }
-.tl-item .body .desc { font-size: 12px; color: var(--fg-muted); font-family: var(--font-mono); }
+.tl-item .body .desc { font-size: 12px; color: var(--fg-muted); font-family: var(--font-mono); overflow-wrap: anywhere; }
 .tl-item .ts { font-size: 11px; font-family: var(--font-mono); color: var(--fg-faint); }
 
 /* ============ Chart styles ============ */

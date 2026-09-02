@@ -48,7 +48,11 @@ export interface Intent {
   signature?: string;
   /** Distinct apps/tools this intent's interactions touched. Only populated where explicitly computed (e.g. an agent's own intents list). */
   appsInteracted?: EntityRef[];
+  /** Human review state — separate from the pipeline `status` field. Defaults to "Ongoing" server-side. */
+  reviewStatus: IntentReviewStatus;
 }
+
+export type IntentReviewStatus = "Ongoing" | "Acknowledged" | "Flagged";
 
 export type EntityRef = Pick<Agent | Tool, "id" | "name">;
 
