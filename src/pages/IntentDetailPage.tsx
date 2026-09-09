@@ -14,7 +14,7 @@ import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useThreat
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { useIntentReview } from "../context/IntentReviewContext";
-import { timeAgo } from "../lib/format";
+import { timeAgo, titleOrUnknown } from "../lib/format";
 import { LedgerTable } from "../components/LedgerTable";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
 import { updateIntentStatus } from "../data/api";
@@ -81,7 +81,7 @@ export function IntentDetailPage() {
   const interactionsTotalPages = interactionsPaged.totalPages;
   const { data: participants } = useIntentParticipants(intentId);
   const firstThreatID = interactions.find((i) => i.threat && i.threatID)?.threatID;
-  const { data: threatSummary, loading: threatSummaryLoading } = useThreatByID(firstThreatID);
+  const { data: threatSummary, loading: threatSummaryLoading, error: threatSummaryError } = useThreatByID(firstThreatID);
   if (loading) {
     return (
       <div className="page">
@@ -416,7 +416,7 @@ export function IntentDetailPage() {
                 <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Loading threat details…</span>
               ) : threatSummary ? (
                 <>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--threat)" }}>{threatSummary.title}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--threat)" }}>{titleOrUnknown(threatSummary.title)}</span>
                   <span style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--fg-muted)", marginLeft: 8 }}>
                     code {threatSummary.threatCode}
                   </span>
@@ -432,6 +432,8 @@ export function IntentDetailPage() {
               ) : (
                 <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
                   {threatCount} threat{threatCount === 1 ? "" : "s"} detected in this intent
+                  {!firstThreatID && " (no threatID on the first threat interaction)"}
+                  {threatSummaryError && ` (failed to load details: ${threatSummaryError.message})`}
                 </span>
               )}
             </div>

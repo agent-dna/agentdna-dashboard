@@ -14,7 +14,7 @@ export interface LoginResponse {
 }
 
 export function login(email: string, password: string): Promise<LoginResponse> {
-  return apiRequest<LoginResponse>("agent-admin/v1/login", {
+  return apiRequest<LoginResponse>("/login", {
     method: "POST",
     body: { email, password },
     auth: false,
@@ -26,13 +26,11 @@ export function login(email: string, password: string): Promise<LoginResponse> {
 //   POST /login           → { status, message, data: <jwt string> }
 //   POST /register-admin  → { status, message, data: null }  (message = DID)
 
-// No localhost fallback on purpose — same reasoning as BASE in client.ts: a
-// deployed build with a missing VITE_ADMIN_API_BASE_URL should fail loudly
-// (see the guard in adminFetch below), not silently point at whoever's
-// machine happens to be running the browser.
-const ADMIN_BASE = (
-  (import.meta.env.VITE_ADMIN_API_BASE_URL as string | undefined) || ""
-).replace(/\/$/, "");
+// No localhost fallback here on purpose — same rationale as client.ts's BASE:
+// a deployed build with a missing/misconfigured VITE_ADMIN_API_BASE_URL should
+// fail loudly (see the guard in adminFetch below), not silently start firing
+// requests at whoever's machine happens to be running it.
+const ADMIN_BASE = ((import.meta.env.VITE_ADMIN_API_BASE_URL as string | undefined) || "").replace(/\/$/, "");
 
 interface AdminRawResponse {
   status: boolean;

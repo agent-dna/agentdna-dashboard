@@ -14,9 +14,9 @@ import { useResolveName, resolveDisplayName } from "../context/DirectoryContext"
 import { useDrawer } from "../context/DrawerContext";
 import { ThreatPill } from "../components/ThreatPill";
 import { SeverityPill } from "../components/SeverityPill";
-import { getThreatSeverity } from "../lib/threatSeverity";
-import { timeAgo, capitalizeFirst } from "../lib/format";
-import type { Intent, Interaction } from "../types";
+import { getThreatSeverity, type ThreatSeverity } from "../lib/threatSeverity";
+import { timeAgo, capitalizeFirst, titleOrUnknown } from "../lib/format";
+import type { Intent, Interaction, IntentReviewStatus } from "../types";
 import type { ThreatListItem } from "../data/api";
 import type { CSSProperties } from "react";
 
@@ -25,6 +25,54 @@ const THREAT_ROW_STYLE: CSSProperties = {
   background: "rgba(220,38,38,0.045)",
   boxShadow: "inset 3px 0 0 var(--threat)",
 };
+
+// Matches the pill styling used on the main Intents page (IntentsPage.tsx) so
+// review status looks identical everywhere it's shown.
+const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
+  Ongoing: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
+  Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
+  Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
+};
+
+const REVIEW_STATUS_OPTIONS: IntentReviewStatus[] = ["Flagged", "Ongoing", "Acknowledged"];
+const SEVERITY_OPTIONS: ThreatSeverity[] = ["Critical", "High", "Medium", "Low"];
+
+/** Plain `<select>` styled to sit in a `.tb-toolbar`, used for the Status/Severity table filters below. */
+function FilterSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: T | "all";
+  onChange: (v: T | "all") => void;
+  options: T[];
+  placeholder: string;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as T | "all")}
+      style={{
+        fontSize: 12.5,
+        fontWeight: 600,
+        padding: "6px 10px",
+        borderRadius: 8,
+        border: "1px solid var(--line)",
+        background: "var(--surface)",
+        color: "var(--fg)",
+        cursor: "pointer",
+      }}
+    >
+      <option value="all">{placeholder}</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 /**
  * A threats-list row is already interaction-shaped — convert it so the
@@ -61,6 +109,9 @@ export function HomePage() {
   const [volumeTab, setVolumeTab] = useState<"agents" | "apps">("agents");
   const [chartTab, setChartTab] = useState<"graph" | "threats">("graph");
   const [threatMessage, setThreatMessage] = useState<ThreatListItem | null>(null);
+  const [intentStatusFilter, setIntentStatusFilter] = useState<IntentReviewStatus | "all">("all");
+  const [threatStatusFilter, setThreatStatusFilter] = useState<IntentReviewStatus | "all">("all");
+  const [threatSeverityFilter, setThreatSeverityFilter] = useState<ThreatSeverity | "all">("all");
 
   const homeState = useHomeMetrics();
   const intentsState = useIntentsPaged(intentsPage);
@@ -76,6 +127,23 @@ export function HomePage() {
   const threatsList = threatsListState.data.items;
   const threatsListTotal = threatsListState.data.total;
   const threatsListTotalPages = threatsListState.data.totalPages;
+
+  // Client-side filters over the currently loaded page — the backend has no
+  // filter query params for these endpoints yet, so this filters what's on
+  // screen rather than re-querying the server.
+  const filteredIntents = useMemo(
+    () => (intentStatusFilter === "all" ? intents : intents.filter((i) => i.reviewStatus === intentStatusFilter)),
+    [intents, intentStatusFilter],
+  );
+  const filteredThreatsList = useMemo(
+    () =>
+      threatsList.filter(
+        (t) =>
+          (threatStatusFilter === "all" || t.reviewStatus === threatStatusFilter) &&
+          (threatSeverityFilter === "all" || getThreatSeverity(t.threatCode) === threatSeverityFilter),
+      ),
+    [threatsList, threatStatusFilter, threatSeverityFilter],
+  );
   const data = seriesState.data;
 
   // Actual calendar dates for the trailing window, oldest → newest, matching the
@@ -139,6 +207,24 @@ export function HomePage() {
       render: (r) => <ThreatPill threat={r.threats > 0} />,
     },
     {
+      key: "reviewStatus",
+      label: "Status",
+      render: (r) => (
+        <span
+          style={{
+            fontSize: 11.5,
+            fontWeight: 700,
+            padding: "3px 9px",
+            borderRadius: 999,
+            color: REVIEW_STATUS_STYLE[r.reviewStatus].color,
+            background: REVIEW_STATUS_STYLE[r.reviewStatus].bg,
+          }}
+        >
+          {r.reviewStatus}
+        </span>
+      ),
+    },
+    {
       key: "time",
       label: "Time",
       align: "right",
@@ -169,19 +255,25 @@ export function HomePage() {
 
   const threatsListCols: DataTableColumn<ThreatListItem>[] = [
     {
+      key: "intent",
+      label: "Intent",
+      render: (r) => (
+        <IntentIdChip id={r.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--fg)" }} />
+      ),
+    },
+    {
       key: "title",
       label: "Title",
       render: (r) => (
-        <span style={{ fontSize: 13, color: r.threatTitle ? "var(--fg)" : "var(--fg-faint)", fontWeight: r.threatTitle ? 600 : 400 }}>
-          {r.threatTitle ? capitalizeFirst(r.threatTitle) : "—"}
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>
+          {capitalizeFirst(titleOrUnknown(r.threatTitle))}
         </span>
       ),
     },
     {
       key: "severity",
       label: "Severity",
-      // /threats-list carries no threat_code, only the title — fall back to matching on that.
-      render: (r) => <SeverityPill severity={getThreatSeverity(undefined, r.threatTitle)} />,
+      render: (r) => <SeverityPill severity={getThreatSeverity(r.threatCode)} />,
     },
     {
       key: "message",
@@ -210,27 +302,21 @@ export function HomePage() {
       ),
     },
     {
-      key: "initiator",
-      label: "Initiator",
+      key: "reviewStatus",
+      label: "Status",
       render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(resolveDisplayName(resolve, r.initiator))}</span>
-      ),
-    },
-    {
-      key: "target",
-      label: "Interacted with",
-      render: (r) =>
-        r.initiator.id === r.target.id ? (
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-faint)" }}>—</span>
-        ) : (
-          <span style={{ fontSize: 13, color: "var(--fg-dim)" }}>{capitalizeFirst(resolveDisplayName(resolve, r.target))}</span>
-        ),
-    },
-    {
-      key: "intent",
-      label: "Intent",
-      render: (r) => (
-        <IntentIdChip id={r.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--fg)" }} />
+        <span
+          style={{
+            fontSize: 11.5,
+            fontWeight: 700,
+            padding: "3px 9px",
+            borderRadius: 999,
+            color: REVIEW_STATUS_STYLE[r.reviewStatus].color,
+            background: REVIEW_STATUS_STYLE[r.reviewStatus].bg,
+          }}
+        >
+          {r.reviewStatus}
+        </span>
       ),
     },
     {
@@ -385,35 +471,56 @@ export function HomePage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr", gap: 16, marginBottom: 20 }}>
-        <div className="card">
+        <div
+          className="card"
+          style={
+            chartTab === "threats"
+              ? {
+                  background: "rgba(220,38,38,0.055)",
+                  border: "1px solid rgba(220,38,38,0.22)",
+                }
+              : undefined
+          }
+        >
           <div className="card-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <h3>{chartTab === "graph" ? "Interactions over time" : "Top 5 threats"}</h3>
-              <div className="sub">
-                {chartTab === "graph" ? "Safe vs threat-classified runs · Last 7 days" : "By volume, most frequent codes"}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              {chartTab === "threats" && (
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1 }}>
+                  <Icon name="shield" size={15} style={{ color: "var(--threat)" }} />
+                </div>
+              )}
+              <div>
+                <h3>{chartTab === "graph" ? "Interactions over time" : "Top 5 threats by volume"}</h3>
+                <div className="sub">
+                  {chartTab === "graph" ? "Safe vs threat-classified runs · Last 7 days" : "By volume, most frequent codes"}
+                </div>
               </div>
             </div>
-            <div style={{ display: "flex", background: "var(--bg-3)", borderRadius: 6, padding: 2 }}>
-              {([{ key: "graph", label: "Graph" }, { key: "threats", label: "Threats" }] as const).map((t) => (
-                <button
-                  key={t.key}
-                  onClick={() => setChartTab(t.key)}
-                  style={{
-                    background: chartTab === t.key ? "var(--surface)" : "transparent",
-                    border: "none",
-                    borderRadius: 5,
-                    padding: "4px 10px",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: chartTab === t.key ? "var(--fg)" : "var(--fg-muted)",
-                    cursor: "pointer",
-                    boxShadow: chartTab === t.key ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
-                    transition: "all 120ms",
-                  }}
-                >
-                  {t.label}
-                </button>
-              ))}
+            <div style={{ display: "flex", background: chartTab === "threats" ? "rgba(220,38,38,0.08)" : "var(--bg-3)", borderRadius: 6, padding: 2 }}>
+              {([{ key: "graph", label: "Graph" }, { key: "threats", label: "Threats" }] as const).map((t) => {
+                const active = chartTab === t.key;
+                const redActive = active && t.key === "threats";
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setChartTab(t.key)}
+                    style={{
+                      background: redActive ? "var(--threat)" : active ? "var(--surface)" : "transparent",
+                      border: "none",
+                      borderRadius: 5,
+                      padding: "4px 10px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: redActive ? "#fff" : active ? "var(--fg)" : "var(--fg-muted)",
+                      cursor: "pointer",
+                      boxShadow: active && !redActive ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
+                      transition: "all 120ms",
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -442,7 +549,7 @@ export function HomePage() {
             </>
           ) : (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 90px 70px 70px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)", marginTop: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 90px 70px 70px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(220,38,38,0.18)", marginTop: 8 }}>
                 {["#", "THREAT", "SEVERITY", "CODE", "COUNT"].map((h, i) => (
                   <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
@@ -455,24 +562,58 @@ export function HomePage() {
                 <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>No threats detected</div>
               )}
               {!topThreatsError && topThreats.map((t, i) => (
-                <div key={t.threatCode} style={{ display: "grid", gridTemplateColumns: "32px 1fr 90px 70px 70px", alignItems: "center", padding: "10px 20px", borderBottom: "1px solid var(--line)" }}>
-                  <div style={{ width: 24, height: 24, borderRadius: 7, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 700, background: i === 0 ? "#0a2240" : "var(--bg-3)", color: i === 0 ? "#fff" : "var(--fg-muted)" }}>
+                <div
+                  key={t.threatCode}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "32px 1fr 90px 70px 70px",
+                    alignItems: "center",
+                    padding: "10px 20px",
+                    borderBottom: "1px solid rgba(220,38,38,0.14)",
+                    background: i === 0 ? "rgba(220,38,38,0.09)" : "transparent",
+                    boxShadow: i === 0 ? "inset 3px 0 0 var(--threat)" : "inset 3px 0 0 transparent",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 7,
+                      display: "grid",
+                      placeItems: "center",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      background: i === 0 ? "var(--threat)" : "rgba(220,38,38,0.12)",
+                      color: i === 0 ? "#fff" : "var(--threat)",
+                    }}
+                  >
                     {String(i + 1).padStart(2, "0")}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.title}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titleOrUnknown(t.title)}</div>
                   <div style={{ textAlign: "right" }}>
-                    <SeverityPill severity={getThreatSeverity(t.threatCode, t.title)} />
+                    <SeverityPill severity={getThreatSeverity(t.threatCode)} />
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", background: "var(--bg-2)", padding: "2px 8px", borderRadius: 4 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--threat)", background: "rgba(220,38,38,0.10)", padding: "2px 8px", borderRadius: 4 }}>
                       {t.threatCode}
                     </span>
                   </div>
-                  <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
                     {t.count.toLocaleString()}
                   </div>
                 </div>
               ))}
+              {!topThreatsError && topThreats.length > 0 && (
+                <div style={{ padding: "12px 20px" }}>
+                  <button
+                    onClick={() => setBottomTab("threats")}
+                    style={{ background: "none", border: "none", fontSize: 13, fontWeight: 600, color: "var(--threat)", cursor: "pointer", padding: 0 }}
+                  >
+                    View all threats →
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -638,6 +779,15 @@ export function HomePage() {
             ))}
           </div>
           {bottomTab === "intents" && (
+            <FilterSelect value={intentStatusFilter} onChange={setIntentStatusFilter} options={REVIEW_STATUS_OPTIONS} placeholder="All statuses" />
+          )}
+          {bottomTab === "threats" && (
+            <>
+              <FilterSelect value={threatStatusFilter} onChange={setThreatStatusFilter} options={REVIEW_STATUS_OPTIONS} placeholder="All statuses" />
+              <FilterSelect value={threatSeverityFilter} onChange={setThreatSeverityFilter} options={SEVERITY_OPTIONS} placeholder="All severities" />
+            </>
+          )}
+          {bottomTab === "intents" && (
             <Pagination page={intentsPage} totalPages={intentsTotalPages} total={intentsTotal} pageSize={10} inline onChange={setIntentsPage} />
           )}
           {bottomTab === "threats" && (
@@ -646,18 +796,24 @@ export function HomePage() {
         </div>
         {bottomTab === "intents" ? (
           <DataTable
-            rows={intents}
+            rows={filteredIntents}
             columns={intentCols}
             onRowClick={(r) => navigate(`/intents/${r.id}`)}
-            emptyText="No intents yet"
+            emptyText={intentStatusFilter === "all" ? "No intents yet" : `No ${intentStatusFilter.toLowerCase()} intents on this page`}
             rowStyle={(r) => (r.threats > 0 ? THREAT_ROW_STYLE : undefined)}
           />
         ) : (
           <DataTable
-            rows={threatsList}
+            rows={filteredThreatsList}
             columns={threatsListCols}
             onRowClick={(r) => openDrawer("interaction", threatToInteraction(r))}
-            emptyText={threatsListState.error ? `Failed to load threats — ${threatsListState.error.message}` : "No threats detected"}
+            emptyText={
+              threatsListState.error
+                ? `Failed to load threats — ${threatsListState.error.message}`
+                : threatStatusFilter === "all" && threatSeverityFilter === "all"
+                  ? "No threats detected"
+                  : "No threats match this filter on this page"
+            }
             // Every row here is a threat by definition.
             rowStyle={() => THREAT_ROW_STYLE}
           />

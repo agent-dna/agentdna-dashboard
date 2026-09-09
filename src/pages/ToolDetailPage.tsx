@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
-import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { ScoreBar } from "../components/ScoreBar";
 import { AppIcon } from "../components/AppIcon";
 import { LedgerTable } from "../components/LedgerTable";
 import { Pagination } from "../components/Pagination";
-import { useToolInfo } from "../data/hooks";
+import { useToolInfo, useToolAgentScores } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { Intent } from "../types";
+import type { ToolAgentScore } from "../data/api";
 
-type Tab = "interactions" | "intents";
+type Tab = "interactions" | "intents" | "agents";
 
 export function ToolDetailPage() {
   const { toolId = "" } = useParams<{ toolId: string }>();
@@ -25,6 +25,7 @@ export function ToolDetailPage() {
   const [intentsPage, setIntentsPage] = useState(1);
 
   const { data: result, loading } = useToolInfo(toolId, interactionsPage, intentsPage);
+  const { data: agentScores } = useToolAgentScores(result?.tool.id || toolId);
 
   if (loading) {
     return (
@@ -100,6 +101,34 @@ export function ToolDetailPage() {
     },
   ];
 
+  const agentCols: DataTableColumn<ToolAgentScore>[] = [
+    {
+      key: "agent",
+      label: "Agent Name",
+      render: (r) => <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{r.agentName}</span>,
+    },
+    {
+      key: "trust",
+      label: "Trust Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.trustScore}</span>,
+    },
+    {
+      key: "intentScore",
+      label: "Intent Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.intentScore}</span>,
+    },
+    {
+      key: "hallucinationScore",
+      label: "Hallucination Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.hallucinationScore}</span>,
+    },
+    {
+      key: "policyScore",
+      label: "Policy Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.policyScore}</span>,
+    },
+  ];
+
   return (
     <div className="page">
       {/* Breadcrumb */}
@@ -164,16 +193,19 @@ export function ToolDetailPage() {
 
       {/* Tabbed table */}
       <div className="card">
-        <Tabs
-          active={tab}
-          onChange={(k) => { setTab(k as Tab); }}
-          tabs={[
-            { key: "interactions", label: "Interactions", count: interactionsTotal },
-            { key: "intents", label: "Intents", count: intentsTotal },
-          ]}
-        />
-        <div className="tb-toolbar" style={{ borderTop: "none" }}>
-          <div />
+        <div className="tb-toolbar">
+          <div className="filters">
+            {([{ key: "interactions", label: "Interactions", count: interactionsTotal }, { key: "intents", label: "Intents", count: intentsTotal }, { key: "agents", label: "Agents", count: agentScores.length }] as const).map((t) => (
+              <div
+                key={t.key}
+                className={`tab ${tab === t.key ? "active" : ""}`}
+                onClick={() => setTab(t.key)}
+              >
+                {t.label}
+                <span className="pill">{t.count}</span>
+              </div>
+            ))}
+          </div>
           {tab === "interactions" && (
             <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} inline onChange={setInteractionsPage} />
           )}
@@ -196,6 +228,14 @@ export function ToolDetailPage() {
             columns={intentCols}
             onRowClick={(r) => navigate(`/intents/${r.id}`)}
             emptyText="No intents yet."
+          />
+        )}
+
+        {tab === "agents" && (
+          <DataTable
+            rows={agentScores}
+            columns={agentCols}
+            emptyText="No agents have this app in their toolset yet."
           />
         )}
       </div>

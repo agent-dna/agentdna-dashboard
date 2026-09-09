@@ -115,17 +115,13 @@ export const useAgentInteractions = (id: string) =>
   useAsync<Interaction[]>(() => api.fetchAgentInteractions(id), [], [id]);
 export const useAgentIntents = (id: string) =>
   useAsync<Intent[]>(() => api.fetchAgentIntents(id), [], [id]);
-export const useAgentTools = (id: string, page = 1) =>
-  useAsync<api.PagedAgentTools>(
-    () => api.fetchAgentTools(id, page),
-    { items: [], total: 0, page: 1, pageSize: 10, totalPages: 1 },
-    [id, page],
-  );
-export const useAgentToolInfo = (agentId: string, toolId: string, page = 1) =>
+export const useAgentTools = (id: string) =>
+  useAsync<api.AgentToolLink[]>(() => api.fetchAgentTools(id), [], [id]);
+export const useAgentToolInfo = (agentId: string, toolId: string) =>
   useAsync<api.AgentToolDetail | null>(
-    () => api.fetchAgentToolInfo(agentId, toolId, page),
+    () => api.fetchAgentToolInfo(agentId, toolId),
     null,
-    [agentId, toolId, page],
+    [agentId, toolId],
   );
 export const useIntentInteractions = (id: string) =>
   useAsync<Interaction[]>(() => api.fetchIntentInteractions(id), [], [id]);
@@ -173,3 +169,6 @@ export const useToolInfo = (nameOrDid: string, interactionsPage = 1, intentsPage
     null,
     [nameOrDid, interactionsPage, intentsPage],
   );
+
+export const useToolAgentScores = (toolDID: string) =>
+  useAsync<api.ToolAgentScore[]>(() => api.fetchToolAgentScores(toolDID), [], [toolDID]);

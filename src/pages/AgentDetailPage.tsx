@@ -1,15 +1,14 @@
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { Pagination } from "../components/Pagination";
 import { IdCell } from "../components/EntityCell";
 import { InfoStat } from "../components/InfoStat";
 import { EditAgentPolicyModal } from "../components/forms/EditAgentPolicyModal";
 import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
-import { ViewToolPolicyModal } from "../components/forms/ViewToolPolicyModal";
 import { RevokeAgentModal } from "../components/forms/RevokeAgentModal";
 import { useAgent, useAgentInteractions, useAgentIntents, useAgentTools, useAgentPolicyHistory } from "../data/hooks";
 import type { AgentToolLink } from "../data/api";
@@ -18,13 +17,19 @@ import { useDrawer } from "../context/DrawerContext";
 import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { isDummyMode } from "../data/dummyRouter";
-import { initials, timeAgo } from "../lib/format";
+import { initials, timeAgo, timeAgoLong, capitalizeFirst } from "../lib/format";
 import { LedgerTable } from "../components/LedgerTable";
 import { AppIcon } from "../components/AppIcon";
 import { ThreatPill } from "../components/ThreatPill";
 import type { Intent } from "../types";
 import { fetchAgentPolicyUpdate, type PolicyHistoryEntry, type PolicyUpdate } from "../api/policy";
 import { exportAgentPdf } from "../lib/exportAgentPdf";
+
+/** Reddish tint + left accent for any row that represents/carries a threat — matches the Home page's intent table. */
+const THREAT_ROW_STYLE: CSSProperties = {
+  background: "rgba(220,38,38,0.045)",
+  boxShadow: "inset 3px 0 0 var(--threat)",
+};
 
 type Tab = "interactions" | "intents" | "tools" | "history";
 
@@ -36,11 +41,9 @@ export function AgentDetailPage() {
   const resolve = useResolveName();
   const isAdmin = !!user?.is_admin;
   const [tab, setTab] = useState<Tab>("tools");
-  const [toolsPage, setToolsPage] = useState(1);
   const [policyOpen, setPolicyOpen] = useState(false);
   const [viewPolicyOpen, setViewPolicyOpen] = useState(false);
   const [revokeOpen, setRevokeOpen] = useState(false);
-  const [toolPolicyOpen, setToolPolicyOpen] = useState<AgentToolLink | null>(null);
   // Picked history row (lightweight); full policy gets loaded lazily into `historyPolicy`.
   const [historyOpen, setHistoryOpen] = useState<PolicyHistoryEntry | null>(null);
   const [historyPolicy, setHistoryPolicy] = useState<PolicyUpdate | null>(null);
@@ -51,7 +54,7 @@ export function AgentDetailPage() {
   const { data: agent, loading } = agentState;
   const { data: interactions } = useAgentInteractions(agentId);
   const { data: intents } = useAgentIntents(agentId);
-  const { data: toolsResult } = useAgentTools(agentId, toolsPage);
+  const { data: tools } = useAgentTools(agentId);
   const { data: history } = useAgentPolicyHistory(agentId);
   const openHistoryRevision = (entry: PolicyHistoryEntry) => {
     setHistoryOpen(entry);
@@ -99,21 +102,21 @@ export function AgentDetailPage() {
     );
   }
 
-  // Matches the columns used on the main Intents page (IntentsPage.tsx) so the
-  // same intent looks the same everywhere it's listed.
+  // Matches the columns used on the Home page's intent table so the same
+  // intent looks the same everywhere it's listed.
   const intentCols: DataTableColumn<Intent>[] = [
     {
       key: "id",
       label: "Intent",
       render: (r) => (
-        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }} />
+        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {
       key: "initiator",
       label: "Initiator",
       render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{resolveDisplayName(resolve, r.initiator)}</span>
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(resolveDisplayName(resolve, r.initiator))}</span>
       ),
     },
     {
@@ -194,46 +197,27 @@ export function AgentDetailPage() {
       render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.trustScore}</span>,
     },
     {
-      key: "policy",
-      label: "Policy file",
-      render: (r) => (
-        <button
-          className="btn-mini"
-          onClick={(e) => {
-            e.stopPropagation();
-            setToolPolicyOpen(r);
-          }}
-        >
-          <Icon name="eye" size={12} /> View
-        </button>
-      ),
+      key: "intentScore",
+      label: "Intent Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.intentScore}</span>,
+    },
+    {
+      key: "hallucinationScore",
+      label: "Hallucination Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.hallucinationScore}</span>,
+    },
+    {
+      key: "policyScore",
+      label: "Policy Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.policyScore}</span>,
     },
     {
       key: "lastInteracted",
       label: "Last Interacted",
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>
-          {timeAgo(r.lastInteracted)}
+        <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+          {timeAgoLong(r.lastInteracted)}
         </span>
-      ),
-    },
-    {
-      key: "actions",
-      label: "",
-      align: "right",
-      width: 120,
-      render: (r) => (
-        <div className="row-actions">
-          <button
-            className="btn-mini"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/agents/${agentId}/tools/${encodeURIComponent(r.toolID)}`);
-            }}
-          >
-            More details
-          </button>
-        </div>
       ),
     },
   ];
@@ -374,7 +358,7 @@ export function AgentDetailPage() {
           tabs={[
             { key: "interactions", label: "Interactions", count: interactions.length },
             { key: "intents", label: "Intents", count: intents.length },
-            { key: "tools", label: "Tools", count: toolsResult.total },
+            { key: "tools", label: "Tools", count: tools.length },
             { key: "history", label: "Policy History", count: history?.history?.length ?? 0 },
           ]}
         />
@@ -393,25 +377,14 @@ export function AgentDetailPage() {
             columns={intentCols}
             onRowClick={(r) => navigate(`/intents/${r.id}`)}
             emptyText="No intents initiated by this agent."
+            rowStyle={(r) => (r.threats > 0 ? THREAT_ROW_STYLE : undefined)}
           />
         )}
 
         {tab === "tools" && (
           <>
-            {toolsResult.totalPages > 1 && (
-              <div className="tb-toolbar" style={{ justifyContent: "flex-end" }}>
-                <Pagination
-                  page={toolsPage}
-                  totalPages={toolsResult.totalPages}
-                  total={toolsResult.total}
-                  pageSize={toolsResult.pageSize}
-                  inline
-                  onChange={setToolsPage}
-                />
-              </div>
-            )}
             <DataTable
-              rows={toolsResult.items}
+              rows={tools}
               columns={toolCols}
               onRowClick={(r) => navigate(`/agents/${agentId}/tools/${encodeURIComponent(r.toolID)}`)}
               emptyText="No apps interacted with yet."
@@ -541,13 +514,6 @@ export function AgentDetailPage() {
           }}
         />
       )}
-      <ViewToolPolicyModal
-        open={!!toolPolicyOpen}
-        toolName={toolPolicyOpen?.toolName || ""}
-        agentName={agent.name}
-        file={toolPolicyOpen?.policyFile}
-        onClose={() => setToolPolicyOpen(null)}
-      />
     </div>
   );
 }

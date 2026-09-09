@@ -10,6 +10,18 @@ export function timeAgo(mins: number): string {
   return `${Math.floor(d / 30)}mo ago`;
 }
 
+/** Same as timeAgo, but spelled out — "2 hours ago" instead of "2h ago". */
+export function timeAgoLong(mins: number): string {
+  const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"} ago`;
+  if (mins < 1) return "just now";
+  if (mins < 60) return plural(Math.floor(mins), "minute");
+  const h = mins / 60;
+  if (h < 24) return plural(Math.floor(h), "hour");
+  const d = h / 24;
+  if (d < 30) return plural(Math.floor(d), "day");
+  return plural(Math.floor(d / 30), "month");
+}
+
 export function fmtRuntime(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
@@ -21,6 +33,11 @@ export function fmtRuntime(ms: number): string {
 /** Uppercases just the first character — leaves the rest of the string untouched. */
 export function capitalizeFirst(s: string): string {
   return s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
+/** Fallback for a threat/error title that came back empty from the backend. */
+export function titleOrUnknown(title: string | undefined | null): string {
+  return title && title.trim() ? title : "Unknown Error";
 }
 
 export function initials(name: string): string {

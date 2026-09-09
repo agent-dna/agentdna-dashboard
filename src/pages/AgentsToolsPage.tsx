@@ -130,27 +130,6 @@ export function AgentsToolsPage() {
       ),
     },
     {
-      key: "score",
-      label: "Reliability",
-      align: "right",
-      sortFn: (a, b) => a.score - b.score,
-      render: (r) =>
-        r.interactions > 0 ? (
-          <ScoreBar value={computeReliability(r.interactions, r.threats)} />
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>
-        ),
-    },
-    {
-      key: "created",
-      label: "Created",
-      align: "right",
-      sortFn: (a, b) => a.created - b.created,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-dim)" }}>{timeAgo(r.created)}</span>
-      ),
-    },
-    {
       key: "threats",
       label: "Threats",
       align: "right",
@@ -163,13 +142,6 @@ export function AgentsToolsPage() {
         ) : (
           <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>
         ),
-    },
-    {
-      key: "connected",
-      label: "Agents using",
-      align: "right",
-      sortFn: (a, b) => a.connected - b.connected,
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.connected}</span>,
     },
     {
       key: "actions",

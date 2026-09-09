@@ -5,7 +5,6 @@ import { MetricTile } from "../components/MetricTile";
 import { AppIcon } from "../components/AppIcon";
 import { InfoStat } from "../components/InfoStat";
 import { LedgerTable } from "../components/LedgerTable";
-import { Pagination } from "../components/Pagination";
 import { ViewToolPolicyModal } from "../components/forms/ViewToolPolicyModal";
 import { useAgent, useAgentToolInfo } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
@@ -16,11 +15,10 @@ export function AgentToolDetailPage() {
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
 
-  const [interactionsPage, setInteractionsPage] = useState(1);
   const [policyOpen, setPolicyOpen] = useState(false);
 
   const { data: agent } = useAgent(agentId);
-  const { data: result, loading } = useAgentToolInfo(agentId, toolId, interactionsPage);
+  const { data: result, loading } = useAgentToolInfo(agentId, toolId);
 
   const backCrumb = (
     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, fontSize: 13 }}>
@@ -58,14 +56,12 @@ export function AgentToolDetailPage() {
               <Icon name="activity" size={18} style={{ color: "var(--accent)" }} />
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg)", marginBottom: 4 }}>API endpoint required</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg)", marginBottom: 4 }}>No trust record for this app</div>
               <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.6, maxWidth: 520 }}>
-                This page is scaffolded and ready. Once{" "}
                 <code style={{ fontFamily: "var(--font-mono)", fontSize: 12, background: "var(--surface-raised)", padding: "1px 5px", borderRadius: 4 }}>
-                  GET /dashboard/v1/agent-tool-info
+                  GET /agent-lhi-scores
                 </code>{" "}
-                is live, the trust score, policy file, and this agent's full interaction history with{" "}
-                {toolId} will appear here.
+                didn't return an entry for {toolId} under this agent.
               </div>
             </div>
           </div>
@@ -74,7 +70,7 @@ export function AgentToolDetailPage() {
     );
   }
 
-  const { toolName, trustScore, policyFile, lastInteracted, interactions, interactionsTotal, interactionsTotalPages } = result;
+  const { toolName, trustScore, intentScore, policyScore, hallucinationScore, policyFile, lastInteracted, interactions } = result;
 
   return (
     <div className="page">
@@ -95,10 +91,11 @@ export function AgentToolDetailPage() {
               As interacted with by <strong style={{ color: "var(--fg)" }}>{agent?.name || agentId}</strong>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
               <InfoStat label="Trust Score" value={trustScore} mono />
-              <InfoStat label="Last interacted" value={timeAgo(lastInteracted)} />
-              <InfoStat label="Interactions" value={interactionsTotal} mono />
+              <InfoStat label="Intent Score" value={intentScore} mono />
+              <InfoStat label="Policy Score" value={policyScore} mono />
+              <InfoStat label="Last scored" value={timeAgo(lastInteracted)} />
             </div>
           </div>
 
@@ -113,7 +110,9 @@ export function AgentToolDetailPage() {
 
       <div className="metrics">
         <MetricTile label="Trust Score" value={trustScore} unit="/ 100" icon="target" sparkColor="#2563EB" spark={[]} />
-        <MetricTile label="Interactions" value={interactionsTotal.toLocaleString()} icon="activity" sparkColor="#0EA5E9" spark={[]} />
+        <MetricTile label="Intent Score" value={intentScore} unit="/ 100" icon="intents" sparkColor="#0EA5E9" spark={[]} />
+        <MetricTile label="Policy Score" value={policyScore} unit="/ 100" icon="shield" sparkColor="#0A2240" spark={[]} />
+        <MetricTile label="Hallucination Score" value={hallucinationScore} unit="/ 100" icon="activity" sparkColor="#DC2626" spark={[]} />
       </div>
 
       <div className="card">
@@ -121,21 +120,13 @@ export function AgentToolDetailPage() {
           <div className="filters">
             <div className="tab active">
               Interactions
-              <span className="pill">{interactionsTotal}</span>
+              <span className="pill">{interactions.length}</span>
             </div>
           </div>
-          <Pagination
-            page={interactionsPage}
-            totalPages={interactionsTotalPages}
-            total={interactionsTotal}
-            pageSize={10}
-            inline
-            onChange={setInteractionsPage}
-          />
         </div>
         <LedgerTable
           rows={interactions}
-          emptyText="No interactions yet."
+          emptyText="No interaction history available for this agent↔app pair yet."
           onView={(r) => openDrawer("interaction", r)}
         />
       </div>

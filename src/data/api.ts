@@ -306,22 +306,25 @@ interface ApiThreatByID {
 }
 
 export async function fetchThreatByID(threatId: string): Promise<ThreatByID | null> {
+  // No threatID to look up isn't a failure — it's a different case (this
+  // interaction just doesn't carry one from whichever endpoint fetched it)
+  // and the caller distinguishes it from a real fetch failure.
   if (!threatId) return null;
-  try {
-    const res = await apiRequest<ApiThreatByID>("/threat-by-id", { query: { threat_id: threatId } });
-    return {
-      id: res.id,
-      intentID: res.intent_id,
-      interactionID: res.interaction_id,
-      time: isoToMinutesAgo(res.time),
-      threatCode: res.threat_code,
-      title: res.title,
-      description: res.description,
-      message: res.message,
-    };
-  } catch {
-    return null;
-  }
+  // No try/catch beyond that — let a real failure (404 "threat ... not
+  // found", network error, etc.) propagate to useAsync's `.error` instead of
+  // collapsing into the same silent null as "no threatID", which made both
+  // cases show an identical, undiagnosable "Unable to load threat details".
+  const res = await apiRequest<ApiThreatByID>("/threat-by-id", { query: { threat_id: threatId } });
+  return {
+    id: res.id,
+    intentID: res.intent_id,
+    interactionID: res.interaction_id,
+    time: isoToMinutesAgo(res.time),
+    threatCode: res.threat_code,
+    title: res.title,
+    description: res.description,
+    message: res.message,
+  };
 }
 
 /**
@@ -341,9 +344,12 @@ export interface ThreatListItem {
   type: string;
   threatID: string;
   threatTitle: string;
+  /** Now returned by /threats-list — undefined only if the backend omits it for a given row. */
+  threatCode: number | undefined;
   message: string;
   /** Minutes ago. */
   time: number;
+  reviewStatus: Intent["reviewStatus"];
 }
 
 interface ApiThreatListItem {
@@ -357,7 +363,9 @@ interface ApiThreatListItem {
   threat: boolean;
   threatID: string;
   threatTitle?: string;
+  threatCode?: number;
   intentID: string;
+  reviewStatus?: string;
   time: string;
   message: string;
 }
@@ -372,8 +380,10 @@ function mapThreatListItem(t: ApiThreatListItem): ThreatListItem {
     type: t.type,
     threatID: t.threatID,
     threatTitle: t.threatTitle?.trim() || "",
+    threatCode: t.threatCode,
     message: t.message,
     time: isoToMinutesAgo(t.time),
+    reviewStatus: toReviewStatus(t.reviewStatus),
   };
 }
 
@@ -919,7 +929,7 @@ export async function fetchAgentIntents(id: string, page = 1): Promise<Intent[]>
   }
 }
 
-// ============ Agent ↔ Tool links (PROPOSED — endpoint not live yet) ============
+// ============ Agent ↔ Tool links (GET /agent-lhi-scores) ============
 
 /** A policy file governing one agent's use of one tool. Either raw text or a hosted file (e.g. PDF). */
 export interface ToolPolicyFile {
@@ -931,123 +941,148 @@ export interface ToolPolicyFile {
   uploadedAt?: string;
 }
 
-/** One row of an agent's "Tools" tab — this agent's relationship with one app it has interacted with. */
+/** One row of an agent's "Tools" tab — this agent's trust relationship with one callee (LHI scoring). */
 export interface AgentToolLink {
-  /** Same value as toolID — DataTable rows key off `id`. */
+  /** Same as toolID/toolName — /agent-lhi-scores has no separate id, callee_name is the only key. */
   id: string;
   toolID: string;
   toolName: string;
-  /** Trust score for this agent↔tool pairing, 0-100. */
+  /** Raw callee_type from the backend ("tool", possibly "agent" for agent-to-agent trust edges). */
+  calleeType: string;
+  /** 0-100, from `trust`. */
   trustScore: number;
+  /** 0-100, from `intent_score`. */
+  intentScore: number;
+  /** 0-100, from `policy_score`. */
+  policyScore: number;
+  /** 0-100, from `hallucination_score`. */
+  hallucinationScore: number;
+  /** /agent-lhi-scores has no policy data at all — always undefined until a real source exists. */
   policyFile?: ToolPolicyFile;
-  /** Minutes since this agent last interacted with the tool. */
+  /** Minutes since this score record's created_at — the closest thing to "last interacted" this endpoint has. */
   lastInteracted: number;
 }
 
-export interface PagedAgentTools {
-  items: AgentToolLink[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
+interface ApiLHIScoreEntry {
+  callee_name: string;
+  callee_type: string;
+  intent_score: number;
+  policy_score: number;
+  hallucination_score: number;
+  trust: number;
+  created_at: string;
 }
 
-interface ApiAgentToolLink {
-  toolID: string;
-  toolName: string;
-  /** Guessed wire key for the trust score — endpoint not live yet, confirm the real name. */
-  lhiScore?: number;
-  policyFilename?: string;
-  policyContent?: string;
-  policyURL?: string;
-  policyUploadedAt?: string;
-  lastInteractedAt?: string;
+interface ApiAgentLHIScores {
+  agentDID: string;
+  scores: ApiLHIScoreEntry[];
 }
 
-interface ApiPagedAgentTools {
-  toolsList: ApiAgentToolLink[];
-  total?: number;
-  page?: number;
-  pageSize?: number;
-  totalPages?: number;
+/** Clamp to [0,1] before scaling — a slightly out-of-range score shouldn't render as e.g. 130 or -20. */
+function scorePct(v: number): number {
+  return Math.round(Math.max(0, Math.min(1, v)) * 100);
 }
 
-function mapAgentToolLink(t: ApiAgentToolLink): AgentToolLink {
-  const hasPolicy = t.policyContent || t.policyURL || t.policyFilename;
+function mapAgentToolLink(e: ApiLHIScoreEntry): AgentToolLink {
   return {
-    id: t.toolID,
-    toolID: t.toolID,
-    toolName: t.toolName,
-    trustScore: t.lhiScore ?? 0,
-    policyFile: hasPolicy
-      ? {
-          filename: t.policyFilename,
-          content: t.policyContent,
-          url: t.policyURL,
-          uploadedAt: t.policyUploadedAt,
-        }
-      : undefined,
-    lastInteracted: isoToMinutesAgo(t.lastInteractedAt),
+    id: e.callee_name,
+    toolID: e.callee_name,
+    toolName: e.callee_name,
+    calleeType: e.callee_type,
+    trustScore: scorePct(e.trust),
+    intentScore: scorePct(e.intent_score),
+    policyScore: scorePct(e.policy_score),
+    hallucinationScore: scorePct(e.hallucination_score),
+    lastInteracted: isoToMinutesAgo(e.created_at),
   };
 }
 
 /**
- * PROPOSED — endpoint isn't live yet; path/shape here is a best guess to be
- * confirmed once the backend contract lands. Fails soft to an empty page so
- * the Tools tab just shows "no apps yet" rather than erroring the whole page.
+ * GET /agent-lhi-scores?agentDID=... — no pagination, returns every trust
+ * edge for the agent at once. Filtered to callee_type "tool" since this
+ * feeds the Tools tab specifically (agent-to-agent edges, if any come back,
+ * belong elsewhere).
  */
-export async function fetchAgentTools(id: string, page = 1): Promise<PagedAgentTools> {
-  try {
-    const res = await apiRequest<ApiPagedAgentTools>("/agent-tools", { query: { agentDID: id, page } });
-    return {
-      items: (res.toolsList || []).map(mapAgentToolLink),
-      total: res.total || 0,
-      page: res.page || page,
-      pageSize: res.pageSize || 10,
-      totalPages: res.totalPages || 1,
-    };
-  } catch {
-    return { items: [], total: 0, page, pageSize: 10, totalPages: 1 };
-  }
+export async function fetchAgentTools(agentDID: string): Promise<AgentToolLink[]> {
+  const res = await apiRequest<ApiAgentLHIScores>("/agent-lhi-scores", { query: { agentDID } });
+  return (res.scores || [])
+    .filter((s) => s.callee_type === "tool")
+    .map(mapAgentToolLink);
 }
 
-/** The "More details" destination for one agent↔tool pairing. */
+/**
+ * The "More details" destination for one agent↔tool pairing. There's no
+ * dedicated detail endpoint yet, so this re-fetches the same /agent-lhi-scores
+ * list and picks out the matching callee — interaction history isn't part of
+ * that payload, so it's always empty here until a real source exists.
+ */
 export interface AgentToolDetail extends AgentToolLink {
   interactions: Interaction[];
   interactionsTotal: number;
   interactionsTotalPages: number;
 }
 
-interface ApiAgentToolInfo extends ApiAgentToolLink {
-  interactionsList?: ApiInteraction[];
-  interactionsTotal?: number;
-  interactionsTotalPages?: number;
-}
-
-/**
- * PROPOSED — endpoint isn't live yet; path/shape here is a best guess to be
- * confirmed once the backend contract lands. Returns null on failure so the
- * page falls back to its "not found / coming soon" state, same as
- * fetchUserInfo/fetchToolInfo do today.
- */
-export async function fetchAgentToolInfo(
-  agentId: string,
-  toolId: string,
-  page = 1,
-): Promise<AgentToolDetail | null> {
+export async function fetchAgentToolInfo(agentId: string, toolId: string): Promise<AgentToolDetail | null> {
   try {
-    const r = await apiRequest<ApiAgentToolInfo>("/agent-tool-info", {
-      query: { agentDID: agentId, toolDID: toolId, page },
-    });
-    return {
-      ...mapAgentToolLink(r),
-      interactions: (r.interactionsList || []).map(mapInteraction),
-      interactionsTotal: r.interactionsTotal || 0,
-      interactionsTotalPages: r.interactionsTotalPages || 1,
-    };
+    const links = await fetchAgentTools(agentId);
+    const match = links.find((l) => l.toolID === toolId);
+    if (!match) return null;
+    return { ...match, interactions: [], interactionsTotal: 0, interactionsTotalPages: 1 };
   } catch {
     return null;
   }
+}
+
+/** One row of a tool's "Agents" section — each agent's trust relationship with this tool (LHI scoring). */
+export interface ToolAgentScore {
+  id: string;
+  agentDID: string;
+  agentName: string;
+  /** 0-100, from `trust`. */
+  trustScore: number;
+  /** 0-100, from `intentScore`. */
+  intentScore: number;
+  /** 0-100, from `policyScore`. */
+  policyScore: number;
+  /** 0-100, from `hallucinationScore`. */
+  hallucinationScore: number;
+}
+
+interface ApiToolAgentScoreEntry {
+  agentDID: string;
+  agentName: string;
+  intentScore: number;
+  policyScore: number;
+  hallucinationScore: number;
+  trust: number;
+}
+
+interface ApiToolAgentScores {
+  toolDID: string;
+  toolName: string;
+  agents: ApiToolAgentScoreEntry[];
+}
+
+function mapToolAgentScore(e: ApiToolAgentScoreEntry): ToolAgentScore {
+  return {
+    id: e.agentDID,
+    agentDID: e.agentDID,
+    agentName: e.agentName,
+    trustScore: scorePct(e.trust),
+    intentScore: scorePct(e.intentScore),
+    policyScore: scorePct(e.policyScore),
+    hallucinationScore: scorePct(e.hallucinationScore),
+  };
+}
+
+/**
+ * GET /tool-agent-scores?toolDID=... — every agent that has this tool in its
+ * agents_list, batched into one LHI-scores lookup on the backend. Agents with
+ * no score entry for this tool yet still come back, with all scores at 0.
+ */
+export async function fetchToolAgentScores(toolDID: string): Promise<ToolAgentScore[]> {
+  const res = await apiRequest<ApiToolAgentScores>("/tool-agent-scores", { query: { toolDID } });
+  return (res.agents || []).map(mapToolAgentScore);
 }
 
 export async function fetchIntentInteractions(id: string): Promise<Interaction[]> {

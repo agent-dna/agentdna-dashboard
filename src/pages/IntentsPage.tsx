@@ -96,7 +96,6 @@ export function IntentsPage() {
     {
       key: "interactions",
       label: "Interactions",
-      align: "right",
       sortFn: (a, b) => a.interactionsCount - b.interactionsCount,
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactionsCount}</span>

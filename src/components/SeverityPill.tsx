@@ -8,12 +8,12 @@ const SEVERITY_STYLE: Record<ThreatSeverity, { color: string; bg: string }> = {
   Warning: { color: "#92700C", bg: "rgba(217,180,6,0.16)" },
 };
 
-/** Colored badge for a threat's severity — "—" when it isn't in threatSeverity.json yet. */
+/** Colored badge for a threat's severity — "—" when it isn't in threatSeverity.json yet (or its value isn't one of the 5 known severities). */
 export function SeverityPill({ severity }: { severity: ThreatSeverity | null }) {
-  if (!severity) {
+  const s = severity ? SEVERITY_STYLE[severity] : undefined;
+  if (!s) {
     return <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-faint)" }}>—</span>;
   }
-  const s = SEVERITY_STYLE[severity];
   return (
     <span
       style={{

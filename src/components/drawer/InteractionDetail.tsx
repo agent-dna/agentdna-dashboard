@@ -7,7 +7,7 @@ import { useDrawer } from "../../context/DrawerContext";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { useThreatByID } from "../../data/hooks";
-import { timeAgo, interactionRawData } from "../../lib/format";
+import { timeAgo, interactionRawData, titleOrUnknown } from "../../lib/format";
 import type { Interaction } from "../../types";
 
 interface Props {
@@ -22,7 +22,7 @@ export function InteractionDetail({ interaction: i }: Props) {
   // Callers that already have the message (e.g. from /threats-list) pass it
   // straight through — skip the GET /threat-by-id round trip entirely so the
   // sidebar shows exactly what the threat table showed, with no extra fetch.
-  const { data: threatDetail, loading: threatLoading } = useThreatByID(
+  const { data: threatDetail, loading: threatLoading, error: threatError } = useThreatByID(
     i.threat && !i.message ? i.threatID : undefined,
   );
   const threatMessage = i.message || threatDetail?.message;
@@ -206,7 +206,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                         <span style={{ color: "var(--fg-muted)" }}>Loading…</span>
                       ) : (
                         <span style={{ color: "var(--threat)" }}>
-                          {threatDetail!.title}{" "}
+                          {titleOrUnknown(threatDetail!.title)}{" "}
                           <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-muted)" }}>
                             (code {threatDetail!.threatCode})
                           </span>
@@ -223,7 +223,13 @@ export function InteractionDetail({ interaction: i }: Props) {
                 ) : !threatLoading && (
                   <>
                     <div className="k">Threat message</div>
-                    <div className="v" style={{ color: "var(--fg-muted)" }}>Unable to load threat details</div>
+                    <div className="v" style={{ color: "var(--fg-muted)" }}>
+                      {!i.threatID
+                        ? "This interaction has no threatID from the endpoint it was loaded from."
+                        : threatError
+                        ? `Failed to load: ${threatError.message}`
+                        : "No message returned for this threat."}
+                    </div>
                   </>
                 )}
               </>

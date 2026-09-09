@@ -961,8 +961,8 @@ Admin: /requests → Org access requests
 <table>
   <thead><tr><th style="width:26%">Variable</th><th style="width:10%">Required</th><th>Description</th></tr></thead>
   <tbody>
-    <tr><td><code>VITE_API_BASE_URL</code></td><td>Yes</td><td>Base URL of the dashboard middleware API, e.g. <code>http://host:9000/dashboard/v1/</code>. A trailing slash is stripped. Falls back to <code>http://localhost:9000</code>.</td></tr>
-    <tr><td><code>VITE_ADMIN_API_BASE_URL</code></td><td>Yes</td><td>Base URL of the agent-admin API, e.g. <code>http://host:8001/agent-admin/v1</code>. Falls back to <code>http://localhost:8000/agent-admin/v1</code>.</td></tr>
+    <tr><td><code>VITE_API_BASE_URL</code></td><td>Yes</td><td>Base URL of the dashboard middleware API, e.g. <code>http://host:9000/dashboard/v1/</code>. A trailing slash is stripped. No fallback — if missing, API requests fail loudly instead of silently hitting a default host.</td></tr>
+    <tr><td><code>VITE_ADMIN_API_BASE_URL</code></td><td>Yes</td><td>Base URL of the agent-admin API, e.g. <code>http://host:8001/agent-admin/v1</code>. No fallback — if missing, admin requests fail loudly instead of silently hitting a default host.</td></tr>
     <tr><td><code>VITE_DUMMY</code></td><td>No</td><td><code>true</code>/<code>1</code> runs entirely on mock data with no backend.</td></tr>
     <tr><td><code>VITE_PORT</code></td><td>No</td><td>Dev-server port, default <code>4009</code> (<code>strictPort</code> is on, so a busy port fails loudly).</td></tr>
     <tr><td><code>VITE_DEV_TOKEN</code></td><td>No</td><td>Fallback bearer token when <code>localStorage</code> has none. Development only.</td></tr>
@@ -972,7 +972,7 @@ Admin: /requests → Org access requests
 <h3>Resolution order</h3>
 <pre><code>window.__ENV__.VITE_API_BASE_URL     ← runtime, written by the Docker entrypoint
   ?? import.meta.env.VITE_API_BASE_URL ← build time, baked in by Vite
-  ?? "http://localhost:9000"           ← last-resort default</code></pre>
+        </code></pre>
 <p>
   This is what makes one image deployable to many environments: <code>index.html</code> loads
   <code>/env-config.js</code> before the bundle, so the runtime value is present before the first
