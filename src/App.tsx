@@ -4,7 +4,6 @@ import { Icon, type IconName } from "./components/Icon";
 import { initials } from "./lib/format";
 import logoMark from "./assets/agentdna-logo.png";
 import { Drawer } from "./components/Drawer";
-// import { TweaksPanel } from "./components/TweaksPanel";
 import { EntityDetail } from "./components/drawer/EntityDetail";
 import { InteractionDetail } from "./components/drawer/InteractionDetail";
 import { IntentDetail } from "./components/drawer/IntentDetail";
@@ -94,7 +93,7 @@ export function App() {
         <nav className="sb-nav">
           <div className="sb-workspace">
             <div className="sb-section">Workspace</div>
-            {NAV_WORKSPACE.map((n) => (
+            {NAV_WORKSPACE.map((n) => ( 
               <NavLink
                 key={n.to}
                 to={n.to}
@@ -105,7 +104,7 @@ export function App() {
                 <Icon className="icon" name={n.icon} size={18} />
                 <span className="label">{n.label}</span>
                 {n.badge != null && <span className="badge">{n.badge}</span>}
-              </NavLink>
+              </NavLink> 
             ))}
           </div>
 
@@ -194,3 +193,5 @@ export function App() {
 }
 
 export default App;
+
+

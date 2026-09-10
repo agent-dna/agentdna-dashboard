@@ -28,3 +28,55 @@ export function setDirectorySnapshot(map: Map<string, DirectoryEntry>) {
 export function getDirectorySnapshot(): Map<string, DirectoryEntry> {
   return snapshot;
 }
+
+// ── Readiness gate ───────────────────────────────────────────────────────────
+// Bug this fixes: classifyParticipant() (in api.ts) falls back to the
+// DID-prefix heuristic above whenever a DID isn't in the directory yet — which
+// is *always true* for every DID until DirectoryProvider's initial
+// fetchAllAgents/fetchAllTools walk finishes. Since that walk and, say, the
+// Home page's /intents-list + per-intent interaction fetches all kick off in
+// parallel on mount, whichever one lost the race used to silently misclassify
+// every tool as an agent, so the "Apps interacted" column's icons intermittently
+// came back empty depending on network timing — the exact "sometimes the icons
+// don't load" symptom. Callers that classify participants should await
+// waitForDirectoryReady() first so they always see the real directory instead
+// of racing it.
+let ready = false;
+let resolveReady: (() => void) | null = null;
+const readyPromise = new Promise<void>((resolve) => {
+  resolveReady = resolve;
+});
+
+/** Called once by DirectoryProvider after its initial load settles (success or caught-empty). */
+export function markDirectoryReady() {
+  if (ready) return;
+  ready = true;
+  resolveReady?.();
+}
+
+/**
+ * Resolves once the org directory has completed its initial load — await
+ * this before classifying participants.
+ *
+ * markDirectoryReady() is *guaranteed* to fire eventually (DirectoryProvider's
+ * fetchAllAgents/fetchAllTools/listAllUsers are all wrapped in .catch(), so
+ * Promise.all there always settles, success or not) — so this doesn't
+ * actually need a timeout to avoid hanging forever. It still has a generous
+ * one purely as a last-resort backstop for the pathological case of
+ * DirectoryProvider never mounting at all; it's deliberately long (20s, well
+ * past how long the directory walk should ever take) so it can't fire *before*
+ * a real but slow load finishes and reintroduce the exact race this exists to
+ * close (an earlier, shorter timeout did exactly that).
+ */
+export function waitForDirectoryReady(): Promise<void> {
+  if (ready) return Promise.resolve();
+  return Promise.race([
+    readyPromise,
+    new Promise<void>((resolve) =>
+      setTimeout(() => {
+        if (!ready) console.warn("[directoryCache] waitForDirectoryReady() timed out after 20s — proceeding without a full directory");
+        resolve();
+      }, 20000),
+    ),
+  ]);
+}

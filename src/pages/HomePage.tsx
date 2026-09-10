@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
@@ -10,14 +10,14 @@ import { Pagination } from "../components/Pagination";
 import { AppIcon } from "../components/AppIcon";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { IntentIdChip } from "../context/IntentNumbersContext";
-import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { useResolveName, resolveDisplayName, useDirectoryLoading } from "../context/DirectoryContext";
 import { useDrawer } from "../context/DrawerContext";
 import { ThreatPill } from "../components/ThreatPill";
 import { SeverityPill } from "../components/SeverityPill";
 import { getThreatSeverity, type ThreatSeverity } from "../lib/threatSeverity";
 import { timeAgo, capitalizeFirst, titleOrUnknown } from "../lib/format";
 import type { Intent, Interaction, IntentReviewStatus } from "../types";
-import type { ThreatListItem } from "../data/api";
+import type { ThreatListItem, TopThreat } from "../data/api";
 import type { CSSProperties } from "react";
 
 /** Reddish tint + left accent for any row that represents/carries a threat. */
@@ -36,6 +36,46 @@ const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: strin
 
 const REVIEW_STATUS_OPTIONS: IntentReviewStatus[] = ["Flagged", "Ongoing", "Acknowledged"];
 const SEVERITY_OPTIONS: ThreatSeverity[] = ["Critical", "High", "Medium", "Low"];
+const SEVERITY_RANK: Record<ThreatSeverity, number> = { Critical: 4, High: 3, Medium: 2, Low: 1, Warning: 0 };
+const severityRank = (s: ThreatSeverity | null) => (s ? SEVERITY_RANK[s] : -1);
+
+const REVIEW_STATUS_ICON: Record<IntentReviewStatus, "flag" | "refresh" | "check"> = {
+  Flagged: "flag",
+  Ongoing: "refresh",
+  Acknowledged: "check",
+};
+
+/** Colored pill + icon for an intent/threat's review status — shared by the Intents and Threats tables below. */
+function ReviewStatusPill({ status }: { status: IntentReviewStatus }) {
+  const s = REVIEW_STATUS_STYLE[status];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        fontSize: 11.5,
+        fontWeight: 700,
+        padding: "3px 10px",
+        borderRadius: 999,
+        color: s.color,
+        background: s.bg,
+      }}
+    >
+      {status === "Flagged" ? (
+        // Filled flag (not just an outline) so a flagged threat reads as more
+        // alarming than a plain stroked icon would.
+        <svg width={11} height={11} viewBox="0 0 24 24" fill={s.color} stroke={s.color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 3v18" fill="none" />
+          <path d="M5 4h13l-3 4 3 4H5" />
+        </svg>
+      ) : (
+        <Icon name={REVIEW_STATUS_ICON[status]} size={11} />
+      )}
+      {status}
+    </span>
+  );
+}
 
 /** Plain `<select>` styled to sit in a `.tb-toolbar`, used for the Status/Severity table filters below. */
 function FilterSelect<T extends string>({
@@ -71,6 +111,60 @@ function FilterSelect<T extends string>({
         </option>
       ))}
     </select>
+  );
+}
+
+const SEVERITY_DONUT_COLORS: Record<"Critical" | "High" | "Medium" | "Low", string> = {
+  Critical: "#7F1D1D",
+  High: "#DC2626",
+  Medium: "#B45309",
+  Low: "#2563EB",
+};
+
+/**
+ * Segmented bar (+ legend row) showing the Critical/High/Medium/Low share of
+ * the top-5 threats by volume, weighted by each threat's count. Sits at the
+ * top of the "Top 5 threats" card, above the table. Threats with no matching
+ * severity (or "Warning") are excluded from both the bar and the percentage
+ * base.
+ */
+function SeverityBar({ topThreats }: { topThreats: TopThreat[] }) {
+  const buckets: Record<"Critical" | "High" | "Medium" | "Low", number> = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+  let total = 0;
+  for (const t of topThreats) {
+    const sev = getThreatSeverity(t.threatCode);
+    if (sev === "Critical" || sev === "High" || sev === "Medium" || sev === "Low") {
+      buckets[sev] += t.count;
+      total += t.count;
+    }
+  }
+
+  if (total === 0) return null;
+
+  const keys = (Object.keys(SEVERITY_DONUT_COLORS) as (keyof typeof SEVERITY_DONUT_COLORS)[]).filter((k) => buckets[k] > 0);
+
+  return (
+    <div style={{ padding: "14px 20px 16px" }}>
+      <div style={{ display: "flex", width: "100%", height: 8, borderRadius: 999, overflow: "hidden" }}>
+        {keys.map((key) => (
+          <div key={key} style={{ width: `${(buckets[key] / total) * 100}%`, background: SEVERITY_DONUT_COLORS[key] }} />
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+          {keys.map((key) => (
+            <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: SEVERITY_DONUT_COLORS[key], flexShrink: 0 }} />
+              <span style={{ color: "var(--fg-muted)" }}>{key}</span>
+              <span style={{ color: "var(--fg)", fontWeight: 700 }}>{Math.round((buckets[key] / total) * 100)}%</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+          Total <span style={{ color: "var(--fg)", fontWeight: 700 }}>{total}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -119,6 +213,24 @@ export function HomePage() {
   const { data: topThreats, error: topThreatsError } = useTopThreats();
   const seriesState = useSeries(series);
   const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
+
+  // Belt-and-suspenders for the "Apps interacted" icons bug: enrichIntentApps
+  // (in api.ts) already awaits waitForDirectoryReady() before classifying
+  // tools vs agents, but if that ever loses the race anyway (e.g. a pathological
+  // slow load past its own backstop timeout), self-heal by refetching intents
+  // once the directory *actually* finishes loading, instead of requiring a
+  // manual page refresh. Only fires on the loading→loaded transition, not on
+  // every render, and not if the directory was already loaded when this page
+  // mounted (the common case when navigating here from elsewhere).
+  const directoryLoading = useDirectoryLoading();
+  const prevDirectoryLoading = useRef(directoryLoading);
+  useEffect(() => {
+    if (prevDirectoryLoading.current && !directoryLoading) {
+      intentsState.refetch();
+    }
+    prevDirectoryLoading.current = directoryLoading;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [directoryLoading]);
 
   const metrics = homeState.data;
   const intents = intentsState.data.items;
@@ -183,7 +295,7 @@ export function HomePage() {
     },
     {
       key: "apps",
-      label: "App interacted",
+      label: "Apps interacted",
       render: (r) => {
         const apps = r.appsInteracted || [];
         if (apps.length === 0) {
@@ -203,26 +315,13 @@ export function HomePage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       render: (r) => <ThreatPill threat={r.threats > 0} />,
     },
     {
       key: "reviewStatus",
       label: "Status",
-      render: (r) => (
-        <span
-          style={{
-            fontSize: 11.5,
-            fontWeight: 700,
-            padding: "3px 9px",
-            borderRadius: 999,
-            color: REVIEW_STATUS_STYLE[r.reviewStatus].color,
-            background: REVIEW_STATUS_STYLE[r.reviewStatus].bg,
-          }}
-        >
-          {r.reviewStatus}
-        </span>
-      ),
+      render: (r) => <ReviewStatusPill status={r.reviewStatus} />,
     },
     {
       key: "time",
@@ -236,17 +335,19 @@ export function HomePage() {
       key: "actions",
       label: "",
       align: "right",
-      width: 60,
+      width: 90,
       render: (r) => (
         <div className="row-actions">
           <button
-            className="btn-mini"
+            className="btn-mini info"
+            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/intents/${r.id}`);
             }}
           >
-            View
+            <Icon name="arrowUpRight" size={12} />
+            Inspect
           </button>
         </div>
       ),
@@ -257,6 +358,8 @@ export function HomePage() {
     {
       key: "intent",
       label: "Intent",
+      width: "13%",
+      sortFn: (a, b) => a.intentID.localeCompare(b.intentID),
       render: (r) => (
         <IntentIdChip id={r.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--fg)" }} />
       ),
@@ -264,6 +367,8 @@ export function HomePage() {
     {
       key: "title",
       label: "Title",
+      width: "20%",
+      sortFn: (a, b) => titleOrUnknown(a.threatTitle).localeCompare(titleOrUnknown(b.threatTitle)),
       render: (r) => (
         <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>
           {capitalizeFirst(titleOrUnknown(r.threatTitle))}
@@ -273,75 +378,55 @@ export function HomePage() {
     {
       key: "severity",
       label: "Severity",
+      width: "14%",
+      sortFn: (a, b) => severityRank(getThreatSeverity(a.threatCode)) - severityRank(getThreatSeverity(b.threatCode)),
       render: (r) => <SeverityPill severity={getThreatSeverity(r.threatCode)} />,
-    },
-    {
-      key: "message",
-      label: "Message",
-      width: 260,
-      render: (r) => (
-        <span
-          onClick={(e) => {
-            e.stopPropagation();
-            setThreatMessage(r);
-          }}
-          title="View full message"
-          style={{
-            fontSize: 13,
-            color: "var(--fg)",
-            cursor: "pointer",
-            display: "block",
-            maxWidth: 260,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {capitalizeFirst(r.message)}
-        </span>
-      ),
     },
     {
       key: "reviewStatus",
       label: "Status",
-      render: (r) => (
-        <span
-          style={{
-            fontSize: 11.5,
-            fontWeight: 700,
-            padding: "3px 9px",
-            borderRadius: 999,
-            color: REVIEW_STATUS_STYLE[r.reviewStatus].color,
-            background: REVIEW_STATUS_STYLE[r.reviewStatus].bg,
-          }}
-        >
-          {r.reviewStatus}
-        </span>
-      ),
+      width: "14%",
+      sortFn: (a, b) => a.reviewStatus.localeCompare(b.reviewStatus),
+      render: (r) => <ReviewStatusPill status={r.reviewStatus} />,
     },
     {
       key: "time",
       label: "Time",
       align: "right",
+      width: "13%",
+      sortFn: (a, b) => a.time - b.time,
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>{capitalizeFirst(timeAgo(r.time))}</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)", paddingRight: 8 }}>{capitalizeFirst(timeAgo(r.time))}</span>
       ),
     },
     {
       key: "actions",
-      label: "",
+      label: "Action",
       align: "right",
-      width: 60,
+      width: "26%",
       render: (r) => (
-        <div className="row-actions">
+        <div className="row-actions" style={{ flexWrap: "nowrap" }}>
           <button
-            className="btn-mini"
+            className="btn-mini danger"
+            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setThreatMessage(r);
+            }}
+          >
+            <Icon name="eye" size={12} />
+            View Message
+          </button>
+          <button
+            className="btn-mini info"
+            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
             onClick={(e) => {
               e.stopPropagation();
               openDrawer("interaction", threatToInteraction(r));
             }}
           >
-            View
+            <Icon name="arrowUpRight" size={12} />
+            Inspect Incident
           </button>
         </div>
       ),
@@ -357,10 +442,10 @@ export function HomePage() {
       ["Active Agents", String(metrics.agentCount)],
       ["Total Intents", String(metrics.intentCount)],
       ["Total Interactions", String(metrics.interactionsCount)],
-      ["Threats Detected", String(metrics.threatCount)],
+      ["Incidents Detected", String(metrics.threatCount)],
       [],
       ["AGENT LIST"],
-      ["Agent ID", "Agent Name", "Total Interactions", "Total Threats"],
+      ["Agent ID", "Agent Name", "Total Interactions", "Total Incidents"],
       ...(metrics.agentList || []).map((a) => [a.agentID, a.agentName, String(a.totalInteractions), String(a.totalThreats)]),
     ];
     const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -410,7 +495,7 @@ export function HomePage() {
               No agents deployed yet
             </div>
             <div style={{ fontSize: 14, color: "var(--fg-muted)", lineHeight: 1.6 }}>
-              Deploy your first agent to start monitoring interactions, detecting threats, and tracking intents in real time.
+              Deploy your first agent to start monitoring interactions, detecting incidents, and tracking intents in real time.
             </div>
           </div>
           <button
@@ -466,22 +551,12 @@ export function HomePage() {
           sparkColor="#0EA5E9"
           spark={data.total}
         />
-        <MetricTile label="Threats Detected" value={metrics.threatCount} icon="shield" sparkColor="#DC2626" spark={data.threats} />
+        <MetricTile label="Incidents Detected" value={metrics.threatCount} icon="shield" sparkColor="#DC2626" spark={data.threats} />
         <MetricTile label="Total Intents" value={metrics.intentCount} icon="intents" sparkColor="#0A2240" spark={[]} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr", gap: 16, marginBottom: 20 }}>
-        <div
-          className="card"
-          style={
-            chartTab === "threats"
-              ? {
-                  background: "rgba(220,38,38,0.055)",
-                  border: "1px solid rgba(220,38,38,0.22)",
-                }
-              : undefined
-          }
-        >
+        <div className={`card${chartTab === "threats" ? " card-threat" : ""}`}>
           <div className="card-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
               {chartTab === "threats" && (
@@ -490,14 +565,14 @@ export function HomePage() {
                 </div>
               )}
               <div>
-                <h3>{chartTab === "graph" ? "Interactions over time" : "Top 5 threats by volume"}</h3>
+                <h3>{chartTab === "graph" ? "Interactions over time" : "Top 5 incidents by volume"}</h3>
                 <div className="sub">
-                  {chartTab === "graph" ? "Safe vs threat-classified runs · Last 7 days" : "By volume, most frequent codes"}
+                  {chartTab === "graph" ? "Safe vs incident-classified runs · Last 7 days" : "By volume, most frequent codes"}
                 </div>
               </div>
             </div>
             <div style={{ display: "flex", background: chartTab === "threats" ? "rgba(220,38,38,0.08)" : "var(--bg-3)", borderRadius: 6, padding: 2 }}>
-              {([{ key: "graph", label: "Graph" }, { key: "threats", label: "Threats" }] as const).map((t) => {
+              {([{ key: "graph", label: "Graph" }, { key: "threats", label: "Incidents" }] as const).map((t) => {
                 const active = chartTab === t.key;
                 const redActive = active && t.key === "threats";
                 return (
@@ -531,7 +606,7 @@ export function HomePage() {
                   <span className="sw" style={{ background: "#2563EB" }} /> Interactions
                 </span>
                 <span className="it">
-                  <span className="sw" style={{ background: "#DC2626" }} /> Threats
+                  <span className="sw" style={{ background: "#DC2626" }} /> Incidents
                 </span>
               </div>
               <div className="chart-wrap">
@@ -542,33 +617,34 @@ export function HomePage() {
                   formatY={(v) => (typeof v === "number" && v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)}
                   series={[
                     { key: "interactions", label: "Interactions", color: "#2563EB", data: data.total },
-                    { key: "threats", label: "Threats", color: "#DC2626", data: data.threats },
+                    { key: "threats", label: "Incidents", color: "#DC2626", data: data.threats },
                   ]}
                 />
               </div>
             </>
           ) : (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 90px 70px 70px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(220,38,38,0.18)", marginTop: 8 }}>
-                {["#", "THREAT", "SEVERITY", "CODE", "COUNT"].map((h, i) => (
-                  <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
+              {!topThreatsError && topThreats.length > 0 && <SeverityBar topThreats={topThreats} />}
+              <div style={{ display: "grid", gridTemplateColumns: "26px 1fr 80px 60px", padding: "10px 16px 5px", borderBottom: "1px solid rgba(220,38,38,0.18)", marginTop: 8 }}>
+                {["#", "INCIDENT", "SEVERITY", "COUNT"].map((h, i) => (
+                  <div key={h} style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
               </div>
               {topThreatsError ? (
-                <div style={{ padding: 28, color: "var(--threat)", fontSize: 13, textAlign: "center" }}>
-                  Failed to load top threats — {topThreatsError.message}
+                <div style={{ padding: 28, color: "var(--threat)", fontSize: 12.5, textAlign: "center" }}>
+                  Failed to load top incidents — {topThreatsError.message}
                 </div>
               ) : topThreats.length === 0 && (
-                <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>No threats detected</div>
+                <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 12.5, textAlign: "center" }}>No incidents detected</div>
               )}
               {!topThreatsError && topThreats.map((t, i) => (
                 <div
                   key={t.threatCode}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "32px 1fr 90px 70px 70px",
+                    gridTemplateColumns: "26px 1fr 80px 60px",
                     alignItems: "center",
-                    padding: "10px 20px",
+                    padding: "8px 16px",
                     borderBottom: "1px solid rgba(220,38,38,0.14)",
                     background: i === 0 ? "rgba(220,38,38,0.09)" : "transparent",
                     boxShadow: i === 0 ? "inset 3px 0 0 var(--threat)" : "inset 3px 0 0 transparent",
@@ -576,13 +652,13 @@ export function HomePage() {
                 >
                   <div
                     style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 7,
+                      width: 21,
+                      height: 21,
+                      borderRadius: 6,
                       display: "grid",
                       placeItems: "center",
                       fontFamily: "var(--font-mono)",
-                      fontSize: 10.5,
+                      fontSize: 9.5,
                       fontWeight: 700,
                       background: i === 0 ? "var(--threat)" : "rgba(220,38,38,0.12)",
                       color: i === 0 ? "#fff" : "var(--threat)",
@@ -590,27 +666,22 @@ export function HomePage() {
                   >
                     {String(i + 1).padStart(2, "0")}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titleOrUnknown(t.title)}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titleOrUnknown(t.title)}</div>
                   <div style={{ textAlign: "right" }}>
                     <SeverityPill severity={getThreatSeverity(t.threatCode)} />
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--threat)", background: "rgba(220,38,38,0.10)", padding: "2px 8px", borderRadius: 4 }}>
-                      {t.threatCode}
-                    </span>
-                  </div>
-                  <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
                     {t.count.toLocaleString()}
                   </div>
                 </div>
               ))}
               {!topThreatsError && topThreats.length > 0 && (
-                <div style={{ padding: "12px 20px" }}>
+                <div style={{ padding: "12px 16px" }}>
                   <button
                     onClick={() => setBottomTab("threats")}
-                    style={{ background: "none", border: "none", fontSize: 13, fontWeight: 600, color: "var(--threat)", cursor: "pointer", padding: 0 }}
+                    style={{ background: "none", border: "none", fontSize: 12.5, fontWeight: 600, color: "var(--threat)", cursor: "pointer", padding: 0 }}
                   >
-                    View all threats →
+                    View all incidents →
                   </button>
                 </div>
               )}
@@ -633,7 +704,7 @@ export function HomePage() {
                 Top {volumeTab === "agents" ? "agents" : "apps"} by volume
               </div>
               <div style={{ fontSize: 12, color: volumeTab === "apps" ? "rgba(255,255,255,0.45)" : "var(--fg-muted)" }}>
-                {volumeTab === "agents" ? "Ranked by interactions · threats flagged" : "Ranked by interactions · share of total"}
+                {volumeTab === "agents" ? "Ranked by interactions · incidents flagged" : "Ranked by interactions · share of total"}
               </div>
             </div>
             <div style={{ display: "flex", background: volumeTab === "apps" ? "rgba(255,255,255,0.07)" : "var(--bg-3)", borderRadius: 6, padding: 2 }}>
@@ -767,7 +838,7 @@ export function HomePage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            {([{ key: "intents", label: "Intents", count: intentsTotal }, { key: "threats", label: "Threats", count: threatsListTotal }] as const).map((t) => (
+            {([{ key: "intents", label: "Intents", count: intentsTotal }, { key: "threats", label: "Incidents", count: threatsListTotal }] as const).map((t) => (
               <div
                 key={t.key}
                 className={`tab ${bottomTab === t.key ? "active" : ""}`}
@@ -809,10 +880,10 @@ export function HomePage() {
             onRowClick={(r) => openDrawer("interaction", threatToInteraction(r))}
             emptyText={
               threatsListState.error
-                ? `Failed to load threats — ${threatsListState.error.message}`
+                ? `Failed to load incidents — ${threatsListState.error.message}`
                 : threatStatusFilter === "all" && threatSeverityFilter === "all"
-                  ? "No threats detected"
-                  : "No threats match this filter on this page"
+                  ? "No incidents detected"
+                  : "No incidents match this filter on this page"
             }
             // Every row here is a threat by definition.
             rowStyle={() => THREAT_ROW_STYLE}
@@ -822,7 +893,7 @@ export function HomePage() {
 
       <Modal
         open={!!threatMessage}
-        title="Threat message"
+        title="Incident message"
         onClose={() => setThreatMessage(null)}
         width={560}
         footer={

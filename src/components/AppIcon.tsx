@@ -162,8 +162,11 @@ export function AppIcon({ name, size = 28 }: AppIconProps) {
     );
   }
 
-  // Fallback: coloured square with first initial
-  const initial = (name || "?").trim()[0].toUpperCase();
+  // Fallback: coloured square with first initial. `name` can come back
+  // whitespace-only from a not-yet-resolved DID — trim before falling back
+  // to "?" so this never throws on an empty/blank string.
+  const trimmed = (name || "").trim();
+  const initial = (trimmed[0] || "?").toUpperCase();
   const bg = colorForName(name);
   return (
     <div style={{

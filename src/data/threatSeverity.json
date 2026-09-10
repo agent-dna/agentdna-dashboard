@@ -1,6 +1,7 @@
 [
   { "title": "Unknown Error", "severity": "Warning" },
 
+  { "code": 2999, "title": "Unknown CoCA Error", "severity": "High", "description": "Unrecognized/uncategorized CoCA verification error" },
   { "code": 2001, "title": "COCA Verification Failed (Light)", "severity": "Low", "description": "Light-tier COCA identity check failed" },
   { "code": 2003, "title": "COCA Verification Failed (Boundary)", "severity": "Medium", "description": "Boundary-tier COCA identity check failed" },
   { "code": 1002, "title": "Testing Error", "severity": "High", "description": "Testing-only error path triggered in agent execution" },

@@ -17,6 +17,9 @@ export function SeverityPill({ severity }: { severity: ThreatSeverity | null }) 
   return (
     <span
       style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
         fontSize: 11.5,
         fontWeight: 700,
         padding: "3px 9px",
@@ -25,6 +28,7 @@ export function SeverityPill({ severity }: { severity: ThreatSeverity | null }) 
         background: s.bg,
       }}
     >
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
       {severity}
     </span>
   );

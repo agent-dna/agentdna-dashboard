@@ -327,9 +327,9 @@ export function AgentDetailPage() {
               Export
             </button>
             {isAdmin && (
-              <button className="btn danger" onClick={() => setRevokeOpen(true)}>
+              <button className={agent.revoked ? "btn safe" : "btn danger"} onClick={() => setRevokeOpen(true)}>
                 <Icon name="shield" size={14} />
-                Revoke agent
+                {agent.revoked ? "Whitelist agent" : "Revoke agent"}
               </button>
             )}
           </div>
@@ -507,6 +507,7 @@ export function AgentDetailPage() {
           open={revokeOpen}
           agentDID={agent.id}
           agentName={agent.name}
+          mode={agent.revoked ? "whitelist" : "revoke"}
           onClose={() => setRevokeOpen(false)}
           onSuccess={() => {
             setRevokeOpen(false);

@@ -2,22 +2,66 @@ import { useEffect, useState } from "react";
 import { Modal } from "../Modal";
 import { Icon } from "../Icon";
 import { errorStyle } from "./styles";
-import { revokeAgent } from "../../api/agents";
+import { revokeAgent, unrevokeAgent } from "../../api/agents";
 import { ApiError } from "../../api/client";
+
+type Mode = "revoke" | "whitelist";
 
 interface Props {
   open: boolean;
   agentDID: string;
   agentName: string;
+  /** "revoke" (default) blocks the agent; "whitelist" reverses a prior revoke via /unrevoke-agent. */
+  mode?: Mode;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-type Phase = "confirm" | "revoking" | "success";
+type Phase = "confirm" | "working" | "success";
 
-export function RevokeAgentModal({ open, agentDID, agentName, onClose, onSuccess }: Props) {
+const COPY: Record<Mode, {
+  actionLabel: string;
+  workingLabel: string;
+  modalTitle: string;
+  confirmBody: (name: string) => string;
+  successTitle: (name: string) => string;
+  successBody: string;
+  color: string;
+  bg: string;
+  border: string;
+  buttonClass: string;
+}> = {
+  revoke: {
+    actionLabel: "Revoke agent",
+    workingLabel: "Revoking…",
+    modalTitle: "Revoke agent",
+    confirmBody: (name) =>
+      `This will permanently revoke ${name}. It will lose all access to connected apps and will no longer be able to handle intents.`,
+    successTitle: (name) => `"${name}" has been revoked`,
+    successBody: "This agent can no longer interact with connected apps or intents.",
+    color: "var(--threat)",
+    bg: "linear-gradient(135deg, rgba(220,38,38,0.18), rgba(220,38,38,0.04))",
+    border: "1px solid rgba(220,38,38,0.22)",
+    buttonClass: "btn danger solid",
+  },
+  whitelist: {
+    actionLabel: "Whitelist agent",
+    workingLabel: "Whitelisting…",
+    modalTitle: "Whitelist agent",
+    confirmBody: (name) => `This will reverse the revoke on ${name}, restoring its access to connected apps and intents.`,
+    successTitle: (name) => `"${name}" has been whitelisted`,
+    successBody: "This agent can interact with connected apps and handle intents again.",
+    color: "var(--safe)",
+    bg: "linear-gradient(135deg, rgba(5,150,105,0.18), rgba(5,150,105,0.04))",
+    border: "1px solid rgba(5,150,105,0.22)",
+    buttonClass: "btn safe solid",
+  },
+};
+
+export function RevokeAgentModal({ open, agentDID, agentName, mode = "revoke", onClose, onSuccess }: Props) {
   const [phase, setPhase] = useState<Phase>("confirm");
   const [err, setErr] = useState<string | null>(null);
+  const copy = COPY[mode];
 
   useEffect(() => {
     if (open) {
@@ -26,14 +70,15 @@ export function RevokeAgentModal({ open, agentDID, agentName, onClose, onSuccess
     }
   }, [open]);
 
-  const doRevoke = async () => {
+  const doAction = async () => {
     setErr(null);
-    setPhase("revoking");
+    setPhase("working");
     try {
-      await revokeAgent(agentDID);
+      if (mode === "revoke") await revokeAgent(agentDID);
+      else await unrevokeAgent(agentDID);
       setPhase("success");
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Failed to revoke agent");
+      setErr(e instanceof ApiError ? e.message : `Failed to ${mode === "revoke" ? "revoke" : "whitelist"} agent`);
       setPhase("confirm");
     }
   };
@@ -47,7 +92,7 @@ export function RevokeAgentModal({ open, agentDID, agentName, onClose, onSuccess
     return (
       <Modal
         open={open}
-        title="Agent revoked"
+        title={mode === "revoke" ? "Agent revoked" : "Agent whitelisted"}
         onClose={handleDone}
         footer={
           <button type="button" className="btn primary" onClick={handleDone}>
@@ -72,9 +117,9 @@ export function RevokeAgentModal({ open, agentDID, agentName, onClose, onSuccess
               borderRadius: 999,
               display: "grid",
               placeItems: "center",
-              background: "linear-gradient(135deg, rgba(220,38,38,0.18), rgba(220,38,38,0.04))",
-              color: "var(--threat)",
-              border: "1px solid rgba(220,38,38,0.22)",
+              background: copy.bg,
+              color: copy.color,
+              border: copy.border,
             }}
           >
             <Icon name="shield" size={28} />
@@ -89,10 +134,10 @@ export function RevokeAgentModal({ open, agentDID, agentName, onClose, onSuccess
                 marginBottom: 6,
               }}
             >
-              “{agentName}” has been revoked
+              {copy.successTitle(agentName)}
             </div>
             <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.55, maxWidth: 360 }}>
-              This agent can no longer interact with connected apps or intents.
+              {copy.successBody}
             </div>
           </div>
         </div>
@@ -100,32 +145,32 @@ export function RevokeAgentModal({ open, agentDID, agentName, onClose, onSuccess
     );
   }
 
-  const revoking = phase === "revoking";
+  const working = phase === "working";
   return (
     <Modal
       open={open}
-      title="Revoke agent"
-      onClose={revoking ? () => {} : onClose}
+      title={copy.modalTitle}
+      onClose={working ? () => {} : onClose}
       footer={
         <>
-          <button type="button" className="btn ghost" onClick={onClose} disabled={revoking}>
+          <button type="button" className="btn ghost" onClick={onClose} disabled={working}>
             Cancel
           </button>
           <button
             type="button"
-            className="btn danger solid"
-            onClick={doRevoke}
-            disabled={revoking}
+            className={copy.buttonClass}
+            onClick={doAction}
+            disabled={working}
             style={{ minWidth: 130, justifyContent: "center" }}
           >
-            {revoking ? (
+            {working ? (
               <>
-                <Spinner size={14} /> Revoking…
+                <Spinner size={14} /> {copy.workingLabel}
               </>
             ) : (
               <>
                 <Icon name="shield" size={14} />
-                Revoke agent
+                {copy.actionLabel}
               </>
             )}
           </button>
@@ -133,10 +178,7 @@ export function RevokeAgentModal({ open, agentDID, agentName, onClose, onSuccess
       }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ fontSize: 13.5, color: "var(--fg)", lineHeight: 1.55 }}>
-          This will permanently revoke <strong>{agentName}</strong>. It will lose all access to
-          connected apps and will no longer be able to handle intents. 
-        </div>
+        <div style={{ fontSize: 13.5, color: "var(--fg)", lineHeight: 1.55 }}>{copy.confirmBody(agentName)}</div>
         {err && <div style={errorStyle}>{err}</div>}
       </div>
     </Modal>

@@ -4,9 +4,9 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { ScoreBar } from "../components/ScoreBar";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { AccessRequestModal } from "../components/forms/AccessRequestModal";
+import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics, useHomeMetrics } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { AppIcon } from "../components/AppIcon";
@@ -40,6 +40,7 @@ export function AgentsToolsPage() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState<{ open: boolean; agent?: Agent }>({ open: false });
+  const [policyOpen, setPolicyOpen] = useState<Agent | null>(null);
 
   const isAgents = tab === "agents";
   const rows = isAgents ? agents : tools;
@@ -48,7 +49,7 @@ export function AgentsToolsPage() {
     {
       key: "name",
       label: "Agent",
-      width: "18%",
+      width: "20%",
       sortFn: (a, b) => a.name.localeCompare(b.name),
       render: (r) => <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>,
     },
@@ -56,6 +57,7 @@ export function AgentsToolsPage() {
       key: "interactions",
       label: "Interactions",
       align: "right",
+      width: "15%",
       sortFn: (a, b) => a.interactions - b.interactions,
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
@@ -65,43 +67,77 @@ export function AgentsToolsPage() {
       key: "score",
       label: "Reliability",
       align: "right",
+      width: "25%",
       sortFn: (a, b) => a.score - b.score,
-      render: (r) =>
-        r.interactions > 0 ? (
-          <ScoreBar value={computeReliability(r.interactions, r.threats)} />
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>
-        ),
+      render: (r) => {
+        if (r.interactions <= 0) {
+          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
+        }
+        const pct = computeReliability(r.interactions, r.threats);
+        const color = pct < 70 ? "var(--threat)" : pct < 85 ? "var(--warn)" : "var(--safe)";
+        return (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color, minWidth: 40, textAlign: "right" }}>
+              {pct}
+            </span>
+            <div style={{ width: 80, height: 6, borderRadius: 999, background: "var(--bg-3)", overflow: "hidden", flexShrink: 0 }}>
+              <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: color, borderRadius: 999 }} />
+            </div>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-muted)", minWidth: 34, textAlign: "right" }}>
+              {Math.round(pct)}%
+            </span>
+          </div>
+        );
+      },
     },
     {
       key: "created",
       label: "Created",
       align: "right",
+      width: "15%",
       sortFn: (a, b) => a.created - b.created,
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-dim)" }}>{timeAgo(r.created)}</span>
       ),
     },
+    // {
+    //   key: "connected",
+    //   label: "Apps Interacted",
+    //   align: "right",
+    //   sortFn: (a, b) => a.connected - b.connected,
+    //   render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.connected}</span>,
+    // },
     {
-      key: "threats",
-      label: "Threats",
+      key: "actions",
+      label: "Action",
       align: "right",
-      sortFn: (a, b) => a.threats - b.threats,
-      render: (r) =>
-        r.threats > 0 ? (
-          <span className="chip threat" style={{ fontVariantNumeric: "tabular-nums" }}>
-            {r.threats}
-          </span>
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>
-        ),
-    },
-    {
-      key: "connected",
-      label: "Apps Interacted",
-      align: "right",
-      sortFn: (a, b) => a.connected - b.connected,
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.connected}</span>,
+      width: "25%",
+      render: (r) => (
+        <div className="row-actions" style={{ flexWrap: "nowrap" }}>
+          <button
+            className="btn-mini danger"
+            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setPolicyOpen(r);
+            }}
+          >
+            <Icon name="eye" size={12} />
+            View Policy
+          </button>
+          <button
+            className="btn-mini info"
+            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/agents/${r.id}`);
+            }}
+          >
+            <Icon name="search" size={12} />
+            Inspect
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -295,6 +331,12 @@ export function AgentsToolsPage() {
         agentName={accessOpen.agent?.name}
         onClose={() => setAccessOpen({ open: false })}
         onSuccess={() => setAccessOpen({ open: false })}
+      />
+      <ViewPolicyModal
+        open={!!policyOpen}
+        name={policyOpen?.name || ""}
+        content={policyOpen?.policy}
+        onClose={() => setPolicyOpen(null)}
       />
     </div>
   );

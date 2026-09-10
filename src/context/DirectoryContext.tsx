@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchAllAgents, fetchAllTools } from "../data/api";
 import { listAllUsers, type OrgUser } from "../api/users";
-import { setDirectorySnapshot, type DirectoryEntry } from "../data/directoryCache";
+import { setDirectorySnapshot, markDirectoryReady, type DirectoryEntry } from "../data/directoryCache";
 import type { Agent, Tool } from "../types";
 
 export type { DirectoryEntry };
@@ -53,6 +53,9 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
       setTools(t);
       setUsers(u);
       setLoading(false);
+      // Signals waitForDirectoryReady() — see directoryCache.ts for why this
+      // matters (agent-vs-tool classification racing ahead of this load).
+      markDirectoryReady();
     });
     return () => {
       cancelled = true;
@@ -80,6 +83,11 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
 /** Returns the DID → entry map (empty Map if no provider mounted). */
 export function useDirectory(): Map<string, DirectoryEntry> {
   return useContext(Ctx)?.map ?? new Map<string, DirectoryEntry>();
+}
+
+/** True until the directory's initial fetchAllAgents/fetchAllTools/listAllUsers walk settles. */
+export function useDirectoryLoading(): boolean {
+  return useContext(Ctx)?.loading ?? true;
 }
 
 /** Shortened DID fallback for unknown entries. */

@@ -3,7 +3,7 @@
 
 import { apiRequest } from "../api/client";
 import { isDummyMode } from "./dummyRouter";
-import { getDirectorySnapshot } from "./directoryCache";
+import { getDirectorySnapshot, waitForDirectoryReady } from "./directoryCache";
 import dummy from "./dummy.json";
 import type {
   Agent,
@@ -786,6 +786,7 @@ interface ApiAgentInfo {
   appsInteracted?: number;
   /** Names of the apps counted in `appsInteracted`. */
   appsList?: string[];
+  revoked?: boolean;
 }
 
 export async function fetchAgent(id: string): Promise<Agent | null> {
@@ -804,6 +805,7 @@ export async function fetchAgent(id: string): Promise<Agent | null> {
       env: r.orgID || "",
       owner: r.deployerDID || "",
       policy: r.policy || "",
+      revoked: !!r.revoked,
     };
   } catch {
     return null;
@@ -847,7 +849,21 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     allInteractions.push(...page.interactions);
   }
 
-  const initiatorDID = (r.initiatorDID ?? "").trim().toLowerCase();
+  // "Owner" is the sender of the intent's very first interaction, not the
+  // top-level initiatorDID/initiatorName — those two can disagree (e.g. the
+  // human user who kicked things off vs. the first agent in the chain), and
+  // the Intent page's Owner card should reflect who actually triggered it.
+  const firstInteraction = r.interactions?.[0];
+  const ownerDID = firstInteraction?.from || r.initiatorDID;
+  const ownerName = firstInteraction?.fromName || r.initiatorName;
+
+  // Wait for the org directory before classifying — otherwise a request that
+  // races ahead of DirectoryProvider's initial load falls back to the
+  // DID-prefix heuristic, which misclassifies tools as agents. See
+  // directoryCache.ts for the full story.
+  await waitForDirectoryReady();
+
+  const initiatorDID = (ownerDID ?? "").trim().toLowerCase();
   const agentDids = new Set<string>();
   const toolDids = new Set<string>();
   for (const ix of allInteractions) {
@@ -865,8 +881,8 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
 
   return mapIntent({
     intentID: r.intentID,
-    initiatorDID: r.initiatorDID,
-    initiatorName: r.initiatorName,
+    initiatorDID: ownerDID,
+    initiatorName: ownerName,
     startedAt: r.startedAt,
     endedAt: r.endedAt,
     status: r.status,
@@ -907,7 +923,14 @@ export async function fetchAgentInteractions(id: string, page = 1): Promise<Inte
  */
 async function enrichIntentApps(intent: Intent): Promise<Intent> {
   try {
-    const firstPage = await fetchIntentInteractionsPaged(intent.id, 1);
+    const [firstPage] = await Promise.all([
+      fetchIntentInteractionsPaged(intent.id, 1),
+      // See directoryCache.ts — without this, a request racing ahead of
+      // DirectoryProvider's initial load misclassifies tools as agents via
+      // the DID-prefix fallback, silently dropping them from "apps
+      // interacted" (the intermittent "icons sometimes don't load" bug).
+      waitForDirectoryReady(),
+    ]);
     const apps = new Map<string, { id: string; name: string }>();
     for (const ix of firstPage.interactions) {
       if (classifyParticipant(ix.initiator.id) === "tool") apps.set(ix.initiator.id, ix.initiator);

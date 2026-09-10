@@ -37,7 +37,8 @@ export type IconName =
   | "pause"
   | "user"
   | "key"
-  | "trash";
+  | "trash"
+  | "flag";
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
   name: IconName;
@@ -212,6 +213,12 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
       <path d="M10 11v6M14 11v6" />
+    </>
+  ),
+  flag: (
+    <>
+      <path d="M5 3v18" />
+      <path d="M5 4h13l-3 4 3 4H5" />
     </>
   ),
 };

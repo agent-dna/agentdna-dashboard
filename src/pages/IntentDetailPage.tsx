@@ -421,7 +421,7 @@ export function IntentDetailPage() {
                     code {threatSummary.threatCode}
                   </span>
                   {threatSummary.message && (
-                    <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 3 }}>{threatSummary.message}</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-muted)", marginTop: 3 }}>{threatSummary.message}</div>
                   )}
                   {threatCount > 1 && (
                     <div style={{ fontSize: 11.5, color: "var(--fg-faint)", marginTop: 3 }}>
