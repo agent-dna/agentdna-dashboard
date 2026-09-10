@@ -77,6 +77,21 @@ export const useInteractionsPaged = (page = 1) =>
     [page],
   );
 export const useAlerts = (page = 1) => useAsync<Interaction[]>(() => api.fetchAlerts(page), [], [page]);
+export const useThreatEventsPaged = (page = 1, limit = 10) =>
+  useAsync<api.PagedThreatEvents>(
+    () => api.fetchThreatEvents(page, limit),
+    { items: [], total: 0, page: 1, pageSize: limit, totalPages: 1 },
+    [page, limit],
+  );
+export const useTopThreats = () => useAsync<api.TopThreat[]>(api.fetchTopThreats, []);
+export const useThreatByID = (threatId: string | undefined) =>
+  useAsync<api.ThreatByID | null>(() => api.fetchThreatByID(threatId || ""), null, [threatId]);
+export const useThreatsListPaged = (page = 1) =>
+  useAsync<api.PagedThreatsList>(
+    () => api.fetchThreatsList(page),
+    { items: [], total: 0, page: 1, pageSize: 10, totalPages: 1 },
+    [page],
+  );
 export const useHomeMetrics = (page = 1) =>
   useAsync<HomeMetrics>(
     () => api.fetchHomeMetrics(page),
@@ -88,7 +103,7 @@ export const useAgentsAppsMetrics = () =>
     api.fetchAgentsAppsMetrics,
     { topAgents: [], topApps: [], metrics: { totalInteractions: 0, totalThreats: 0, totalAgents: 0, totalApps: 0, avgReliability: 0 } },
   );
-export const useSeries = (range: "24h" | "7d") =>
+export const useSeries = (range: "24h" | "7d" | "30d") =>
   useAsync<TimeSeries>(() => api.fetchSeries(range), { total: [], safe: [], threats: [] }, [range]);
 export const useHeatmap = () => useAsync<HeatmapRow[]>(api.fetchHeatmap, []);
 
@@ -100,6 +115,14 @@ export const useAgentInteractions = (id: string) =>
   useAsync<Interaction[]>(() => api.fetchAgentInteractions(id), [], [id]);
 export const useAgentIntents = (id: string) =>
   useAsync<Intent[]>(() => api.fetchAgentIntents(id), [], [id]);
+export const useAgentTools = (id: string) =>
+  useAsync<api.AgentToolLink[]>(() => api.fetchAgentTools(id), [], [id]);
+export const useAgentToolInfo = (agentId: string, toolId: string) =>
+  useAsync<api.AgentToolDetail | null>(
+    () => api.fetchAgentToolInfo(agentId, toolId),
+    null,
+    [agentId, toolId],
+  );
 export const useIntentInteractions = (id: string) =>
   useAsync<Interaction[]>(() => api.fetchIntentInteractions(id), [], [id]);
 
@@ -114,6 +137,19 @@ export const useIntentParticipants = (id: string) =>
 export const useLogs = (kind: "agent" | "intent", id: string) =>
   useAsync<LogEntry[]>(() => api.fetchLogs(kind, id), [], [kind, id]);
 
+export const useUserInfo = (
+  userID: string,
+  interactionsPage = 1,
+  intentsPage = 1,
+  threatsPage = 1,
+  agentsPage = 1,
+) =>
+  useAsync<api.UserDetailResult | null>(
+    () => api.fetchUserInfo(userID, interactionsPage, intentsPage, threatsPage, agentsPage),
+    null,
+    [userID, interactionsPage, intentsPage, threatsPage, agentsPage],
+  );
+
 export const useAgentPolicyHistory = (id: string) =>
   useAsync<PolicyHistory | null>(
     () => (id ? fetchAgentPolicyHistory(id).catch(() => null) : Promise.resolve(null)),
@@ -126,3 +162,13 @@ export const useIntentDiagram = (id: string) =>
 
 export const useIntentBlockData = (id: string) =>
   useAsync<api.IntentBlock | null>(() => api.fetchIntentBlockData(id), null, [id]);
+
+export const useToolInfo = (nameOrDid: string, interactionsPage = 1, intentsPage = 1) =>
+  useAsync<api.ToolDetailResult | null>(
+    () => api.fetchToolInfo(nameOrDid, interactionsPage, intentsPage),
+    null,
+    [nameOrDid, interactionsPage, intentsPage],
+  );
+
+export const useToolAgentScores = (toolDID: string) =>
+  useAsync<api.ToolAgentScore[]>(() => api.fetchToolAgentScores(toolDID), [], [toolDID]);

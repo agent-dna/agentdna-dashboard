@@ -5,6 +5,49 @@ import { fetchUserProfile, fetchAdminProfile } from "../api/profile";
 import { dummyCurrentUser, isDummyMode } from "../data/dummyRouter";
 
 const USER_KEY = "agentdna.user";
+const SESSION_START_KEY = "agentdna.sessionStart";
+
+/** Hard cap on how long a session survives, regardless of what the JWT claims. */
+const MAX_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
+
+function markSessionStart() {
+  try {
+    localStorage.setItem(SESSION_START_KEY, String(Date.now()));
+  } catch {
+    // ignore
+  }
+}
+
+function clearSessionStart() {
+  try {
+    localStorage.removeItem(SESSION_START_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * True when the stored session is older than MAX_SESSION_MS. Sessions created before
+ * this cap existed have no recorded start, so we stamp them now instead of evicting
+ * everyone at once — the JWT `exp` check and the 401 handler still catch stale ones.
+ */
+function isSessionExpired(): boolean {
+  try {
+    const raw = localStorage.getItem(SESSION_START_KEY);
+    if (!raw) {
+      markSessionStart();
+      return false;
+    }
+    const started = Number(raw);
+    if (!Number.isFinite(started)) {
+      markSessionStart();
+      return false;
+    }
+    return Date.now() - started >= MAX_SESSION_MS;
+  } catch {
+    return false;
+  }
+}
 
 export interface AuthUser {
   did: string;
@@ -104,15 +147,25 @@ function dummyUser(): AuthUser {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const dummy = isDummyMode();
-  const [user, setUser] = useState<AuthUser | null>(() =>
-    dummy ? dummyUser() : readStoredUser() || userFromToken(getToken()),
-  );
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (dummy) return dummyUser();
+    // A token that is past its exp, or a session older than 7 days, is dead — don't
+    // restore a logged-in shell the backend will only answer with 401s.
+    if (!userFromToken(getToken()) || isSessionExpired()) {
+      setToken(null);
+      writeStoredUser(null);
+      clearSessionStart();
+      return null;
+    }
+    return readStoredUser() || userFromToken(getToken());
+  });
   const [token, setTokenState] = useState<string | null>(() => (dummy ? "dummy.jwt.token" : getToken()));
   const [loading, setLoading] = useState(false);
 
   const logout = useCallback(() => {
     setToken(null);
     writeStoredUser(null);
+    clearSessionStart();
     setUser(null);
     setTokenState(null);
   }, []);
@@ -120,25 +173,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setUnauthorizedHandler(() => {
       writeStoredUser(null);
+      clearSessionStart();
       setUser(null);
       setTokenState(null);
     });
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  // Proactively sign out when the JWT expires mid-session
+  // Proactively sign out when the JWT expires or the 7-day session cap is hit —
+  // both while the tab stays open and when it wakes back up after being away.
   useEffect(() => {
     if (dummy) return;
-    const id = window.setInterval(() => {
+    const check = () => {
       const tok = getToken();
-      if (tok && userFromToken(tok) === null) {
-        setToken(null);
-        writeStoredUser(null);
-        setUser(null);
-        setTokenState(null);
-      }
-    }, 30_000);
-    return () => window.clearInterval(id);
+      if (!tok) return;
+      if (userFromToken(tok) !== null && !isSessionExpired()) return;
+      setToken(null);
+      writeStoredUser(null);
+      clearSessionStart();
+      setUser(null);
+      setTokenState(null);
+    };
+    const id = window.setInterval(check, 30_000);
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
   }, [dummy]);
 
   const applyAuthResponse = useCallback((res: LoginResponse) => {
@@ -152,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       agent_access_list: res.agent_access_list,
     };
     setToken(res.token);
+    markSessionStart();
     writeStoredUser(u);
     setUser(u);
     setTokenState(res.token);
@@ -183,6 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const u = dummyUser();
         u.email = email || u.email;
         setToken("dummy.jwt.token");
+        markSessionStart();
         writeStoredUser(u);
         setUser(u);
         setTokenState("dummy.jwt.token");
@@ -200,6 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u = userFromToken(jwt);
     if (!u) throw new Error("Received invalid or expired token.");
     setToken(jwt);
+    markSessionStart();
     writeStoredUser(u);
     setUser(u);
     setTokenState(jwt);
@@ -213,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         u.email = username || u.email;
         u.is_admin = true;
         setToken("dummy.jwt.token");
+        markSessionStart();
         writeStoredUser(u);
         setUser(u);
         setTokenState("dummy.jwt.token");
@@ -234,6 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         u.org_id = org || u.org_id;
         u.is_admin = true;
         setToken("dummy.jwt.token");
+        markSessionStart();
         writeStoredUser(u);
         setUser(u);
         setTokenState("dummy.jwt.token");
@@ -257,6 +325,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         u.org_id = orgId || u.org_id;
         u.is_admin = false;
         setToken("dummy.jwt.token");
+        markSessionStart();
         writeStoredUser(u);
         setUser(u);
         setTokenState("dummy.jwt.token");

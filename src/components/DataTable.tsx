@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 export interface DataTableColumn<R> {
   key: string;
@@ -15,6 +15,8 @@ interface DataTableProps<R extends { id?: string }> {
   onRowClick?: (row: R) => void;
   selectedId?: string | null;
   emptyText?: string;
+  /** Extra inline style per row, e.g. tinting threat rows red. */
+  rowStyle?: (row: R) => CSSProperties | undefined;
 }
 
 export function DataTable<R extends { id?: string }>({
@@ -23,6 +25,7 @@ export function DataTable<R extends { id?: string }>({
   onRowClick,
   selectedId,
   emptyText = "No data",
+  rowStyle,
 }: DataTableProps<R>) {
   const [sort, setSort] = useState<{ key: string | null; dir: 1 | -1 }>({ key: null, dir: 1 });
 
@@ -73,7 +76,7 @@ export function DataTable<R extends { id?: string }>({
               key={row.id || i}
               className={selectedId && row.id === selectedId ? "selected" : ""}
               onClick={() => onRowClick && onRowClick(row)}
-              style={{ cursor: onRowClick ? "pointer" : "default" }}
+              style={{ cursor: onRowClick ? "pointer" : "default", ...rowStyle?.(row) }}
             >
               {columns.map((c) => (
                 <td key={c.key} style={{ textAlign: c.align || "left", width: c.width }}>

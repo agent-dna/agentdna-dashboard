@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Icon, type IconName } from "./components/Icon";
+import { initials } from "./lib/format";
 import logoMark from "./assets/agentdna-logo.png";
 import { Drawer } from "./components/Drawer";
-// import { TweaksPanel } from "./components/TweaksPanel";
 import { EntityDetail } from "./components/drawer/EntityDetail";
 import { InteractionDetail } from "./components/drawer/InteractionDetail";
 import { IntentDetail } from "./components/drawer/IntentDetail";
@@ -11,6 +11,7 @@ import { SearchDropdown } from "./components/SearchDropdown";
 import { useDrawer } from "./context/DrawerContext";
 import { useTweaks } from "./context/TweaksContext";
 import { useAuth } from "./context/AuthContext";
+import { useIntentReview } from "./context/IntentReviewContext";
 import { listAgentCreationRequests, listAccessRequestsForOrg } from "./api/requests";
 import { fetchSearch, type SearchResults } from "./data/api";
 import type { Agent, Tool, Intent, Interaction } from "./types";
@@ -25,8 +26,9 @@ interface NavEntry {
 export function App() {
   const { tweaks, setTweak } = useTweaks();
   const { drawer, closeDrawer } = useDrawer();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
+  const { unacknowledgedCount } = useIntentReview();
   const [pendingCount, setPendingCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
@@ -61,9 +63,8 @@ export function App() {
 
   const NAV_WORKSPACE: NavEntry[] = [
     { to: "/dashboard", label: "Home", icon: "home" },
-    { to: "/intents", label: "Intents", icon: "intents" },
+    { to: "/intents", label: "Intents", icon: "intents", badge: unacknowledgedCount > 0 ? unacknowledgedCount : undefined },
     { to: "/agents", label: "Agents & Apps", icon: "agents" },
-    { to: "/graph", label: "Flow", icon: "activity" },
     { to: "/requests", label: "Requests", icon: "box", badge: pendingCount > 0 ? pendingCount : undefined },
     { to: "/interactions", label: "Interactions", icon: "interactions" },
   ];
@@ -90,38 +91,53 @@ export function App() {
       <aside className="sidebar">
           <img src={logoMark} alt="AgentDNA" className="brand-full" />
         <nav className="sb-nav">
-          <div className="sb-section">Workspace</div>
-          {NAV_WORKSPACE.map((n) => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.to === "/requests"}
-              className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
-              title={n.label}
-            >
-              <Icon className="icon" name={n.icon} size={18} />
-              <span className="label">{n.label}</span>
-              {n.badge != null && <span className="badge">{n.badge}</span>}
-            </NavLink>
-          ))}
-
-          <div style={{ flex: 1 }} />
-          <div className="sb-section">Account</div>
-          <NavLink
-            to="/profile"
-            className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
-            title="Profile"
-          >
-            <Icon className="icon" name="user" size={18} />
-            <span className="label">Profile</span>
-          </NavLink>
-        </nav>
-        <div className="sb-foot">
-          <div className="who">
-            {user ? (user.name || (user.is_admin ? user.email : user.email.split("@")[0])) : "Guest"}
-            <div className="sub">{user?.org_id || ""}</div>
+          <div className="sb-workspace">
+            <div className="sb-section">Workspace</div>
+            {NAV_WORKSPACE.map((n) => ( 
+              <NavLink
+                key={n.to}
+                to={n.to}
+                end={n.to === "/requests"}
+                className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+                title={n.label}
+              >
+                <Icon className="icon" name={n.icon} size={18} />
+                <span className="label">{n.label}</span>
+                {n.badge != null && <span className="badge">{n.badge}</span>}
+              </NavLink> 
+            ))}
           </div>
-        </div>
+
+          <div className="sb-bottom">
+            <div className="sb-section">Account</div>
+            <button
+              type="button"
+              className="sb-item"
+              onClick={logout}
+              title="Sign out"
+              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(220,38,38,0.12)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(220,38,38,0.06)"; }}
+              style={{
+                background: "rgba(220,38,38,0.06)",
+                border: "1px solid rgba(220,38,38,0.2)",
+                width: "100%",
+                textAlign: "left",
+                color: "var(--threat)",
+                cursor: "pointer",
+              }}
+            >
+              <Icon className="icon" name="arrowRight" size={18} />
+              <span className="label">Sign out</span>
+            </button>
+            <NavLink to="/profile" className="sb-foot" title="Profile" style={{ textDecoration: "none" }}>
+              <div className="avatar">{initials(user ? (user.name || user.email) : "Guest")}</div>
+              <div className="who">
+                {user ? (user.name || (user.is_admin ? user.email : user.email.split("@")[0])) : "Guest"}
+                <div className="sub">{user?.org_id || ""}</div>
+              </div>
+            </NavLink>
+          </div>
+        </nav>
       </aside>
 
       <div className="main">
@@ -177,3 +193,5 @@ export function App() {
 }
 
 export default App;
+
+

@@ -1,20 +1,34 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell } from "../components/EntityCell";
+import { EntityLink } from "../components/EntityLink";
+import { entityPath } from "../lib/entityLinks";
+import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
-import { useIntent, useIntentInteractionsPaged, useIntentParticipants } from "../data/hooks";
+import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useThreatByID } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
-import { timeAgo } from "../lib/format";
-import { useInteractionColumns } from "./InteractionsPage";
+import { useIntentReview } from "../context/IntentReviewContext";
+import { timeAgo, titleOrUnknown } from "../lib/format";
+import { LedgerTable } from "../components/LedgerTable";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
+import { updateIntentStatus } from "../data/api";
+import { ApiError } from "../api/client";
 import { IntentIdChip } from "../context/IntentNumbersContext";
-import type { IntentParticipant, Tool } from "../types";
+import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
+
+const REVIEW_STATUSES: IntentReviewStatus[] = ["Ongoing", "Acknowledged", "Flagged"];
+
+const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
+  Ongoing: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
+  Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
+  Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
+};
 
 type Tab = "interactions" | "participants";
 
@@ -22,16 +36,52 @@ export function IntentDetailPage() {
   const { intentId = "" } = useParams<{ intentId: string }>();
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
+  const resolve = useResolveName();
+  const { refetch: refetchIntentReview } = useIntentReview();
   const [tab, setTab] = useState<Tab>("interactions");
   const [interactionsPage, setInteractionsPage] = useState(1);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const statusBtnRef = useRef<HTMLButtonElement>(null);
+  const statusMenuRef = useRef<HTMLDivElement>(null);
+  const [statusMenuPos, setStatusMenuPos] = useState({ top: 0, right: 0 });
 
-  const { data: intent, loading } = useIntent(intentId);
+  // Fixed positioning (computed from the button's own rect) so the menu
+  // isn't clipped by the hero card's `overflow: hidden` the way an
+  // absolutely-positioned child would be.
+  useEffect(() => {
+    if (!statusMenuOpen) return;
+    const update = () => {
+      const rect = statusBtnRef.current?.getBoundingClientRect();
+      if (rect) setStatusMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    };
+    update();
+    const onOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!statusBtnRef.current?.contains(target) && !statusMenuRef.current?.contains(target)) {
+        setStatusMenuOpen(false);
+      }
+    };
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    document.addEventListener("mousedown", onOutside);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+      document.removeEventListener("mousedown", onOutside);
+    };
+  }, [statusMenuOpen]);
+
+  const intentState = useIntent(intentId);
+  const { data: intent, loading } = intentState;
   const { data: interactionsPaged, loading: interactionsLoading } = useIntentInteractionsPaged(intentId, interactionsPage);
   const interactions = interactionsPaged.interactions;
   const interactionsTotal = interactionsPaged.total;
   const interactionsTotalPages = interactionsPaged.totalPages;
   const { data: participants } = useIntentParticipants(intentId);
-  const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
+  const firstThreatID = interactions.find((i) => i.threat && i.threatID)?.threatID;
+  const { data: threatSummary, loading: threatSummaryLoading, error: threatSummaryError } = useThreatByID(firstThreatID);
   if (loading) {
     return (
       <div className="page">
@@ -57,13 +107,57 @@ export function IntentDetailPage() {
   }
 
   const participantRows = participants.map((p) => ({ ...p, id: `${p.type}:${p.entity.id}` }));
+
+  const changeStatus = async (next: IntentReviewStatus) => {
+    if (next === intent.reviewStatus) { setStatusMenuOpen(false); return; }
+    setStatusSaving(true);
+    setStatusError(null);
+    try {
+      await updateIntentStatus(intent.id, next);
+      intentState.refetch();
+      refetchIntentReview();
+      setStatusMenuOpen(false);
+    } catch (e) {
+      setStatusError(e instanceof ApiError ? e.message : "Failed to update status");
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  /**
+   * Participants route to their own detail page when the directory knows what
+   * they are; apps without a resolvable kind still fall back to the drawer.
+   */
+  const openParticipant = (p: IntentParticipant) => {
+    const to = entityPath(resolve(p.entity.id).kind ?? (p.type === "agent" ? "agent" : undefined), p.entity.id);
+    if (to) navigate(to);
+    else openDrawer("tool", p.entity as unknown as Tool);
+  };
+
   const threatCount = interactions.filter((i: { threat: boolean }) => i.threat).length;
+
+  // Interaction IDs end in "-<n>", the sequence number within the intent's
+  // block chain — list them in that order (1, 2, 3, …) rather than however
+  // the backend happened to return the page.
+  const interactionSeq = (id: string): number => {
+    const m = id.match(/-(\d+)$/);
+    return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+  };
+  const sortedInteractions = [...interactions].sort((a, b) => interactionSeq(a.id) - interactionSeq(b.id));
 
   const participantCols: DataTableColumn<IntentParticipant & { id: string }>[] = [
     {
       key: "name",
       label: "Name",
-      render: (r) => <EntityCell name={r.entity.name} sub={r.entity.id} paletteIx={r.entity.name.charCodeAt(0)} />,
+      render: (r) => (
+        <EntityCell
+          name={r.entity.name}
+          sub={r.entity.id}
+          nameNode={<EntityLink did={r.entity.id} fallbackName={r.entity.name} color="var(--fg)" />}
+          subNode={<EntityLink did={r.entity.id} color="var(--fg-muted)">{r.entity.id}</EntityLink>}
+          paletteIx={r.entity.name.charCodeAt(0)}
+        />
+      ),
     },
     {
       key: "count",
@@ -105,8 +199,7 @@ export function IntentDetailPage() {
             className="btn-mini"
             onClick={(e) => {
               e.stopPropagation();
-              if (r.type === "agent") navigate(`/agents/${r.entity.id}`);
-              else openDrawer("tool", r.entity as unknown as Tool);
+              openParticipant(r);
             }}
           >
             View
@@ -138,7 +231,7 @@ export function IntentDetailPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
+                gridTemplateColumns: "repeat(5, 1fr)",
                 gap: 24,
               }}
             >
@@ -153,7 +246,7 @@ export function IntentDetailPage() {
                     fontWeight: 600,
                   }}
                 >
-                  Initiator
+                  Owner
                 </div>
                 <div
                   style={{
@@ -165,7 +258,7 @@ export function IntentDetailPage() {
                     wordBreak: "break-word",
                   }}
                 >
-                  {intent.initiator.name || "—"}
+                  {resolveDisplayName(resolve, intent.initiator)}
                 </div>
                 {intent.provenanceRecordID ? (
                   <a
@@ -209,6 +302,24 @@ export function IntentDetailPage() {
               />
               <InfoStat label="Started" value={timeAgo(intent.started)} />
               <InfoStat
+                label="Status"
+                value={
+                  <span
+                    style={{
+                      display: "inline-block",
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      padding: "3px 10px",
+                      borderRadius: 999,
+                      color: REVIEW_STATUS_STYLE[intent.reviewStatus].color,
+                      background: REVIEW_STATUS_STYLE[intent.reviewStatus].bg,
+                    }}
+                  >
+                    {intent.reviewStatus}
+                  </span>
+                }
+              />
+              <InfoStat
                 label="Threat detected"
                 value={
                   <span style={{ color: threatCount > 0 ? "var(--threat)" : "var(--fg)", fontWeight: 600 }}>
@@ -220,7 +331,7 @@ export function IntentDetailPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, position: "relative" }}>
             <button className="btn primary" onClick={() => navigate(`/graph/${intent.id}`)}>
               <Icon name="flow" size={14} />
               View Flow
@@ -232,8 +343,102 @@ export function IntentDetailPage() {
               <Icon name="download" size={14} />
               Export
             </button>
+            <button ref={statusBtnRef} className="btn" onClick={() => setStatusMenuOpen((o) => !o)} disabled={statusSaving}>
+              <Icon name="settings" size={14} />
+              {statusSaving ? "Saving…" : "Change status"}
+            </button>
+            {statusMenuOpen && (
+              <div
+                ref={statusMenuRef}
+                style={{
+                  position: "fixed",
+                  top: statusMenuPos.top,
+                  right: statusMenuPos.right,
+                  background: "var(--bg-1)",
+                  border: "1px solid var(--line-strong)",
+                  borderRadius: 10,
+                  boxShadow: "0 12px 32px rgba(10,34,64,0.16)",
+                  padding: 6,
+                  minWidth: 160,
+                  zIndex: 300,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}
+              >
+                {REVIEW_STATUSES.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => changeStatus(s)}
+                    disabled={statusSaving}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      background: s === intent.reviewStatus ? "var(--bg-2)" : "transparent",
+                      border: "none",
+                      borderRadius: 7,
+                      padding: "7px 10px",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "var(--fg)",
+                      cursor: statusSaving ? "default" : "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    {s}
+                    {s === intent.reviewStatus && <Icon name="check" size={13} style={{ color: "var(--accent)" }} />}
+                  </button>
+                ))}
+              </div>
+            )}
+            {statusError && (
+              <div style={{ fontSize: 11.5, color: "var(--threat)", maxWidth: 160 }}>{statusError}</div>
+            )}
           </div>
         </div>
+
+        {threatCount > 0 && (
+          <div
+            style={{
+              marginTop: 18,
+              paddingTop: 16,
+              borderTop: "1px solid var(--line)",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+            }}
+          >
+            <Icon name="shield" size={15} style={{ color: "var(--threat)", flexShrink: 0, marginTop: 1 }} />
+            <div style={{ minWidth: 0 }}>
+              {threatSummaryLoading ? (
+                <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Loading threat details…</span>
+              ) : threatSummary ? (
+                <>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--threat)" }}>{titleOrUnknown(threatSummary.title)}</span>
+                  <span style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--fg-muted)", marginLeft: 8 }}>
+                    code {threatSummary.threatCode}
+                  </span>
+                  {threatSummary.message && (
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-muted)", marginTop: 3 }}>{threatSummary.message}</div>
+                  )}
+                  {threatCount > 1 && (
+                    <div style={{ fontSize: 11.5, color: "var(--fg-faint)", marginTop: 3 }}>
+                      +{threatCount - 1} more threat{threatCount - 1 === 1 ? "" : "s"} in this intent
+                    </div>
+                  )}
+                </>
+              ) : (
+                <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+                  {threatCount} threat{threatCount === 1 ? "" : "s"} detected in this intent
+                  {!firstThreatID && " (no threatID on the first threat interaction)"}
+                  {threatSummaryError && ` (failed to load details: ${threatSummaryError.message})`}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Activity metrics */}
@@ -257,11 +462,12 @@ export function IntentDetailPage() {
 
         {tab === "interactions" && (
           <>
-            <DataTable
-              rows={interactions}
-              columns={interactionCols}
-              onRowClick={(r) => openDrawer("interaction", r)}
+            <LedgerTable
+              rows={sortedInteractions}
               emptyText={interactionsLoading ? "Loading…" : "No interactions recorded for this intent yet."}
+              onView={(r) => openDrawer("interaction", r)}
+              // Every row here belongs to this intent — the column repeats the page.
+              showIntent={false}
             />
             <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} loading={interactionsLoading} onChange={setInteractionsPage} />
           </>
@@ -271,9 +477,7 @@ export function IntentDetailPage() {
           <DataTable
             rows={participantRows}
             columns={participantCols}
-            onRowClick={(r) =>
-              r.type === "agent" ? navigate(`/agents/${r.entity.id}`) : openDrawer("tool", r.entity as unknown as Tool)
-            }
+            onRowClick={(r) => openParticipant(r)}
             emptyText="No participants found."
           />
         )}

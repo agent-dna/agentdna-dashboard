@@ -1,16 +1,21 @@
-import { useState, type MouseEvent } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { initials } from "../lib/format";
 import { Icon } from "./Icon";
 import { isDummyMode } from "../data/dummyRouter";
 
 interface EntityCellProps {
+  /** Plain name — drives the avatar initials and the default rendering. */
   name: string;
   sub?: string;
   paletteIx?: number;
   icon?: string;
+  /** Replaces the rendered name (e.g. wrapped in a link). Initials still use `name`. */
+  nameNode?: ReactNode;
+  /** Replaces the rendered sub-line. Visibility still follows `sub`. */
+  subNode?: ReactNode;
 }
 
-export function EntityCell({ name, sub, paletteIx = 0, icon }: EntityCellProps) {
+export function EntityCell({ name, sub, paletteIx = 0, icon, nameNode, subNode }: EntityCellProps) {
   const av = `a${(paletteIx % 5) + 1}`;
   // In dummy/demo mode the sub-line is the raw DID which we explicitly hide.
   const showSub = !!sub && !isDummyMode();
@@ -18,8 +23,8 @@ export function EntityCell({ name, sub, paletteIx = 0, icon }: EntityCellProps) 
     <div className="cell-name">
       <div className={`av ${av}`}>{icon || initials(name)}</div>
       <div className="nm">
-        <div>{name}</div>
-        {showSub && <div className="sub">{sub}</div>}
+        <div>{nameNode ?? name}</div>
+        {showSub && <div className="sub">{subNode ?? sub}</div>}
       </div>
     </div>
   );

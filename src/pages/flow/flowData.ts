@@ -12,10 +12,10 @@
  */
 
 import type { Intent, Interaction } from "../../types";
-import type { IntentBlock, IntentDiagram } from "../../data/api";
+import type { DiagramInteraction, IntentBlock, IntentDiagram } from "../../data/api";
 import type { useResolveName } from "../../context/DirectoryContext";
 
-export type FlowNodeKind = "human" | "agent" | "tool";
+export type FlowNodeKind = "human" | "agent" | "tool" | "provenance";
 export type FlowDirection = "request" | "response";
 export type FlowVerdict = "allowed" | "blocked";
 
@@ -24,6 +24,8 @@ export interface FlowNode {
   kind: FlowNodeKind;
   name: string;
   label: string;
+  /** Raw DID this node was built from — `id` is a sanitized derivative. */
+  did?: string;
   /** normalized 0..1 — set by tierLayout */
   x: number;
   y: number;
@@ -42,6 +44,14 @@ export interface FlowStep {
   latency: number;
   /** ID of the TraceSpan this step corresponds to (for TraceInspector) */
   spanId: string;
+  /**
+   * Source interaction, when this step came from /intent-diagram. Steps are
+   * keyed off this rather than `from>to` because a parallel flow can hit the
+   * same node pair more than once.
+   */
+  interactionID?: string;
+  /** Ordering stamp from /intent-diagram; equal values mean concurrent hops. */
+  epoch?: number;
 }
 
 export interface TraceSpan {
@@ -72,6 +82,18 @@ export interface FlowTrace {
   totalCost: number;
 }
 
+export interface SealEdge {
+  /** Node whose envelope is being written to the ledger. */
+  from: string;
+  to: string;
+  /** Empty for the closing seal — the drop itself carries the meaning. */
+  label: string;
+  /** True when this seal was triggered by a blocked hop rather than completion. */
+  threat: boolean;
+  /** Step that triggers this seal, so playback can light it at the right beat. */
+  stepIndex: number;
+}
+
 export interface Flow {
   intentId: string;
   intent: Intent;
@@ -79,6 +101,8 @@ export interface Flow {
   nodeById: Record<string, FlowNode>;
   /** unique directed edges (from > to). */
   edges: [string, string][];
+  /** Terminal edges into the provenance layer. */
+  sealEdges: SealEdge[];
   steps: FlowStep[];
   status: "halted" | "completed";
   trace: FlowTrace;
@@ -139,6 +163,197 @@ function tierLayout(nodes: FlowNode[], orchId: string | null, steps: FlowStep[])
   return nodes;
 }
 
+/* ------- depth layout (DAG layering) ------- */
+
+/**
+ * Lay nodes out by longest-path depth from the initiator instead of by role.
+ *
+ * The role-based `tierLayout` collapses every agent into a single "worker"
+ * column, so a parallel flow (A fans out to B and C, both returning to A) ends
+ * up with A sitting alongside its own children and every edge drawn as an
+ * intra-column arc. Layering by depth puts each hop in its own column and lets
+ * concurrent siblings share one.
+ *
+ * Response hops are excluded from the depth graph: they point back up the tree
+ * and would otherwise form cycles that have no valid layering.
+ */
+function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
+  const ids = new Set(nodes.map((n) => n.id));
+
+  // First-appearance order, used to keep column ordering stable.
+  const order: Record<string, number> = {};
+  let o = 0;
+  for (const s of steps) {
+    for (const id of [s.from, s.to]) {
+      if (order[id] == null) order[id] = o++;
+    }
+  }
+
+  // Forward (request) edges only, deduped.
+  const outAdj = new Map<string, string[]>();
+  const indeg = new Map<string, number>();
+  for (const id of ids) { outAdj.set(id, []); indeg.set(id, 0); }
+
+  const seenEdge = new Set<string>();
+  const forward: Array<[string, string]> = [];
+  for (const s of steps) {
+    if (s.dir === "response") continue;
+    if (s.from === s.to) continue;
+    if (!ids.has(s.from) || !ids.has(s.to)) continue;
+    const key = `${s.from}>${s.to}`;
+    if (seenEdge.has(key)) continue;
+    seenEdge.add(key);
+    forward.push([s.from, s.to]);
+    outAdj.get(s.from)!.push(s.to);
+    indeg.set(s.to, indeg.get(s.to)! + 1);
+  }
+
+  // Kahn's topological sort, propagating longest-path depth.
+  const depth = new Map<string, number>();
+  for (const id of ids) depth.set(id, 0);
+
+  const queue = Array.from(ids).filter((id) => indeg.get(id) === 0);
+  queue.sort((a, b) => (order[a] ?? 0) - (order[b] ?? 0));
+  const settled = new Set<string>();
+
+  while (queue.length) {
+    const id = queue.shift()!;
+    settled.add(id);
+    for (const next of outAdj.get(id)!) {
+      depth.set(next, Math.max(depth.get(next)!, depth.get(id)! + 1));
+      indeg.set(next, indeg.get(next)! - 1);
+      if (indeg.get(next) === 0) queue.push(next);
+    }
+  }
+
+  // Anything left unsettled sits in a request-edge cycle (a re-entrant agent).
+  // Best-effort: place it one column past its deepest parent so it still lands
+  // somewhere sensible rather than collapsing to column 0.
+  for (const [from, to] of forward) {
+    if (!settled.has(to)) {
+      depth.set(to, Math.max(depth.get(to)!, depth.get(from)! + 1));
+    }
+  }
+
+  // Group into columns and spread each one vertically.
+  const byDepth = new Map<number, FlowNode[]>();
+  for (const n of nodes) {
+    const d = depth.get(n.id) ?? 0;
+    if (!byDepth.has(d)) byDepth.set(d, []);
+    byDepth.get(d)!.push(n);
+  }
+
+  const depths = Array.from(byDepth.keys()).sort((a, b) => a - b);
+  const xStart = 0.14;
+  const xEnd = 0.86;
+
+  depths.forEach((d, i) => {
+    const col = byDepth.get(d)!;
+    col.sort((a, b) => (order[a.id] ?? 0) - (order[b.id] ?? 0));
+    const x = depths.length === 1 ? 0.5 : xStart + ((xEnd - xStart) / (depths.length - 1)) * i;
+    const k = col.length;
+    const half = Math.min(0.34, 0.17 * (k - 1));
+    col.forEach((n, j) => {
+      n.x = x;
+      n.y = k === 1 ? 0.5 : 0.5 - half + 2 * half * (j / (k - 1));
+    });
+  });
+
+  return nodes;
+}
+
+
+/* ------- parallel rounds ------- */
+
+/**
+ * Group step indices into rounds that play together.
+ *
+ * A fan-out — one agent dispatching to several others at once — should light up
+ * as a single beat rather than a sequence. Consecutive request hops leaving the
+ * same node for different targets are treated as concurrent; when the diagram
+ * supplies epochs, they must match too, so genuinely sequential calls from the
+ * same source stay separate.
+ *
+ * Responses always stand alone: a reply is a distinct beat even when several
+ * arrive from a fan-out.
+ */
+export function groupParallelRounds(steps: FlowStep[]): number[][] {
+  const rounds: number[][] = [];
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    const open = rounds[rounds.length - 1];
+    const prev = open ? steps[open[open.length - 1]] : null;
+    const concurrent =
+      prev != null &&
+      s.dir === "request" &&
+      prev.dir === "request" &&
+      s.from === prev.from &&
+      s.to !== prev.to &&
+      (s.epoch == null || prev.epoch == null || s.epoch === prev.epoch);
+    if (concurrent && open) open.push(i);
+    else rounds.push([i]);
+  }
+  return rounds;
+}
+
+
+/* ------- provenance layer ------- */
+
+export const PROVENANCE_ID = "nd_provenance";
+
+/**
+ * Every flow terminates in the provenance layer.
+ *
+ * The last hop's envelope is sealed and stored; on top of that, any hop where a
+ * threat was detected writes its envelope immediately, so a halted flow still
+ * leaves a record at the point it was stopped.
+ *
+ * The node is positioned directly rather than by the layout pass — it isn't a
+ * participant in the call chain, it's the ledger the chain drops into, so it
+ * sits centred beneath the graph instead of taking a depth column.
+ */
+function attachProvenance(steps: FlowStep[], nodes: FlowNode[]): { node: FlowNode | null; sealEdges: SealEdge[] } {
+  if (steps.length === 0) return { node: null, sealEdges: [] };
+
+  const sealEdges: SealEdge[] = [];
+  const sealed = new Set<string>();
+
+  // The closing seal first, so if the final hop is itself blocked it reads as
+  // the full seal rather than a bare threat write.
+  const last = steps[steps.length - 1];
+  if (last) {
+    sealed.add(last.to);
+    sealEdges.push({
+      from: last.to,
+      to: PROVENANCE_ID,
+      label: "",
+      threat: last.verdict === "blocked",
+      stepIndex: steps.length - 1,
+    });
+  }
+
+  // Sit directly beneath the node that closes the flow, so the seal reads as a
+  // short drop from its source. Y is kept well inside the frame — the node's
+  // caption renders below it and would otherwise clip off the canvas.
+  const anchor = last ? nodes.find((n) => n.id === last.to) : undefined;
+  const node: FlowNode = {
+    id: PROVENANCE_ID,
+    kind: "provenance",
+    name: "Provenance Layer",
+    label: "",
+    x: anchor ? anchor.x : 0.5,
+    y: 0.82,
+  };
+
+  steps.forEach((s, i) => {
+    if (s.verdict !== "blocked" || sealed.has(s.to)) return;
+    sealed.add(s.to);
+    sealEdges.push({ from: s.to, to: PROVENANCE_ID, label: "Envelope stored", threat: true, stepIndex: i });
+  });
+
+  return { node, sealEdges };
+}
+
 /* ------- helpers ------- */
 
 function shortDid(did: string): string {
@@ -191,6 +406,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       id,
       kind,
       name,
+      did,
       label: kind === "tool" ? "App" : "",
       x: 0,
       y: 0,
@@ -223,6 +439,9 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       verdict: isBlocked ? "blocked" : "allowed",
       checks: { identity: true, trust: true, scope: !isBlocked },
       latency: Math.max(40, Math.floor(ixn.runtime || Math.floor(60 + Math.random() * 400))),
+      // Links this step back to the real Interaction record, so the trace
+      // inspector can show the exact same raw data as the interaction drawer.
+      interactionID: ixn.id,
     });
     // Only the target — the entity where the threat was detected — gets the
     // red box. The initiator (`fromNode`) is the culprit, not the victim, so
@@ -387,12 +606,17 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     spanId: stepSpan.get(`${s.from}>${s.to}`) || rootSpan.id,
   }));
 
+  // Appended after layout so the ledger keeps its fixed position.
+  const { node: provNode, sealEdges } = attachProvenance(steps, nodes);
+  if (provNode) nodes.push(provNode);
+
   return {
     intentId: intent.id,
     intent,
     nodes,
     nodeById: Object.fromEntries(nodes.map((n) => [n.id, n])),
     edges,
+    sealEdges,
     steps,
     status: halted ? "halted" : "completed",
     trace: flowTrace,
@@ -414,7 +638,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
   const ensureNode = (did: string, name: string, kind: FlowNodeKind, label: string): FlowNode => {
     const id = idForDid(did);
     if (!nodesById.has(id)) {
-      nodesById.set(id, { id, kind, name: name || shortDid(did), label, x: 0, y: 0 });
+      nodesById.set(id, { id, kind, name: name || shortDid(did), did, label, x: 0, y: 0 });
     }
     return nodesById.get(id)!;
   };
@@ -432,32 +656,55 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
   const halted = basicInfo.threatDetected || sorted.some((ix) => ix.threat);
 
-  // Stack-based nesting for outbound. spanForDid maps DID → its outbound span
-  // so response interactions can be nested under the sender's span.
-  // Stack starts empty; the first outbound interaction becomes the tree root.
+  // Nesting is tracked per-DID rather than on a single stack. A stack can only
+  // hold one open branch, so in a parallel flow the second fan-out hop would
+  // pop the first sibling's frame and reparent everything under it. Each agent
+  // instead owns its own frames, so concurrent siblings stay open at once.
+  //
+  // A DID can be activated more than once (a re-entrant agent), so frames are
+  // stored as a list and looked up by epoch.
   let rootSpan: TraceSpan | null = null;
-  const stack: Array<{ did: string; span: TraceSpan }> = [];
-  const spanSeq = new Map<string, number>();
-  const spanForDid = new Map<string, TraceSpan>();
+  const frames = new Map<string, Array<{ epoch: number; span: TraceSpan }>>();
+
+  const openFrame = (did: string, epoch: number, span: TraceSpan) => {
+    if (!frames.has(did)) frames.set(did, []);
+    frames.get(did)!.push({ epoch, span });
+  };
+
+  /** Most recent frame for `did` at or before `epoch`. */
+  const frameFor = (did: string, epoch: number): TraceSpan | null => {
+    const list = frames.get(did);
+    if (!list || list.length === 0) return null;
+    let best: TraceSpan | null = null;
+    for (const f of list) {
+      if (f.epoch <= epoch) best = f.span;
+    }
+    return best ?? list[list.length - 1].span;
+  };
 
   // ── Steps + span bookkeeping ────────────────────────────────────────────────
   // rawSteps includes ALL interactions so the hop count equals interactionsCount.
   const rawSteps: Omit<FlowStep, "spanId">[] = [];
-  const stepSpan = new Map<string, string>(); // "fromId>toId" → spanId
+  // Keyed by interactionID, not "fromId>toId" — a parallel flow can hit the
+  // same node pair twice and the second write would clobber the first.
+  const stepSpan = new Map<string, string>();
+
+  let spanSeq = 0;
+  const spanIdFor = (ix: DiagramInteraction, prefix = ""): string =>
+    `sp_${sanitize(intent.id)}_${prefix}${sanitize(ix.interactionID) || `ix${spanSeq++}`}`;
 
   // Responses are collected and processed after all outbound spans are built so
-  // spanForDid is fully populated before we look up the sender's span.
+  // every frame exists before we look up the sender's.
   const pendingResponses: typeof sorted = [];
 
   for (const ix of sorted) {
     const fromDid = ix.initiator;
     const toDid = ix.to;
     const isResponse = ix.type === "response";
-    const isTool = ix.type === "tool_call";
     const isBlocked = ix.threat;
 
-    const toKind: FlowNodeKind = toDid === basicInfo.initiatorDID ? "human" : (isTool ? "tool" : "agent");
-    const toLabel = toDid === basicInfo.initiatorDID ? "User" : (isTool ? "App" : "Agent");
+    const toKind: FlowNodeKind = toDid === basicInfo.initiatorDID ? "human" : "agent";
+    const toLabel = toDid === basicInfo.initiatorDID ? "User" : "Agent";
 
     const fromNode = ensureNode(
       fromDid,
@@ -475,18 +722,14 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     rawSteps.push({
       from: fromNodeId,
       to: toNodeId,
+      interactionID: ix.interactionID,
+      epoch: ix.epoch,
       dir: isResponse ? "response" : "request",
-      title: isResponse
-        ? `Response · ${fromNode.name}`
-        : isTool
-        ? `Invoke ${toNode.name}`
-        : `Delegate · ${toNode.name}`,
+      title: isResponse ? `Response · ${fromNode.name}` : `Delegate · ${toNode.name}`,
       summary: isBlocked
         ? `Scope check FAILED — ${fromNode.name} → ${toNode.name} was blocked.`
         : isResponse
         ? `${fromNode.name} returned result to ${toNode.name}.`
-        : isTool
-        ? `${fromNode.name} invoked ${toNode.name}. Capability token verified.`
         : `${fromNode.name} delegated work to ${toNode.name}. Checks passed.`,
       verdict: isBlocked ? "blocked" : "allowed",
       checks: { identity: true, trust: true, scope: !isBlocked },
@@ -498,21 +741,18 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
       continue;
     }
 
-    // Outbound: pop stack back to the frame matching the current sender.
-    while (stack.length > 1 && stack[stack.length - 1].did !== fromDid) {
-      stack.pop();
-    }
-    const parent = stack.length > 0 ? stack[stack.length - 1].span : null;
+    // Outbound: parent is the frame the sender was already running in. Looking
+    // it up per-DID (rather than popping a shared stack) is what lets two
+    // fan-out hops from the same agent both nest under it.
+    const parent = frameFor(fromDid, ix.epoch);
 
-    const seq = (spanSeq.get(toDid) || 0) + 1;
-    spanSeq.set(toDid, seq);
-    const spanId = `sp_${sanitize(intent.id)}_${sanitize(toDid)}_${seq}`;
+    const spanId = spanIdFor(ix);
 
     const span = mkSpan({
       id: spanId,
       name: ix.initiatorName || fromNode.name,
-      kind: isTool ? "tool" : "agent",
-      label: isTool ? "App" : "Agent",
+      kind: "agent",
+      label: "Agent",
       status: isBlocked ? "blocked" : "ok",
       input: ix.message || "",
       output: "",
@@ -533,12 +773,8 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     } else {
       rootSpan = span; // first outbound span is the tree root
     }
-    stepSpan.set(`${fromNodeId}>${toNodeId}`, spanId);
-    spanForDid.set(toDid, span);
-
-    if (!isTool) {
-      stack.push({ did: toDid, span });
-    }
+    stepSpan.set(ix.interactionID, spanId);
+    openFrame(toDid, ix.epoch, span);
   }
 
   // Response interactions: nest each response span under the outbound span of
@@ -553,14 +789,12 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
 
     ensureNode(toDid, ix.toName, toKind, toLabel);
 
-    const fromNodeId = idForDid(fromDid);
-    const toNodeId = idForDid(toDid);
+    // Nest under the frame the responder was running in at the time it replied.
+    // Matching on epoch matters for a re-entrant agent, which has more than one
+    // frame and would otherwise always resolve to the last.
+    const senderSpan = frameFor(fromDid, ix.epoch) ?? rootSpan!;
 
-    const senderSpan = spanForDid.get(fromDid) ?? rootSpan!;
-
-    const seq = (spanSeq.get(toDid) || 0) + 1;
-    spanSeq.set(toDid, seq);
-    const spanId = `sp_${sanitize(intent.id)}_resp_${sanitize(toDid || ix.toName)}_${seq}`;
+    const spanId = spanIdFor(ix, "resp_");
 
     const responseSpan = mkSpan({
       id: spanId,
@@ -583,7 +817,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     });
 
     senderSpan.children.push(responseSpan);
-    stepSpan.set(`${fromNodeId}>${toNodeId}`, spanId);
+    stepSpan.set(ix.interactionID, spanId);
   }
 
   // ── Assemble nodes / edges ─────────────────────────────────────────────────
@@ -600,15 +834,21 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     if (!seenEdges.has(key)) { seenEdges.add(key); edges.push([s.from, s.to]); }
   }
 
-  tierLayout(nodes, null, rawSteps as FlowStep[]);
+  // Depth layering, not role tiers — a parallel flow needs each hop in its own
+  // column with concurrent siblings sharing one.
+  depthLayout(nodes, rawSteps as FlowStep[]);
 
   const spanById: Record<string, TraceSpan> = {};
   for (const s of allSpans) spanById[s.id] = s;
 
   const steps: FlowStep[] = rawSteps.map((s) => ({
     ...s,
-    spanId: stepSpan.get(`${s.from}>${s.to}`) || rootSpan!.id,
+    spanId: (s.interactionID ? stepSpan.get(s.interactionID) : undefined) || rootSpan!.id,
   }));
+
+  // Appended after layout so the ledger keeps its fixed position.
+  const { node: provNode, sealEdges } = attachProvenance(steps, nodes);
+  if (provNode) nodes.push(provNode);
 
   const flowTrace: FlowTrace = {
     trace: rootSpan!,
@@ -628,6 +868,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     nodes,
     nodeById: Object.fromEntries(nodes.map((n) => [n.id, n])),
     edges,
+    sealEdges,
     steps,
     status: halted ? "halted" : "completed",
     trace: flowTrace,

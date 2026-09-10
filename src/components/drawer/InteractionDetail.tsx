@@ -6,7 +6,8 @@ import { DrawerSection } from "./DrawerSection";
 import { useDrawer } from "../../context/DrawerContext";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useIntentLabel } from "../../context/IntentNumbersContext";
-import {  timeAgo } from "../../lib/format";
+import { useThreatByID } from "../../data/hooks";
+import { timeAgo, interactionRawData, titleOrUnknown } from "../../lib/format";
 import type { Interaction } from "../../types";
 
 interface Props {
@@ -18,6 +19,13 @@ export function InteractionDetail({ interaction: i }: Props) {
   const navigate = useNavigate();
   const resolve = useResolveName();
   const intentLabel = useIntentLabel();
+  // Callers that already have the message (e.g. from /threats-list) pass it
+  // straight through — skip the GET /threat-by-id round trip entirely so the
+  // sidebar shows exactly what the threat table showed, with no extra fetch.
+  const { data: threatDetail, loading: threatLoading, error: threatError } = useThreatByID(
+    i.threat && !i.message ? i.threatID : undefined,
+  );
+  const threatMessage = i.message || threatDetail?.message;
 
   const openIntent = () => {
     if (!i.intent?.id) return;
@@ -34,13 +42,17 @@ export function InteractionDetail({ interaction: i }: Props) {
   const pickName = (did: string, apiName: string | undefined) => {
     const hit = resolve(did);
     if (hit.kind && hit.name) return { name: hit.name, kind: hit.kind };
-    if (apiName && apiName.trim() && !apiName.includes("…")) return { name: apiName.trim(), kind: hit.kind };
-    return { name: hit.name || did, kind: hit.kind };
+    // apiName is sometimes just the raw DID with no resolved name behind it
+    // (backend had nothing to join) — truncate anything DID-length so it
+    // doesn't overflow the drawer's fixed width.
+    if (apiName && apiName.trim() && !apiName.includes("…")) return { name: truncateId(apiName.trim()), kind: hit.kind };
+    return { name: truncateId(hit.name || did), kind: hit.kind };
   };
 
   const initiator = pickName(i.initiator.id, i.initiator.name);
   const target = pickName(i.target.id, i.target.name);
   const targetKind = target.kind || i.targetType;
+  const isSelfInteraction = i.initiator.id === i.target.id;
   return (
     <>
       <div className="drawer-head">
@@ -88,52 +100,79 @@ export function InteractionDetail({ interaction: i }: Props) {
               padding: 16,
             }}
           >
-            <div>
+            {isSelfInteraction ? (
               <div
                 style={{
-                  fontSize: 11,
-                  color: "var(--fg-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  marginBottom: 6,
-                  fontWeight: 600,
+                  border: "1px solid var(--accent)",
+                  borderRadius: 8,
+                  padding: "10px 10px 12px",
+                  background: "rgba(37,99,235,0.06)",
                 }}
               >
-                Initiator
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--accent)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    marginBottom: 6,
+                    fontWeight: 600,
+                  }}
+                >
+                  Initiator &amp; Target
+                </div>
+                <EntityCell name={initiator.name} paletteIx={initiator.name.charCodeAt(0)} />
               </div>
-              <EntityCell name={initiator.name} paletteIx={initiator.name.charCodeAt(0)} />
-            </div>
+            ) : (
+              <>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--fg-muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      marginBottom: 6,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Initiator
+                  </div>
+                  <EntityCell name={initiator.name} paletteIx={initiator.name.charCodeAt(0)} />
+                </div>
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                color: "var(--accent)",
-                paddingLeft: 12,
-              }}
-            >
-              <Icon name="arrowRight" size={16} style={{ transform: "rotate(90deg)" }} />
-              {/* <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
-                {fmtRuntime(i.runtime)}
-              </span> */}
-            </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    color: "var(--accent)",
+                    paddingLeft: 12,
+                  }}
+                >
+                  <Icon name="arrowRight" size={16} style={{ transform: "rotate(90deg)" }} />
+                  {/* <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
+                    {fmtRuntime(i.runtime)}
+                  </span> */}
+                </div>
 
-            <div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--fg-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  marginBottom: 6,
-                  fontWeight: 600,
-                }}
-              >
-                Target · {targetKind === "tool" ? "app" : targetKind}
-              </div>
-              <EntityCell name={target.name} paletteIx={(target.name.charCodeAt(2) || 0)} />
-            </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--fg-muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      marginBottom: 6,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Target · {targetKind === "tool" ? "app" : targetKind}
+                  </div>
+                  <EntityCell name={target.name} paletteIx={(target.name.charCodeAt(2) || 0)} />
+                </div>
+              </>
+            )}
           </div>
         </DrawerSection>
 
@@ -157,6 +196,44 @@ export function InteractionDetail({ interaction: i }: Props) {
             <div className="v" style={{ color: i.threat ? "var(--threat)" : "var(--safe)" }}>
               {i.threat ? "true" : "false"}
             </div>
+            {i.threat && (i.threatID || i.message) && (
+              <>
+                {(threatLoading || threatDetail) && (
+                  <>
+                    <div className="k">Threat</div>
+                    <div className="v">
+                      {threatLoading ? (
+                        <span style={{ color: "var(--fg-muted)" }}>Loading…</span>
+                      ) : (
+                        <span style={{ color: "var(--threat)" }}>
+                          {titleOrUnknown(threatDetail!.title)}{" "}
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-muted)" }}>
+                            (code {threatDetail!.threatCode})
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+                {threatMessage ? (
+                  <>
+                    <div className="k">Threat message</div>
+                    <div className="v" style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{threatMessage}</div>
+                  </>
+                ) : !threatLoading && (
+                  <>
+                    <div className="k">Threat message</div>
+                    <div className="v" style={{ color: "var(--fg-muted)" }}>
+                      {!i.threatID
+                        ? "This interaction has no threatID from the endpoint it was loaded from."
+                        : threatError
+                        ? `Failed to load: ${threatError.message}`
+                        : "No message returned for this threat."}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
             <div className="k">Intent ID</div>
             <div className="v" style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {i.intent?.id ? (
@@ -216,7 +293,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                 <div className="line" />
                 <div className="body">
                   <div className="nm">Threat detected</div>
-                  <div className="desc">Interaction flagged for review</div>
+                  <div className="desc">{threatMessage || "Interaction flagged for review"}</div>
                 </div>
               </div>
             )}
@@ -246,17 +323,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                 maxHeight: 360,
                 overflowY: "auto",
               }}
-              dangerouslySetInnerHTML={{ __html: colorizeJson(JSON.stringify({
-                id: i.id,
-                blockType: i.blockType,
-                threat: i.threat,
-                created: i.created,
-                runtime: i.runtime,
-                targetType: i.targetType,
-                initiator: { id: i.initiator.id, name: i.initiator.name },
-                target: { id: i.target.id, name: i.target.name },
-                intent: { id: i.intent?.id, name: i.intent?.name },
-              }, null, 2)) }}
+              dangerouslySetInnerHTML={{ __html: colorizeJson(JSON.stringify(interactionRawData(i), null, 2)) }}
             />
           </div>
         </DrawerSection>

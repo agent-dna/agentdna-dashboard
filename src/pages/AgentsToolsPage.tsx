@@ -1,16 +1,15 @@
 import { useState } from "react";
 import { Pagination } from "../components/Pagination";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
-import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { EntityCell } from "../components/EntityCell";
-import { ScoreBar } from "../components/ScoreBar";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { AccessRequestModal } from "../components/forms/AccessRequestModal";
-import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics } from "../data/hooks";
+import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
+import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics, useHomeMetrics } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
+import { AppIcon } from "../components/AppIcon";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
 import { exportAgentsListPdf, exportToolsListPdf } from "../lib/exportListPdf";
@@ -21,7 +20,8 @@ type Tab = "agents" | "tools";
 export function AgentsToolsPage() {
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
-  const [tab, setTab] = useState<Tab>("agents");
+  const location = useLocation();
+  const [tab, setTab] = useState<Tab>((location.state as { tab?: Tab } | null)?.tab ?? "agents");
   const [agentsPage, setAgentsPage] = useState(1);
   const [toolsPage, setToolsPage] = useState(1);
   const agentsState = useAgentsPaged(agentsPage);
@@ -35,10 +35,12 @@ export function AgentsToolsPage() {
   const toolsTotal = toolsState.data.total || 0;
   const toolsPageSize = toolsState.data.pageSize || 10;
   const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
+  const { data: homeMetrics } = useHomeMetrics();
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState<{ open: boolean; agent?: Agent }>({ open: false });
+  const [policyOpen, setPolicyOpen] = useState<Agent | null>(null);
 
   const isAgents = tab === "agents";
   const rows = isAgents ? agents : tools;
@@ -47,7 +49,7 @@ export function AgentsToolsPage() {
     {
       key: "name",
       label: "Agent",
-      width: "18%",
+      width: "20%",
       sortFn: (a, b) => a.name.localeCompare(b.name),
       render: (r) => <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>,
     },
@@ -55,6 +57,7 @@ export function AgentsToolsPage() {
       key: "interactions",
       label: "Interactions",
       align: "right",
+      width: "15%",
       sortFn: (a, b) => a.interactions - b.interactions,
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
@@ -64,43 +67,77 @@ export function AgentsToolsPage() {
       key: "score",
       label: "Reliability",
       align: "right",
+      width: "25%",
       sortFn: (a, b) => a.score - b.score,
-      render: (r) =>
-        r.interactions > 0 ? (
-          <ScoreBar value={computeReliability(r.interactions, r.threats)} />
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>
-        ),
+      render: (r) => {
+        if (r.interactions <= 0) {
+          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
+        }
+        const pct = computeReliability(r.interactions, r.threats);
+        const color = pct < 70 ? "var(--threat)" : pct < 85 ? "var(--warn)" : "var(--safe)";
+        return (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color, minWidth: 40, textAlign: "right" }}>
+              {pct}
+            </span>
+            <div style={{ width: 80, height: 6, borderRadius: 999, background: "var(--bg-3)", overflow: "hidden", flexShrink: 0 }}>
+              <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: color, borderRadius: 999 }} />
+            </div>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-muted)", minWidth: 34, textAlign: "right" }}>
+              {Math.round(pct)}%
+            </span>
+          </div>
+        );
+      },
     },
     {
       key: "created",
       label: "Created",
       align: "right",
+      width: "15%",
       sortFn: (a, b) => a.created - b.created,
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-dim)" }}>{timeAgo(r.created)}</span>
       ),
     },
+    // {
+    //   key: "connected",
+    //   label: "Apps Interacted",
+    //   align: "right",
+    //   sortFn: (a, b) => a.connected - b.connected,
+    //   render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.connected}</span>,
+    // },
     {
-      key: "threats",
-      label: "Threats",
+      key: "actions",
+      label: "Action",
       align: "right",
-      sortFn: (a, b) => a.threats - b.threats,
-      render: (r) =>
-        r.threats > 0 ? (
-          <span className="chip threat" style={{ fontVariantNumeric: "tabular-nums" }}>
-            {r.threats}
-          </span>
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>
-        ),
-    },
-    {
-      key: "connected",
-      label: "Apps Interacted",
-      align: "right",
-      sortFn: (a, b) => a.connected - b.connected,
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.connected}</span>,
+      width: "25%",
+      render: (r) => (
+        <div className="row-actions" style={{ flexWrap: "nowrap" }}>
+          <button
+            className="btn-mini danger"
+            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setPolicyOpen(r);
+            }}
+          >
+            <Icon name="eye" size={12} />
+            View Policy
+          </button>
+          <button
+            className="btn-mini info"
+            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/agents/${r.id}`);
+            }}
+          >
+            <Icon name="search" size={12} />
+            Inspect
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -110,7 +147,13 @@ export function AgentsToolsPage() {
       label: "App",
       sortFn: (a, b) => a.name.localeCompare(b.name),
       render: (r) => (
-        <EntityCell name={r.name} sub={r.provider} paletteIx={r.name.charCodeAt(0)} icon={r.provider.slice(0, 2).toUpperCase()} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <AppIcon name={r.name} size={28} />
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</div>
+            {r.provider && <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 1 }}>{r.provider}</div>}
+          </div>
+        </div>
       ),
     },
     {
@@ -120,27 +163,6 @@ export function AgentsToolsPage() {
       sortFn: (a, b) => a.interactions - b.interactions,
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
-      ),
-    },
-    {
-      key: "score",
-      label: "Reliability",
-      align: "right",
-      sortFn: (a, b) => a.score - b.score,
-      render: (r) =>
-        r.interactions > 0 ? (
-          <ScoreBar value={computeReliability(r.interactions, r.threats)} />
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>
-        ),
-    },
-    {
-      key: "created",
-      label: "Created",
-      align: "right",
-      sortFn: (a, b) => a.created - b.created,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-dim)" }}>{timeAgo(r.created)}</span>
       ),
     },
     {
@@ -156,13 +178,6 @@ export function AgentsToolsPage() {
         ) : (
           <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>
         ),
-    },
-    {
-      key: "connected",
-      label: "Agents using",
-      align: "right",
-      sortFn: (a, b) => a.connected - b.connected,
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.connected}</span>,
     },
     {
       key: "actions",
@@ -208,7 +223,7 @@ export function AgentsToolsPage() {
       </div>
 
       <div className="metrics">
-        <MetricTile label="Total Agents" value={agentsAppsMetrics.metrics.totalAgents} icon="agents" sparkColor="#2563EB" spark={[]} />
+        <MetricTile label="Total Agents" value={isAdmin ? agentsAppsMetrics.metrics.totalAgents : homeMetrics.agentCount} icon="agents" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Total Apps" value={agentsAppsMetrics.metrics.totalApps} icon="box" sparkColor="#0A2240" spark={[]} />
         <MetricTile
           label="Avg. Reliability"
@@ -222,65 +237,65 @@ export function AgentsToolsPage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-        <TopList
-          title="Top agents by volume"
-          subtitle="Ranked by interactions · threats flagged in this period"
-          rows={agentsAppsMetrics.topAgents.map((a) => ({
-            id: a.name,
-            name: a.name,
-            interactions: a.totalInteractions,
-            threats: a.totalThreats,
-          }))}
-          accent="var(--accent)"
-          accent2="var(--accent-2)"
+        <TopAgentsList
+          rows={
+            // /agents-apps-metrics' topAgents is org-wide — fine for admins, but a
+            // regular user should only see their own agents here, so derive the
+            // ranking from their own (already access-scoped) /agents-list instead.
+            isAdmin
+              ? agentsAppsMetrics.topAgents.map((a) => ({
+                  id: a.name,
+                  name: a.name,
+                  interactions: a.totalInteractions,
+                  threats: a.totalThreats,
+                }))
+              : agents
+                  .slice()
+                  .sort((a, b) => b.interactions - a.interactions)
+                  .slice(0, 5)
+                  .map((a) => ({ id: a.id, name: a.name, interactions: a.interactions, threats: a.threats }))
+          }
+          totalAgents={isAdmin ? agentsAppsMetrics.metrics.totalAgents : homeMetrics.agentCount}
           onRowClick={(r) => {
-            const match = agents.find((a) => a.name === r.name);
+            const match = agents.find((a) => a.id === r.id) || agents.find((a) => a.name === r.name);
             if (match) navigate(`/agents/${match.id}`);
           }}
-          showBar={false}
-          showStats={true}
+          onViewAll={() => navigate("/agents", { state: { tab: "agents" } })}
         />
-        <TopList
-          title="Top apps by volume"
-          subtitle="Ranked by interactions"
+        <TopAppsList
           rows={agentsAppsMetrics.topApps.map((a) => ({
             id: a.name,
             name: a.name,
             interactions: a.totalInteractions,
-            threats: a.totalThreats,
           }))}
-          accent="var(--accent-3)"
-          accent2="var(--accent)"
-          onRowClick={(r) => {
-            const match = tools.find((t) => t.name === r.name);
-            if (match) openDrawer("tool", match);
-          }}
+          totalApps={agentsAppsMetrics.metrics.totalApps}
+          onRowClick={(r) => navigate(`/tools/${encodeURIComponent(r.name)}`)}
+          onViewAll={() => navigate("/agents", { state: { tab: "tools" } })}
         />
       </div>
 
       <div className="card">
-        <Tabs
-          active={tab}
-          onChange={(k) => setTab(k as Tab)}
-          tabs={[
-            { key: "agents", label: "Agents", count: agents.length },
-            { key: "tools", label: "Apps", count: tools.length },
-          ]}
-        />
-
         <div className="tb-toolbar">
           <div className="filters">
+            {([{ key: "agents", label: "Agents", count: agents.length }, { key: "tools", label: "Apps", count: tools.length }] as const).map((t) => (
+              <div
+                key={t.key}
+                className={`tab ${tab === t.key ? "active" : ""}`}
+                onClick={() => setTab(t.key as Tab)}
+              >
+                {t.label}
+                <span className="pill">{t.count}</span>
+              </div>
+            ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <Pagination
-              page={isAgents ? agentsPage : toolsPage}
-              totalPages={isAgents ? agentsTotalPages : toolsTotalPages}
-              total={isAgents ? agentsTotal : toolsTotal}
-              pageSize={isAgents ? agentsPageSize : toolsPageSize}
-              inline
-              onChange={(p) => (isAgents ? setAgentsPage(p) : setToolsPage(p))}
-            />
-          </div>
+          <Pagination
+            page={isAgents ? agentsPage : toolsPage}
+            totalPages={isAgents ? agentsTotalPages : toolsTotalPages}
+            total={isAgents ? agentsTotal : toolsTotal}
+            pageSize={isAgents ? agentsPageSize : toolsPageSize}
+            inline
+            onChange={(p) => (isAgents ? setAgentsPage(p) : setToolsPage(p))}
+          />
         </div>
 
         {isAgents ? (
@@ -294,7 +309,7 @@ export function AgentsToolsPage() {
           <DataTable
             columns={toolCols}
             rows={rows as Tool[]}
-            onRowClick={(r) => openDrawer("tool", r)}
+            onRowClick={(r) => navigate(`/tools/${encodeURIComponent(r.name)}`)}
             emptyText="No tools yet"
           />
         )}
@@ -317,6 +332,12 @@ export function AgentsToolsPage() {
         onClose={() => setAccessOpen({ open: false })}
         onSuccess={() => setAccessOpen({ open: false })}
       />
+      <ViewPolicyModal
+        open={!!policyOpen}
+        name={policyOpen?.name || ""}
+        content={policyOpen?.policy}
+        onClose={() => setPolicyOpen(null)}
+      />
     </div>
   );
 }
@@ -328,215 +349,151 @@ function computeReliability(interactions: number, threats: number): number {
   return Math.max(0, Math.round(pct * 100) / 100);
 }
 
-interface TopListItem {
+interface VolumeRow {
   id: string;
   name: string;
   interactions: number;
   threats?: number;
-  sub?: string;
 }
 
-interface TopListProps<T extends TopListItem> {
-  title: string;
-  subtitle: string;
-  rows: T[];
-  accent: string;
-  accent2: string;
-  onRowClick: (row: T) => void;
-  showBar?: boolean;
-  showStats?: boolean;
-}
-
-function TopList<T extends TopListItem>({
-  title,
-  subtitle,
+function TopAgentsList({
   rows,
-  accent,
-  accent2,
+  totalAgents,
   onRowClick,
-  showBar = true,
-  showStats = false,
-}: TopListProps<T>) {
-  const max = rows.reduce((m, x) => Math.max(m, x.interactions), 0) || 1;
+  onViewAll,
+}: {
+  rows: VolumeRow[];
+  totalAgents: number;
+  onRowClick: (r: VolumeRow) => void;
+  onViewAll: () => void;
+}) {
   return (
-    <div className="card">
-      <div className="card-head">
+    <div className="card" style={{ display: "flex", flexDirection: "column", padding: 0, overflow: "hidden" }}>
+      <div style={{ padding: "18px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <h3>{title}</h3>
-          <div className="sub">{subtitle}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--fg)", marginBottom: 2 }}>Top agents by volume</div>
+          <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>Ranked by interactions · threats flagged</div>
         </div>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", background: "var(--bg-3)", color: "var(--fg-muted)", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>LAST 30 DAYS</span>
       </div>
-      <div style={{ padding: "4px 10px 14px", display: "flex", flexDirection: "column", gap: 2 }}>
+
+      <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)" }}>
+        {["#", "AGENT", "IXNS", "THREATS"].map((h, i) => (
+          <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase", textAlign: i > 1 ? "right" : "left" }}>{h}</div>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignContent: "flex-start" }}>
         {rows.length === 0 && (
-          <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>
-            No data
-          </div>
+          <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 13, textAlign: "center" }}>No data</div>
         )}
         {rows.map((r, i) => {
-          const pct = (r.interactions / max) * 100;
-          const isTop = i === 0;
+          const threats = r.threats ?? 0;
           return (
             <div
               key={r.id}
               onClick={() => onRowClick(r)}
-              style={{
-                display: "grid",
-                gridTemplateColumns: showStats ? "auto 1fr auto auto" : "auto 1fr auto",
-                gap: 14,
-                alignItems: "center",
-                padding: "12px 14px",
-                borderRadius: 10,
-                cursor: "pointer",
-                transition: "background 120ms, transform 120ms",
-                position: "relative",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLDivElement).style.background = "transparent";
-              }}
+              style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", alignItems: "center", padding: "10px 20px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
             >
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  display: "grid",
-                  placeItems: "center",
-                  fontFamily: "var(--font-display)",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  background: isTop
-                    ? `linear-gradient(135deg, ${accent}, ${accent2})`
-                    : "var(--bg-3)",
-                  color: isTop ? "#fff" : "var(--fg-muted)",
-                  boxShadow: isTop ? `0 2px 6px ${accent}33` : "none",
-                  flexShrink: 0,
-                }}
-              >
+              <div style={{ width: 28, height: 28, borderRadius: 8, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, background: i === 0 ? "#0a2240" : "var(--bg-3)", color: i === 0 ? "#fff" : "var(--fg-muted)" }}>
                 {String(i + 1).padStart(2, "0")}
               </div>
-
               <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 13.5,
-                    fontWeight: 600,
-                    color: "var(--fg)",
-                    marginBottom: showBar ? 6 : 2,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {r.name}
-                </div>
-                {r.sub && !showBar && (
-                  <div
-                    style={{
-                      fontSize: 11.5,
-                      color: "var(--fg-muted)",
-                      fontFamily: "var(--font-mono)",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {r.sub}
-                  </div>
-                )}
-                {showBar && (
-                  <div style={{ height: 4, borderRadius: 2, background: "var(--bg-3)", overflow: "hidden" }}>
-                    <div
-                      style={{
-                        width: `${pct}%`,
-                        height: "100%",
-                        background: `linear-gradient(90deg, ${accent}, ${accent2})`,
-                      }}
-                    />
-                  </div>
-                )}
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
               </div>
-
-              {showStats ? (
-                <>
-                  <Stat
-                    icon="activity"
-                    value={r.interactions.toLocaleString()}
-                    label="ixns"
-                    color="var(--accent)"
-                  />
-                  <Stat
-                    icon="shield"
-                    value={(r.threats ?? 0).toLocaleString()}
-                    label="threats"
-                    color={(r.threats ?? 0) > 0 ? "var(--threat)" : "var(--fg-faint)"}
-                  />
-                </>
-              ) : (
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "var(--fg)",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {r.interactions.toLocaleString()}
-                </div>
-              )}
+              <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
+                {r.interactions.toLocaleString()}
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, background: threats > 0 ? "rgba(220,38,38,0.1)" : "var(--bg-3)", color: threats > 0 ? "#dc2626" : "var(--fg-muted)", padding: "2px 8px", borderRadius: 4 }}>
+                  {threats.toLocaleString()}
+                </span>
+              </div>
             </div>
           );
         })}
+      </div>
+
+      <div style={{ padding: "12px 20px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Showing top {rows.length} of {totalAgents} agents</span>
+        <button onClick={onViewAll} style={{ background: "none", border: "none", fontSize: 12, fontWeight: 600, color: "var(--accent)", cursor: "pointer", padding: 0 }}>View all agents →</button>
       </div>
     </div>
   );
 }
 
-interface StatProps {
-  icon: import("../components/Icon").IconName;
-  value: string;
-  label: string;
-  color: string;
-}
-
-function Stat({ icon, value, label, color }: StatProps) {
+function TopAppsList({
+  rows,
+  totalApps,
+  onRowClick,
+  onViewAll,
+}: {
+  rows: VolumeRow[];
+  totalApps: number;
+  onRowClick: (r: VolumeRow) => void;
+  onViewAll: () => void;
+}) {
+  const totalIxns = rows.reduce((s, r) => s + r.interactions, 0) || 1;
+  const maxIxns = rows.reduce((m, r) => Math.max(m, r.interactions), 0) || 1;
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-end",
-        gap: 2,
-        minWidth: 72,
-      }}
-    >
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 5, color }}>
-        <Icon name={icon} size={12} />
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 13,
-            fontWeight: 700,
-            color: "var(--fg)",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {value}
-        </span>
+    <div style={{ borderRadius: 14, background: "#0b1633", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "18px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 16.5, fontWeight: 700, color: "#fff", marginBottom: 2 }}>Top apps by volume</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)" }}>Ranked by interactions</div>
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.4)", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>LAST 30 DAYS</span>
       </div>
-      <div
-        style={{
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "var(--fg-muted)",
-        }}
-      >
-        {label}
+
+      <div style={{ display: "grid", gridTemplateColumns: "36px 28px 1fr 76px 72px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+        {["#", "", "APP", "IXNS", "SHARE"].map((h, i) => (
+          <div key={i} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", textAlign: i > 2 ? "right" : "left" }}>{h}</div>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {rows.length === 0 && (
+          <div style={{ padding: 28, color: "rgba(255,255,255,0.35)", fontSize: 14, textAlign: "center" }}>No data</div>
+        )}
+        {rows.map((r, i) => {
+          const share = Math.round((r.interactions / totalIxns) * 100);
+          const barPct = (r.interactions / maxIxns) * 100;
+          return (
+            <div
+              key={r.id}
+              onClick={() => onRowClick(r)}
+              style={{ cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 20px" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "36px 28px 1fr 76px 72px", alignItems: "center", padding: "10px 0 4px" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: i === 0 ? "#fff" : "rgba(255,255,255,0.4)" }}>
+                  {String(i + 1).padStart(2, "0")}
+                </div>
+                <AppIcon name={r.name} size={22} />
+                <div style={{ fontSize: 14, fontWeight: 500, color: "#fff", fontFamily: "var(--font-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: 6 }}>
+                  {r.name}
+                </div>
+                <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
+                  {r.interactions.toLocaleString()}
+                </div>
+                <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.6)", fontVariantNumeric: "tabular-nums" }}>
+                  {share}%
+                </div>
+              </div>
+              <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginBottom: 8 }}>
+                <div style={{ width: `${barPct}%`, height: "100%", background: "linear-gradient(90deg, #5f83e8, #a8bdf5)", borderRadius: 2 }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.35)" }}>Showing top {rows.length} of {totalApps} apps</span>
+        <button onClick={onViewAll} style={{ background: "none", border: "none", fontSize: 13, fontWeight: 600, color: "#5f83e8", cursor: "pointer", padding: 0 }}>View all apps →</button>
       </div>
     </div>
   );

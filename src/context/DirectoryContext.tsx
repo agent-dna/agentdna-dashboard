@@ -1,12 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchAllAgents, fetchAllTools } from "../data/api";
 import { listAllUsers, type OrgUser } from "../api/users";
+import { setDirectorySnapshot, markDirectoryReady, type DirectoryEntry } from "../data/directoryCache";
 import type { Agent, Tool } from "../types";
 
-export interface DirectoryEntry {
-  name: string;
-  kind: "agent" | "tool" | "user";
-}
+export type { DirectoryEntry };
 
 interface DirectoryContextValue {
   map: Map<string, DirectoryEntry>;
@@ -16,13 +14,11 @@ interface DirectoryContextValue {
 const Ctx = createContext<DirectoryContextValue | null>(null);
 
 /**
- * Fetches the org's agents and tools once and exposes a DID → { name, kind }
- * lookup. Used by interaction tables (and anywhere we render counterparty info)
- * to display real names instead of raw DIDs.
- *
- * NOTE: only page 1 of /agents-list and /tools-list (10 each) is loaded. Larger
- * orgs will see fallback shortened DIDs for un-cached entries until the backend
- * either (a) returns enough rows or (b) starts joining names into interactions.
+ * Fetches the org's agents and tools once (walking every page via
+ * fetchAllAgents/fetchAllTools) and exposes a DID → { name, kind } lookup.
+ * Used by interaction tables (and anywhere we render counterparty info) to
+ * display real names instead of raw DIDs — and, via directoryCache, as the
+ * source of truth for agent-vs-tool classification in api.ts.
  */
 export function DirectoryProvider({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -57,6 +53,9 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
       setTools(t);
       setUsers(u);
       setLoading(false);
+      // Signals waitForDirectoryReady() — see directoryCache.ts for why this
+      // matters (agent-vs-tool classification racing ahead of this load).
+      markDirectoryReady();
     });
     return () => {
       cancelled = true;
@@ -71,6 +70,11 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
     return m;
   }, [agents, tools, users]);
 
+  // Mirror into the plain (non-React) cache api.ts reads from, so its
+  // agent-vs-tool classification can use the real directory instead of
+  // guessing from DID shape.
+  useEffect(() => setDirectorySnapshot(map), [map]);
+
   const value = useMemo<DirectoryContextValue>(() => ({ map, loading }), [map, loading]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -79,6 +83,11 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
 /** Returns the DID → entry map (empty Map if no provider mounted). */
 export function useDirectory(): Map<string, DirectoryEntry> {
   return useContext(Ctx)?.map ?? new Map<string, DirectoryEntry>();
+}
+
+/** True until the directory's initial fetchAllAgents/fetchAllTools/listAllUsers walk settles. */
+export function useDirectoryLoading(): boolean {
+  return useContext(Ctx)?.loading ?? true;
 }
 
 /** Shortened DID fallback for unknown entries. */
@@ -95,4 +104,22 @@ export function useResolveName(): (did: string) => { name: string; kind?: "agent
     if (hit) return hit;
     return { name: shortDid(did) };
   };
+}
+
+/**
+ * Best display name for an { id, name } entity (e.g. an intent's initiator).
+ *
+ * The list endpoints (/intent-list, /agent-intents, /intent-info, …) only
+ * sometimes resolve a display name server-side — when they don't, the mapper
+ * fills `name` with the same shortened-DID fallback `shortDid` produces here,
+ * so a naive `entity.name || "—"` still shows a DID. Try the directory (which
+ * covers the whole org, not just what one endpoint joined) before giving up.
+ */
+export function resolveDisplayName(
+  resolve: (did: string) => { name: string; kind?: "agent" | "tool" | "user" },
+  entity: { id: string; name: string },
+): string {
+  const backendName = entity.name?.trim();
+  if (backendName && backendName !== shortDid(entity.id)) return backendName;
+  return resolve(entity.id).name;
 }

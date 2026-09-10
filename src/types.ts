@@ -7,12 +7,17 @@ export interface Agent {
   created: number;
   interactions: number;
   threats: number;
+  /** Distinct count of apps interacted with. From /agent-info's `appsInteracted`; 0 for endpoints that don't return it. */
   connected: number;
+  /** Names of the apps counted in `connected`. Only populated by /agent-info. */
+  appsList?: string[];
   status: Status;
   env: string;
   owner: string;
   /** Raw .md/.txt policy text from /agent-info; empty string when no policy uploaded. */
   policy?: string;
+  /** From /agent-info's `revoked` field. Only /agent-info returns this — false for endpoints that don't. */
+  revoked?: boolean;
 }
 
 export interface Tool {
@@ -43,7 +48,13 @@ export interface Intent {
   status: Status;
   provenanceRecordID: string;
   signature?: string;
+  /** Distinct apps/tools this intent's interactions touched. Only populated where explicitly computed (e.g. an agent's own intents list). */
+  appsInteracted?: EntityRef[];
+  /** Human review state — separate from the pipeline `status` field. Defaults to "Ongoing" server-side. */
+  reviewStatus: IntentReviewStatus;
 }
+
+export type IntentReviewStatus = "Ongoing" | "Acknowledged" | "Flagged";
 
 export type EntityRef = Pick<Agent | Tool, "id" | "name">;
 
@@ -58,6 +69,10 @@ export interface Interaction {
   created: number;
   /** Backend-supplied block type (e.g. on-chain block category). Optional. */
   blockType?: string;
+  /** Non-empty only when `threat` is true — pass to GET /threat-by-id for the full message. */
+  threatID?: string;
+  /** Resolved threat message, when the caller already has it (e.g. from /threats-list) — skips the GET /threat-by-id lookup in the drawer. */
+  message?: string;
 }
 
 export interface TimeSeries {

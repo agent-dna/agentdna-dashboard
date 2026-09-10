@@ -1,27 +1,37 @@
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { MetricTile } from "../components/MetricTile";
 import { Tabs } from "../components/Tabs";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { IdCell } from "../components/EntityCell";
-import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
 import { EditAgentPolicyModal } from "../components/forms/EditAgentPolicyModal";
 import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
-import { useAgent, useAgentInteractions, useAgentIntents, useAgentPolicyHistory } from "../data/hooks";
+import { RevokeAgentModal } from "../components/forms/RevokeAgentModal";
+import { useAgent, useAgentInteractions, useAgentIntents, useAgentTools, useAgentPolicyHistory } from "../data/hooks";
+import type { AgentToolLink } from "../data/api";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
-import { useResolveName } from "../context/DirectoryContext";
+import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { isDummyMode } from "../data/dummyRouter";
-import { fmtRuntime, initials, timeAgo } from "../lib/format";
-import { useInteractionColumns } from "./InteractionsPage";
+import { initials, timeAgo, timeAgoLong, capitalizeFirst } from "../lib/format";
+import { LedgerTable } from "../components/LedgerTable";
+import { AppIcon } from "../components/AppIcon";
+import { ThreatPill } from "../components/ThreatPill";
 import type { Intent } from "../types";
 import { fetchAgentPolicyUpdate, type PolicyHistoryEntry, type PolicyUpdate } from "../api/policy";
 import { exportAgentPdf } from "../lib/exportAgentPdf";
 
-type Tab = "interactions" | "intents" | "history";
+/** Reddish tint + left accent for any row that represents/carries a threat — matches the Home page's intent table. */
+const THREAT_ROW_STYLE: CSSProperties = {
+  background: "rgba(220,38,38,0.045)",
+  boxShadow: "inset 3px 0 0 var(--threat)",
+};
+
+type Tab = "interactions" | "intents" | "tools" | "history";
 
 export function AgentDetailPage() {
   const { agentId = "" } = useParams<{ agentId: string }>();
@@ -30,9 +40,10 @@ export function AgentDetailPage() {
   const { user } = useAuth();
   const resolve = useResolveName();
   const isAdmin = !!user?.is_admin;
-  const [tab, setTab] = useState<Tab>("interactions");
+  const [tab, setTab] = useState<Tab>("tools");
   const [policyOpen, setPolicyOpen] = useState(false);
   const [viewPolicyOpen, setViewPolicyOpen] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
   // Picked history row (lightweight); full policy gets loaded lazily into `historyPolicy`.
   const [historyOpen, setHistoryOpen] = useState<PolicyHistoryEntry | null>(null);
   const [historyPolicy, setHistoryPolicy] = useState<PolicyUpdate | null>(null);
@@ -43,8 +54,8 @@ export function AgentDetailPage() {
   const { data: agent, loading } = agentState;
   const { data: interactions } = useAgentInteractions(agentId);
   const { data: intents } = useAgentIntents(agentId);
+  const { data: tools } = useAgentTools(agentId);
   const { data: history } = useAgentPolicyHistory(agentId);
-  const interactionCols = useInteractionColumns((k, e) => openDrawer(k, e));
   const openHistoryRevision = (entry: PolicyHistoryEntry) => {
     setHistoryOpen(entry);
     setHistoryPolicy(null);
@@ -91,59 +102,56 @@ export function AgentDetailPage() {
     );
   }
 
+  // Matches the columns used on the Home page's intent table so the same
+  // intent looks the same everywhere it's listed.
   const intentCols: DataTableColumn<Intent>[] = [
     {
       key: "id",
       label: "Intent",
       render: (r) => (
-        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }} />
+        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {
-      key: "runtime",
-      label: "Runtime",
-      align: "right",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{fmtRuntime(r.runtime)}</span>,
+      key: "initiator",
+      label: "Initiator",
+      render: (r) => (
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(resolveDisplayName(resolve, r.initiator))}</span>
+      ),
     },
     {
-      key: "agents",
-      label: "Agents",
-      align: "right",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.agentsInteracted}</span>,
+      key: "interactions",
+      label: "Interactions",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactionsCount}</span>,
     },
     {
-      key: "tools",
-      label: "Apps",
-      align: "right",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.toolsInteracted}</span>,
+      key: "apps",
+      label: "App interacted",
+      render: (r) => {
+        const apps = r.appsInteracted || [];
+        if (apps.length === 0) {
+          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
+        }
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {apps.slice(0, 3).map((app) => (
+              <AppIcon key={app.id} name={resolveDisplayName(resolve, app)} size={20} />
+            ))}
+            {apps.length > 3 && (
+              <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>+{apps.length - 3}</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "threats",
       label: "Threats",
-      align: "right",
-      render: (r) =>
-        r.threats > 0 ? (
-          <span className="chip threat">{r.threats}</span>
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>
-        ),
+      render: (r) => <ThreatPill threat={r.threats > 0} />,
     },
     {
-      key: "score",
-      label: "Score",
-      align: "right",
-      render: (r) => {
-        const ix = r.agentsInteracted + r.toolsInteracted;
-        if (ix <= 0) {
-          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
-        }
-        const pct = Math.max(0, Math.round((((ix - r.threats) / ix) * 100) * 100) / 100);
-        return <ScoreBar value={pct} />;
-      },
-    },
-    {
-      key: "started",
-      label: "Started",
+      key: "time",
+      label: "Time",
       align: "right",
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>
@@ -168,6 +176,48 @@ export function AgentDetailPage() {
             View
           </button>
         </div>
+      ),
+    },
+  ];
+
+  const toolCols: DataTableColumn<AgentToolLink>[] = [
+    {
+      key: "tool",
+      label: "Tool Name",
+      render: (r) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <AppIcon name={r.toolName} size={22} />
+          <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{r.toolName}</span>
+        </div>
+      ),
+    },
+    {
+      key: "trust",
+      label: "Trust Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.trustScore}</span>,
+    },
+    {
+      key: "intentScore",
+      label: "Intent Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.intentScore}</span>,
+    },
+    {
+      key: "hallucinationScore",
+      label: "Hallucination Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.hallucinationScore}</span>,
+    },
+    {
+      key: "policyScore",
+      label: "Policy Score",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.policyScore}</span>,
+    },
+    {
+      key: "lastInteracted",
+      label: "Last Interacted",
+      render: (r) => (
+        <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+          {timeAgoLong(r.lastInteracted)}
+        </span>
       ),
     },
   ];
@@ -225,10 +275,6 @@ export function AgentDetailPage() {
               >
                 {agent.name}
               </h1>
-              <span className={`chip ${agent.status === "warn" ? "warn" : "safe"}`}>
-                <span className={`dot-status ${agent.status === "warn" ? "warn" : "safe"}`} />
-                {agent.status === "warn" ? "needs review" : "healthy"}
-              </span>
               <span className="chip info" style={{ fontSize: 10.5, padding: "2px 7px" }}>
                 agent
               </span>
@@ -251,7 +297,7 @@ export function AgentDetailPage() {
               <InfoStat label="Owner" value={resolve(agent.owner).name} />
               <InfoStat label="Environment" value={agent.env} />
               <InfoStat label="Created" value={timeAgo(agent.created)} />
-              <InfoStat label="Connected apps" value={agent.connected} mono />
+              <InfoStat label="Interacted apps" value={agent.connected} mono />
             </div>
           </div>
 
@@ -280,6 +326,12 @@ export function AgentDetailPage() {
               <Icon name="download" size={14} />
               Export
             </button>
+            {isAdmin && (
+              <button className={agent.revoked ? "btn safe" : "btn danger"} onClick={() => setRevokeOpen(true)}>
+                <Icon name="shield" size={14} />
+                {agent.revoked ? "Whitelist" : "Revoke agent"}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -306,16 +358,16 @@ export function AgentDetailPage() {
           tabs={[
             { key: "interactions", label: "Interactions", count: interactions.length },
             { key: "intents", label: "Intents", count: intents.length },
+            { key: "tools", label: "Tools", count: tools.length },
             { key: "history", label: "Policy History", count: history?.history?.length ?? 0 },
           ]}
         />
 
         {tab === "interactions" && (
-          <DataTable
+          <LedgerTable
             rows={interactions}
-            columns={interactionCols}
-            onRowClick={(r) => openDrawer("interaction", r)}
             emptyText="No interactions yet."
+            onView={(r) => openDrawer("interaction", r)}
           />
         )}
 
@@ -325,7 +377,19 @@ export function AgentDetailPage() {
             columns={intentCols}
             onRowClick={(r) => navigate(`/intents/${r.id}`)}
             emptyText="No intents initiated by this agent."
+            rowStyle={(r) => (r.threats > 0 ? THREAT_ROW_STYLE : undefined)}
           />
+        )}
+
+        {tab === "tools" && (
+          <>
+            <DataTable
+              rows={tools}
+              columns={toolCols}
+              onRowClick={(r) => navigate(`/agents/${agentId}/tools/${encodeURIComponent(r.toolID)}`)}
+              emptyText="No apps interacted with yet."
+            />
+          </>
         )}
 
         {tab === "history" && (
@@ -438,6 +502,19 @@ export function AgentDetailPage() {
         }
         onClose={closeHistoryRevision}
       />
+      {isAdmin && (
+        <RevokeAgentModal
+          open={revokeOpen}
+          agentDID={agent.id}
+          agentName={agent.name}
+          mode={agent.revoked ? "whitelist" : "revoke"}
+          onClose={() => setRevokeOpen(false)}
+          onSuccess={() => {
+            setRevokeOpen(false);
+            agentState.refetch();
+          }}
+        />
+      )}
     </div>
   );
 }
