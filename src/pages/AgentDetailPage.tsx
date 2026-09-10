@@ -329,7 +329,7 @@ export function AgentDetailPage() {
             {isAdmin && (
               <button className={agent.revoked ? "btn safe" : "btn danger"} onClick={() => setRevokeOpen(true)}>
                 <Icon name="shield" size={14} />
-                {agent.revoked ? "Whitelist agent" : "Revoke agent"}
+                {agent.revoked ? "Whitelist" : "Revoke agent"}
               </button>
             )}
           </div>
