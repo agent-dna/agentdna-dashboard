@@ -2,23 +2,33 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
-import { ScoreBar } from "../components/ScoreBar";
 import { AppIcon } from "../components/AppIcon";
+import { ThreatPill } from "../components/ThreatPill";
 import { LedgerTable } from "../components/LedgerTable";
 import { Pagination } from "../components/Pagination";
 import { useToolInfo, useToolAgentScores } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
+import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
 import { timeAgo } from "../lib/format";
 import { IntentIdChip } from "../context/IntentNumbersContext";
-import type { Intent } from "../types";
+import type { Intent, IntentReviewStatus } from "../types";
 import type { ToolAgentScore } from "../data/api";
 
 type Tab = "interactions" | "intents" | "agents";
+
+// Matches the pill styling used on the main Intents page (IntentsPage.tsx) so
+// review status looks identical everywhere it's shown.
+const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
+  Ongoing: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
+  Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
+  Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
+};
 
 export function ToolDetailPage() {
   const { toolId = "" } = useParams<{ toolId: string }>();
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
+  const resolve = useResolveName();
 
   const [tab, setTab] = useState<Tab>("interactions");
   const [interactionsPage, setInteractionsPage] = useState(1);
@@ -51,18 +61,65 @@ export function ToolDetailPage() {
 
   const { tool, interactions, interactionsTotal, interactionsTotalPages, intents, intentsTotal, intentsTotalPages } = result;
 
+  // Matches the columns used on the main Intents page (IntentsPage.tsx) so an
+  // intent looks the same everywhere it's listed. No "Apps interacted" column
+  // here — /tool-info's intents list doesn't return per-intent participant
+  // lists, only this tool's own totals, so there's nothing real to show there.
   const intentCols: DataTableColumn<Intent>[] = [
     {
       key: "id",
       label: "Intent",
+      sortFn: (a, b) => a.id.localeCompare(b.id),
       render: (r) => (
         <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {
-      key: "started",
-      label: "Started",
+      key: "initiator",
+      label: "Initiator",
+      sortFn: (a, b) => a.initiator.name.localeCompare(b.initiator.name),
+      render: (r) => (
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>
+          {resolveDisplayName(resolve, r.initiator)}
+        </span>
+      ),
+    },
+    {
+      key: "interactions",
+      label: "Interactions",
+      sortFn: (a, b) => a.interactionsCount - b.interactionsCount,
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactionsCount}</span>,
+    },
+    {
+      key: "threats",
+      label: "Threats",
+      sortFn: (a, b) => a.threats - b.threats,
+      render: (r) => <ThreatPill threat={r.threats > 0} />,
+    },
+    {
+      key: "reviewStatus",
+      label: "Review",
+      sortFn: (a, b) => a.reviewStatus.localeCompare(b.reviewStatus),
+      render: (r) => (
+        <span
+          style={{
+            fontSize: 11.5,
+            fontWeight: 700,
+            padding: "3px 9px",
+            borderRadius: 999,
+            color: REVIEW_STATUS_STYLE[r.reviewStatus].color,
+            background: REVIEW_STATUS_STYLE[r.reviewStatus].bg,
+          }}
+        >
+          {r.reviewStatus}
+        </span>
+      ),
+    },
+    {
+      key: "time",
+      label: "Time",
       align: "right",
+      sortFn: (a, b) => a.started - b.started,
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>
           {r.started ? timeAgo(r.started) : "—"}
@@ -70,30 +127,17 @@ export function ToolDetailPage() {
       ),
     },
     {
-      key: "threats",
-      label: "Threat",
-      align: "right",
-      render: (r) =>
-        r.threats > 0 ? (
-          <span className="chip threat">{r.threats}</span>
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>
-        ),
-    },
-    {
-      key: "score",
-      label: "Score",
-      align: "right",
-      render: (r) => <ScoreBar value={r.score} />,
-    },
-    {
       key: "actions",
       label: "",
       align: "right",
-      width: 60,
+      width: 100,
       render: (r) => (
         <div className="row-actions">
-          <button className="btn-mini" onClick={(e) => { e.stopPropagation(); navigate(`/intents/${r.id}`); }}>
+          <button
+            className="btn-mini"
+            style={{ fontSize: 13, padding: "7px 16px" }}
+            onClick={(e) => { e.stopPropagation(); navigate(`/intents/${r.id}`); }}
+          >
             View
           </button>
         </div>
