@@ -1317,9 +1317,14 @@ interface ApiToolInteraction {
 interface ApiToolIntent {
   intentID: string;
   initiatorDID: string;
+  initiatorName?: string;
+  title?: string;
   flowType?: string;
   status?: string;
   threatDetected?: boolean;
+  threatCount?: number;
+  interactionsCount?: number;
+  reviewStatus?: string;
   startedAt?: string;
   endedAt?: string;
 }
@@ -1387,18 +1392,18 @@ function mapToolInteraction(i: ApiToolInteraction): Interaction {
 function mapToolIntent(i: ApiToolIntent): Intent {
   return {
     id: i.intentID,
-    name: i.intentID,
-    initiator: { id: i.initiatorDID, name: shortDid(i.initiatorDID) } as Agent,
+    name: i.title || i.intentID,
+    initiator: { id: i.initiatorDID, name: i.initiatorName?.trim() || shortDid(i.initiatorDID) } as Agent,
     runtime: 0,
     started: i.startedAt ? isoToMinutesAgo(i.startedAt) : 0,
     agentsInteracted: 0,
     toolsInteracted: 0,
-    interactionsCount: 0,
-    threats: i.threatDetected ? 1 : 0,
+    interactionsCount: i.interactionsCount ?? 0,
+    threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
     score: i.threatDetected ? 0 : 100,
     status: (i.status as Agent["status"]) || "safe",
     provenanceRecordID: "",
-    reviewStatus: "Ongoing",
+    reviewStatus: toReviewStatus(i.reviewStatus),
   };
 }
 
