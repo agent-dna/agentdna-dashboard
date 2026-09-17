@@ -302,11 +302,12 @@ export function groupParallelRounds(steps: FlowStep[]): number[][] {
 export const PROVENANCE_ID = "nd_provenance";
 
 /**
- * Every flow terminates in the provenance layer.
- *
- * The last hop's envelope is sealed and stored; on top of that, any hop where a
- * threat was detected writes its envelope immediately, so a halted flow still
- * leaves a record at the point it was stopped.
+ * Every flow terminates in the provenance layer — and the seal is always
+ * drawn from the intent's initiator, never from whichever node happened to
+ * be holding the envelope on the last (or a blocked) hop. The envelope is
+ * the initiator's the whole time; the chain in between is just delegation.
+ * That's true whether the flow completed cleanly or was halted by a threat —
+ * the seal still runs from the initiator, just colored red instead of green.
  *
  * The node is positioned directly rather than by the layout pass — it isn't a
  * participant in the call chain, it's the ledger the chain drops into, so it
@@ -315,26 +316,20 @@ export const PROVENANCE_ID = "nd_provenance";
 function attachProvenance(steps: FlowStep[], nodes: FlowNode[]): { node: FlowNode | null; sealEdges: SealEdge[] } {
   if (steps.length === 0) return { node: null, sealEdges: [] };
 
-  const sealEdges: SealEdge[] = [];
-  const sealed = new Set<string>();
-
-  // The closing seal first, so if the final hop is itself blocked it reads as
-  // the full seal rather than a bare threat write.
   const last = steps[steps.length - 1];
-  if (last) {
-    sealed.add(last.to);
-    sealEdges.push({
-      from: last.to,
-      to: PROVENANCE_ID,
-      label: "",
-      threat: last.verdict === "blocked",
-      stepIndex: steps.length - 1,
-    });
-  }
+  // Prefer the explicit human node; a purely agent-to-agent chain (no human
+  // in it) falls back to whoever sent the very first hop.
+  const initiatorId = nodes.find((n) => n.kind === "human")?.id ?? steps[0]?.from ?? last?.to;
+  const anyBlocked = steps.some((s) => s.verdict === "blocked");
 
-  // Sit directly beneath the node that closes the flow, so the seal reads as a
-  // short drop from its source. Y is kept well inside the frame — the node's
-  // caption renders below it and would otherwise clip off the canvas.
+  const sealEdges: SealEdge[] = initiatorId
+    ? [{ from: initiatorId, to: PROVENANCE_ID, label: "", threat: anyBlocked, stepIndex: steps.length - 1 }]
+    : [];
+
+  // Sit directly beneath the node that closes the flow, so the layout still
+  // reads left-to-right chronologically even though the seal line itself
+  // reaches back to the initiator. Y is kept well inside the frame — the
+  // node's caption renders below it and would otherwise clip off the canvas.
   const anchor = last ? nodes.find((n) => n.id === last.to) : undefined;
   const node: FlowNode = {
     id: PROVENANCE_ID,
@@ -344,12 +339,6 @@ function attachProvenance(steps: FlowStep[], nodes: FlowNode[]): { node: FlowNod
     x: anchor ? anchor.x : 0.5,
     y: 0.82,
   };
-
-  steps.forEach((s, i) => {
-    if (s.verdict !== "blocked" || sealed.has(s.to)) return;
-    sealed.add(s.to);
-    sealEdges.push({ from: s.to, to: PROVENANCE_ID, label: "Envelope stored", threat: true, stepIndex: i });
-  });
 
   return { node, sealEdges };
 }
