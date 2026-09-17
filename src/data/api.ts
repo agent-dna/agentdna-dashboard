@@ -28,6 +28,22 @@ function isoToMinutesAgo(iso: string | undefined | null): number {
   return Math.max(0, Math.floor((Date.now() - t) / 60000));
 }
 
+/**
+ * /user-info's agents.list[].created comes back as a raw Unix epoch
+ * timestamp (not an ISO string like every other `createdAt` field, and not
+ * already "minutes ago"), so it was being handed straight to timeAgo() as if
+ * it *were* minutes-ago — a value that large read as tens of thousands of
+ * months. Handles both epoch-seconds and epoch-milliseconds (some backends
+ * send one, some the other) by magnitude: anything past year ~5138 in
+ * seconds is almost certainly already milliseconds.
+ */
+function epochToMinutesAgo(epoch: number | undefined | null): number {
+  if (!epoch) return 0;
+  const ms = epoch > 1e12 ? epoch : epoch * 1000;
+  if (Number.isNaN(ms)) return 0;
+  return Math.max(0, Math.floor((Date.now() - ms) / 60000));
+}
+
 function shortDid(did: string): string {
   if (!did) return "";
   return did.length > 24 ? `${did.slice(0, 12)}…${did.slice(-6)}` : did;
@@ -1555,7 +1571,7 @@ export async function fetchUserInfo(
       agents: (r.agents?.list || []).map((a) => ({
         id: a.agentDID,
         name: a.agentName,
-        created: a.created,
+        created: epochToMinutesAgo(a.created),
         interactions: a.totalInteractions || 0,
         threats: a.totalThreats || 0,
         status: a.status,

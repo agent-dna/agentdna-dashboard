@@ -190,14 +190,7 @@ export function UserDetailPage() {
     {
       key: "name",
       label: "Agent",
-      render: (r) => (
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, rgba(37,99,235,0.18), rgba(14,165,233,0.05))", display: "grid", placeItems: "center", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 11, color: "var(--accent)", border: "1px solid var(--line-strong)", flexShrink: 0 }}>
-            {initials(r.name || "A")}
-          </div>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>
-        </div>
-      ),
+      render: (r) => <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>,
     },
     {
       key: "status",

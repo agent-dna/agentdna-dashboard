@@ -67,7 +67,7 @@ export function UsersTab() {
   useEffect(() => { load(); }, [load]);
 
   const cols: DataTableColumn<OrgUser & { id: string }>[] = [
-    { key: "userName", label: "Email", render: (r) => <span style={{ color: "var(--fg)", fontWeight: 600 }}>{r.userName}</span> },
+    { key: "userName", label: "Name", render: (r) => <span style={{ color: "var(--fg)", fontWeight: 600 }}>{r.userName}</span> },
     {
       key: "userID",
       label: "User ID",

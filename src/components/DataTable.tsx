@@ -46,7 +46,7 @@ export function DataTable<R extends { id?: string }>({
               <th
                 key={c.key}
                 className={sort.key === c.key ? "active" : ""}
-                style={{ width: c.width, textAlign: c.align || "left" }}
+                style={{ width: c.width, textAlign: "center" }}
                 onClick={() =>
                   c.sortFn &&
                   setSort((s) => ({
@@ -79,8 +79,15 @@ export function DataTable<R extends { id?: string }>({
               style={{ cursor: onRowClick ? "pointer" : "default", ...rowStyle?.(row) }}
             >
               {columns.map((c) => (
-                <td key={c.key} style={{ textAlign: c.align || "left", width: c.width }}>
-                  {c.render ? c.render(row) : (row as Record<string, ReactNode>)[c.key]}
+                <td key={c.key} style={{ width: c.width }}>
+                  {/* A centered flex wrapper (not just text-align) so this
+                      centers everything a column can render — plain text,
+                      pills/chips, and multi-element rows like an icon+name
+                      flex container — regardless of what alignment that
+                      column's own render() markup was built with. */}
+                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
+                    {c.render ? c.render(row) : (row as Record<string, ReactNode>)[c.key]}
+                  </div>
                 </td>
               ))}
             </tr>

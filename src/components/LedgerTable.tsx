@@ -4,7 +4,7 @@ import { IntentIdChip } from "../context/IntentNumbersContext";
 import { timeAgo } from "../lib/format";
 import { EntityLink } from "./EntityLink";
 
-const TD_STYLE = { padding: "14px 22px", borderBottom: "1px solid var(--line)", verticalAlign: "middle" } as const;
+const TD_STYLE = { padding: "14px 22px", borderBottom: "1px solid var(--line)", verticalAlign: "middle", textAlign: "center" } as const;
 
 export function LedgerTable({
   rows,
@@ -27,9 +27,9 @@ export function LedgerTable({
     return hit.name || did || "—";
   }
 
-  const TH = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
+  const TH = ({ children }: { children: React.ReactNode; right?: boolean }) => (
     <th style={{
-      textAlign: right ? "right" : "left",
+      textAlign: "center",
       font: "700 11.5px var(--font-body)",
       letterSpacing: "0.07em",
       textTransform: "uppercase",
@@ -128,12 +128,12 @@ export function LedgerTable({
                   </span>
                 )}
               </td>
-              <td style={{ ...TD_STYLE, textAlign: "right" }}>
+              <td style={TD_STYLE}>
                 <span style={{ font: "500 12.5px var(--font-mono)", color: "var(--fg-faint)" }}>
                   {timeAgo(r.created)}
                 </span>
               </td>
-              <td style={{ ...TD_STYLE, textAlign: "right" }}>
+              <td style={TD_STYLE}>
                 <span
                   onClick={(e) => { e.stopPropagation(); onView(r); }}
                   style={{ font: "600 12px var(--font-mono)", color: "var(--accent)", letterSpacing: "0.04em", cursor: "pointer" }}
