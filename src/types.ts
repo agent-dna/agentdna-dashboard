@@ -119,6 +119,11 @@ export interface HomeMetrics {
   threatCount: number;
   page: number;
   agentList: HomeAgentSummary[];
+  // 24-hour changes
+  agentCount24hChange?: number;
+  intentCount24hChange?: number;
+  interactionsCount24hChange?: number;
+  threatCount24hChange?: number;
 }
 
 export interface PublicMetrics {

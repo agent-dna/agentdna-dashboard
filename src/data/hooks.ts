@@ -95,7 +95,7 @@ export const useThreatsListPaged = (page = 1) =>
 export const useHomeMetrics = (page = 1) =>
   useAsync<HomeMetrics>(
     () => api.fetchHomeMetrics(page),
-    { agentCount: 0, intentCount: 0, interactionsCount: 0, threatCount: 0, page: 1, agentList: [] },
+    { agentCount: 0, intentCount: 0, interactionsCount: 0, threatCount: 0, page: 1, agentList: [], agentCount24hChange: 0, intentCount24hChange: 0, interactionsCount24hChange: 0, threatCount24hChange: 0 },
     [page],
   );
 export const useAgentsAppsMetrics = () =>

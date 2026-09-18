@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
-import { MetricTile } from "../components/MetricTile";
+import { Modal } from "../components/Modal";
 
 import { Chart } from "../components/Chart";
-import { Modal } from "../components/Modal";
 import { useHomeMetrics, useIntentsPaged, useThreatsListPaged, useTopThreats, useSeries, useAgentsAppsMetrics } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { AppIcon } from "../components/AppIcon";
@@ -206,6 +205,7 @@ export function HomePage() {
   const [intentStatusFilter, setIntentStatusFilter] = useState<IntentReviewStatus | "all">("all");
   const [threatStatusFilter, setThreatStatusFilter] = useState<IntentReviewStatus | "all">("all");
   const [threatSeverityFilter, setThreatSeverityFilter] = useState<ThreatSeverity | "all">("all");
+  const [showThreatsInfo, setShowThreatsInfo] = useState(false);
 
   const homeState = useHomeMetrics();
   const intentsState = useIntentsPaged(intentsPage);
@@ -278,7 +278,7 @@ export function HomePage() {
       key: "id",
       label: "Intent",
       render: (r) => (
-        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)" }} />
+        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {
@@ -291,7 +291,7 @@ export function HomePage() {
     {
       key: "interactions",
       label: "Interactions",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactionsCount}</span>,
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{r.interactionsCount}</span>,
     },
     {
       key: "apps",
@@ -299,7 +299,7 @@ export function HomePage() {
       render: (r) => {
         const apps = r.appsInteracted || [];
         if (apps.length === 0) {
-          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
+          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 13 }}>—</span>;
         }
         return (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -307,7 +307,7 @@ export function HomePage() {
               <AppIcon key={app.id} name={resolveDisplayName(resolve, app)} size={20} />
             ))}
             {apps.length > 3 && (
-              <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>+{apps.length - 3}</span>
+              <span style={{ fontSize: 13, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>+{apps.length - 3}</span>
             )}
           </div>
         );
@@ -328,7 +328,7 @@ export function HomePage() {
       label: "Time",
       align: "right",
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>{timeAgo(r.started)}</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--fg-muted)" }}>{timeAgo(r.started)}</span>
       ),
     },
     {
@@ -339,14 +339,37 @@ export function HomePage() {
       render: (r) => (
         <div className="row-actions">
           <button
-            className="btn-mini info"
-            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            style={{
+              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 12px",
+              fontSize: 11.5,
+              fontWeight: 600,
+              borderRadius: 7,
+              border: "1px solid rgba(37,99,235,0.25)",
+              background: "rgba(37,99,235,0.06)",
+              color: "var(--accent)",
+              cursor: "pointer",
+              transition: "all 120ms ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--accent)";
+              e.currentTarget.style.borderColor = "var(--accent)";
+              e.currentTarget.style.color = "#fff";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(37,99,235,0.06)";
+              e.currentTarget.style.borderColor = "rgba(37,99,235,0.25)";
+              e.currentTarget.style.color = "var(--accent)";
+            }}
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/intents/${r.id}`);
             }}
           >
-            <Icon name="arrowUpRight" size={12} />
+            <Icon name="arrowUpRight" size={11} />
             Inspect
           </button>
         </div>
@@ -361,7 +384,7 @@ export function HomePage() {
       width: "13%",
       sortFn: (a, b) => a.intentID.localeCompare(b.intentID),
       render: (r) => (
-        <IntentIdChip id={r.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--fg)" }} />
+        <IntentIdChip id={r.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {
@@ -396,7 +419,7 @@ export function HomePage() {
       width: "13%",
       sortFn: (a, b) => a.time - b.time,
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)", paddingRight: 8 }}>{capitalizeFirst(timeAgo(r.time))}</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--fg-muted)", paddingRight: 8 }}>{capitalizeFirst(timeAgo(r.time))}</span>
       ),
     },
     {
@@ -405,28 +428,74 @@ export function HomePage() {
       align: "right",
       width: "26%",
       render: (r) => (
-        <div className="row-actions" style={{ flexWrap: "nowrap" }}>
+        <div className="row-actions" style={{ flexWrap: "nowrap", gap: 6 }}>
           <button
-            className="btn-mini danger"
-            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            style={{
+              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "6px 11px",
+              fontSize: 11.5,
+              fontWeight: 600,
+              borderRadius: 7,
+              border: "1px solid rgba(220,38,38,0.28)",
+              background: "rgba(220,38,38,0.06)",
+              color: "var(--threat)",
+              cursor: "pointer",
+              transition: "all 120ms ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--threat)";
+              e.currentTarget.style.borderColor = "var(--threat)";
+              e.currentTarget.style.color = "#fff";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(220,38,38,0.06)";
+              e.currentTarget.style.borderColor = "rgba(220,38,38,0.28)";
+              e.currentTarget.style.color = "var(--threat)";
+            }}
             onClick={(e) => {
               e.stopPropagation();
               setThreatMessage(r);
             }}
           >
-            <Icon name="eye" size={12} />
-            View Message
+            <Icon name="eye" size={11} />
+            Message
           </button>
           <button
-            className="btn-mini info"
-            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            style={{
+              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "6px 11px",
+              fontSize: 11.5,
+              fontWeight: 600,
+              borderRadius: 7,
+              border: "1px solid rgba(37,99,235,0.25)",
+              background: "rgba(37,99,235,0.06)",
+              color: "var(--accent)",
+              cursor: "pointer",
+              transition: "all 120ms ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--accent)";
+              e.currentTarget.style.borderColor = "var(--accent)";
+              e.currentTarget.style.color = "#fff";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(37,99,235,0.06)";
+              e.currentTarget.style.borderColor = "rgba(37,99,235,0.25)";
+              e.currentTarget.style.color = "var(--accent)";
+            }}
             onClick={(e) => {
               e.stopPropagation();
               openDrawer("interaction", threatToInteraction(r));
             }}
           >
-            <Icon name="arrowUpRight" size={12} />
-            Inspect Incident
+            <Icon name="arrowUpRight" size={11} />
+            Inspect
           </button>
         </div>
       ),
@@ -520,8 +589,89 @@ export function HomePage() {
     );
   }
 
+  // Calculate critical/high severity threat counts
+  const criticalThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "Critical").reduce((sum, t) => sum + t.count, 0);
+  const highThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "High").reduce((sum, t) => sum + t.count, 0);
+  const mediumThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "Medium").reduce((sum, t) => sum + t.count, 0);
+  const lowThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "Low").reduce((sum, t) => sum + t.count, 0);
+  const urgentCount = criticalThreats + highThreats;
+  const totalThreatsBySeverity = criticalThreats + highThreats + mediumThreats + lowThreats || 1;
+
+  // Find most recent threat
+  const mostRecentThreat = threatsList.length > 0 ? threatsList[0] : null;
+
   return (
     <div className="page">
+      {/* Critical Alerts Banner */}
+      {/* {urgentCount > 0 && (
+        <div
+          style={{
+            background: "#FFFFFF",
+            border: "1px solid #E2E8F0",
+            borderLeft: "4px solid #D92D20",
+            borderRadius: 10,
+            padding: "16px 20px",
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.06)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: "#FEF3F2",
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Icon name="shield" size={18} style={{ color: "#D92D20" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 15.5, fontWeight: 670, color: "#0F2747", marginBottom: 4, letterSpacing: "-0.01em" }}>
+                {criticalThreats > 0 ? `${criticalThreats} critical incident${criticalThreats !== 1 ? 's' : ''} require attention` : `${highThreats} high-priority incident${highThreats !== 1 ? 's' : ''} require attention`}
+              </div>
+              <div style={{ fontSize: 13, color: "#64748B", fontWeight: 400 }}>
+                {(highThreats + mediumThreats + lowThreats) > 0 && `${highThreats + mediumThreats + lowThreats} contained`}
+                {mostRecentThreat && ` · Last detected ${timeAgo(mostRecentThreat.time)}`}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              style={{
+                background: "#FFFFFF",
+                border: "1px solid #D92D20",
+                color: "#D92D20",
+                fontWeight: 500,
+                padding: "7px 14px",
+                borderRadius: 8,
+                fontSize: 13.5,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                transition: "all 120ms ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#FEF3F2";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#FFFFFF";
+              }}
+              onClick={() => setBottomTab("threats")}
+            >
+              Review incidents →
+            </button>
+          </div>
+        </div>
+      )} */}
+
       <div className="page-head">
         <div>
           <h1>Dashboard</h1>
@@ -542,17 +692,405 @@ export function HomePage() {
       </div>
 
       <div className="metrics">
-        <MetricTile label="Active Agents" value={metrics.agentCount} icon="agents" sparkColor="#2563EB" spark={[]} />
-        <MetricTile
-          label="Total Interactions"
-          value={metrics.interactionsCount >= 1000 ? (metrics.interactionsCount / 1000).toFixed(1) : metrics.interactionsCount}
-          unit={metrics.interactionsCount >= 1000 ? "k" : undefined}
-          icon="activity"
-          sparkColor="#0EA5E9"
-          spark={data.total}
-        />
-        <MetricTile label="Incidents Detected" value={metrics.threatCount} icon="shield" sparkColor="#DC2626" spark={data.threats} />
-        <MetricTile label="Total Intents" value={metrics.intentCount} icon="intents" sparkColor="#0A2240" spark={[]} />
+        {/* Active Threats Card - Professional security platform design */}
+        <div
+          style={{
+            background: "var(--bg-1)",
+            border: "1px solid var(--line)",
+            borderRadius: 12,
+            padding: "18px 20px",
+            position: "relative" as const,
+            overflow: "hidden",
+            boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
+          }}
+        >
+          {/* Title with Info Icon */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+                Incidents
+              </div>
+              <button
+                onClick={() => setShowThreatsInfo(true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 2,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--fg-muted)",
+                  transition: "color 120ms",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--fg-muted)")}
+                title="More information"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Main Count with Change Indicator */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
+            <div style={{ fontSize: 36, fontWeight: 700, color: "var(--threat)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
+              {metrics.threatCount}
+            </div>
+            {metrics.threatCount24hChange != null && metrics.threatCount24hChange > 0 && (
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--threat)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
+                }}
+              >
+                +{metrics.threatCount24hChange} · 24hr
+              </div>
+            )}
+          </div>
+
+          {/* Severity Breakdown Labels */}
+          {metrics.threatCount > 0 && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
+                {[
+                  { label: "Critical", count: criticalThreats, color: "#7F1D1D" },
+                  { label: "High", count: highThreats, color: "#E57373" },
+                  { label: "Medium", count: mediumThreats, color: "#FFB74D" },
+                  { label: "Low", count: lowThreats, color: "#FFA726" },
+                ].map(({ label, count, color }) => {
+                  if (count === 0) return null;
+                  return (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                      {label} <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Severity Bar */}
+              <div style={{ display: "flex", width: "100%", height: 6, borderRadius: 999, overflow: "hidden", background: "var(--bg-3)" }}>
+                {[
+                  { label: "Critical", count: criticalThreats, color: "#7F1D1D" },
+                  { label: "High", count: highThreats, color: "#E57373" },
+                  { label: "Medium", count: mediumThreats, color: "#FFB74D" },
+                  { label: "Low", count: lowThreats, color: "#FFA726" },
+                ].map(({ label, count, color }) => {
+                  const percentage = totalThreatsBySeverity > 0 ? (count / totalThreatsBySeverity) * 100 : 0;
+                  if (percentage === 0) return null;
+                  return (
+                    <div
+                      key={label}
+                      style={{
+                        width: `${percentage}%`,
+                        background: color,
+                        transition: "width 300ms ease",
+                      }}
+                      title={`${label}: ${count} (${Math.round(percentage)}%)`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Interactions Card with Safe/Incident Bar */}
+        <div
+          style={{
+            background: "var(--bg-1)",
+            border: "1px solid var(--line)",
+            borderRadius: 12,
+            padding: "18px 20px",
+            position: "relative" as const,
+            overflow: "hidden",
+            boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
+          }}
+        >
+          {/* Title with Info Icon */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+                Interactions
+              </div>
+              <button
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 2,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--fg-muted)",
+                  transition: "color 120ms",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--fg-muted)")}
+                title="Information about interactions"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Main Count with Change Indicator */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
+            <div style={{ fontSize: 36, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
+              {metrics.interactionsCount >= 1000 ? (metrics.interactionsCount / 1000).toFixed(1) : metrics.interactionsCount}
+              {metrics.interactionsCount >= 1000 && <span style={{ fontSize: 16, color: "var(--fg-muted)", marginLeft: 4, fontWeight: 400 }}>k</span>}
+            </div>
+            {metrics.interactionsCount24hChange != null && metrics.interactionsCount24hChange > 0 && (
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--fg-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
+                }}
+              >
+                +{metrics.interactionsCount24hChange} · 24hr
+              </div>
+            )}
+          </div>
+
+          {/* Safe vs Incident Bar */}
+          {metrics.interactionsCount > 0 && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563EB", flexShrink: 0 }} />
+                  Safe <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.interactionsCount - metrics.threatCount}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#7F1D1D", flexShrink: 0 }} />
+                  Incidents <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.threatCount}</span>
+                </div>
+              </div>
+
+              {/* Horizontal Bar */}
+              <div style={{ display: "flex", width: "100%", height: 6, borderRadius: 999, overflow: "hidden", background: "var(--bg-3)" }}>
+                <div
+                  style={{
+                    width: `${((metrics.interactionsCount - metrics.threatCount) / metrics.interactionsCount) * 100}%`,
+                    background: "#2563EB",
+                    transition: "width 300ms ease",
+                  }}
+                  title={`Safe interactions: ${metrics.interactionsCount - metrics.threatCount}`}
+                />
+                <div
+                  style={{
+                    width: `${(metrics.threatCount / metrics.interactionsCount) * 100}%`,
+                    background: "#7F1D1D",
+                    transition: "width 300ms ease",
+                  }}
+                  title={`Incident interactions: ${metrics.threatCount}`}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Agents Card */}
+        <div
+          style={{
+            background: "var(--bg-1)",
+            border: "1px solid var(--line)",
+            borderRadius: 12,
+            padding: "18px 20px",
+            position: "relative" as const,
+            overflow: "hidden",
+            boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
+          }}
+        >
+          {/* Title with Info Icon */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+                Agents
+              </div>
+              <button
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 2,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--fg-muted)",
+                  transition: "color 120ms",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--fg-muted)")}
+                title="Information about agents"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Main Count with Change Indicator */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
+            <div style={{ fontSize: 36, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
+              {metrics.agentCount}
+            </div>
+            {metrics.agentCount24hChange != null && metrics.agentCount24hChange > 0 && (
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--fg-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
+                }}
+              >
+                +{metrics.agentCount24hChange} · 24hr
+              </div>
+            )}
+          </div>
+
+          {/* Active/Total Bar */}
+          {metrics.agentCount > 0 && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563EB", flexShrink: 0 }} />
+                  Active <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.agentCount}</span>
+                </div>
+              </div>
+
+              {/* Horizontal Bar */}
+              <div style={{ display: "flex", width: "100%", height: 6, borderRadius: 999, overflow: "hidden", background: "var(--bg-3)" }}>
+                <div
+                  style={{
+                    width: "100%",
+                    background: "#2563EB",
+                    transition: "width 300ms ease",
+                  }}
+                  title={`Active agents: ${metrics.agentCount}`}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Intents Card with Safe/Blocked Bar */}
+        <div
+          style={{
+            background: "var(--bg-1)",
+            border: "1px solid var(--line)",
+            borderRadius: 12,
+            padding: "18px 20px",
+            position: "relative" as const,
+            overflow: "hidden",
+            boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
+          }}
+        >
+          {/* Title with Info Icon */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+                Intents
+              </div>
+              <button
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 2,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--fg-muted)",
+                  transition: "color 120ms",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--fg-muted)")}
+                title="Information about intents"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Main Count with Change Indicator */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
+            <div style={{ fontSize: 36, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
+              {metrics.intentCount}
+            </div>
+            {metrics.intentCount24hChange != null && metrics.intentCount24hChange > 0 && (
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--fg-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
+                }}
+              >
+                +{metrics.intentCount24hChange} · 24hr
+              </div>
+            )}
+          </div>
+
+          {/* Safe vs Blocked Bar */}
+          {metrics.intentCount > 0 && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563EB", flexShrink: 0 }} />
+                  Safe <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.intentCount - metrics.threatCount}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#7F1D1D", flexShrink: 0 }} />
+                  Blocked <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.threatCount}</span>
+                </div>
+              </div>
+
+              {/* Horizontal Bar */}
+              <div style={{ display: "flex", width: "100%", height: 6, borderRadius: 999, overflow: "hidden", background: "var(--bg-3)" }}>
+                <div
+                  style={{
+                    width: `${((metrics.intentCount - metrics.threatCount) / metrics.intentCount) * 100}%`,
+                    background: "#2563EB",
+                    transition: "width 300ms ease",
+                  }}
+                  title={`Safe intents: ${metrics.intentCount - metrics.threatCount}`}
+                />
+                <div
+                  style={{
+                    width: `${(metrics.threatCount / metrics.intentCount) * 100}%`,
+                    background: "#7F1D1D",
+                    transition: "width 300ms ease",
+                  }}
+                  title={`Blocked intents: ${metrics.threatCount}`}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr", gap: 16, marginBottom: 20 }}>
@@ -565,38 +1103,60 @@ export function HomePage() {
                 </div>
               )}
               <div>
-                <h3>{chartTab === "graph" ? "Interactions over time" : "Top 5 incidents by volume"}</h3>
+                <h3>{chartTab === "graph" ? "Interactions over time" : "Security events"}</h3>
                 <div className="sub">
-                  {chartTab === "graph" ? "Safe vs incident-classified runs · Last 7 days" : "By volume, most frequent codes"}
+                  {chartTab === "graph" ? "Safe vs incident-classified runs · Last 7 days" : "Top incidents requiring attention"}
                 </div>
               </div>
             </div>
-            <div style={{ display: "flex", background: chartTab === "threats" ? "rgba(220,38,38,0.08)" : "var(--bg-3)", borderRadius: 6, padding: 2 }}>
-              {([{ key: "graph", label: "Graph" }, { key: "threats", label: "Incidents" }] as const).map((t) => {
-                const active = chartTab === t.key;
-                const redActive = active && t.key === "threats";
-                return (
-                  <button
-                    key={t.key}
-                    onClick={() => setChartTab(t.key)}
-                    style={{
-                      background: redActive ? "var(--threat)" : active ? "var(--surface)" : "transparent",
-                      border: "none",
-                      borderRadius: 5,
-                      padding: "4px 10px",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: redActive ? "#fff" : active ? "var(--fg)" : "var(--fg-muted)",
-                      cursor: "pointer",
-                      boxShadow: active && !redActive ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
-                      transition: "all 120ms",
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
+            {chartTab === "graph" ? (
+              <div style={{ display: "flex", background: "var(--bg-3)", borderRadius: 6, padding: 2 }}>
+                {([{ key: "graph", label: "Graph" }, { key: "threats", label: "Incidents" }] as const).map((t) => {
+                  const active = chartTab === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => setChartTab(t.key)}
+                      style={{
+                        background: active ? "var(--surface)" : "transparent",
+                        border: "none",
+                        borderRadius: 5,
+                        padding: "4px 10px",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: active ? "var(--fg)" : "var(--fg-muted)",
+                        cursor: "pointer",
+                        boxShadow: active ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
+                        transition: "all 120ms",
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  style={{
+                    background: "transparent",
+                    border: "1px solid var(--line)",
+                    borderRadius: 6,
+                    padding: "4px 10px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "var(--fg-muted)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  Last 24h
+                  <Icon name="chevronDown" size={12} style={{ color: "var(--fg-muted)" }} />
+                </button>
+              </div>
+            )}
           </div>
 
           {chartTab === "graph" ? (
@@ -624,10 +1184,9 @@ export function HomePage() {
             </>
           ) : (
             <>
-              {!topThreatsError && topThreats.length > 0 && <SeverityBar topThreats={topThreats} />}
-              <div style={{ display: "grid", gridTemplateColumns: "26px 1fr 80px 60px", padding: "10px 16px 5px", borderBottom: "1px solid rgba(220,38,38,0.18)", marginTop: 8 }}>
-                {["#", "INCIDENT", "SEVERITY", "COUNT"].map((h, i) => (
-                  <div key={h} style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "26px 1fr 80px 90px 80px 24px", padding: "10px 20px 5px", borderBottom: "1px solid rgba(220,38,38,0.18)", marginTop: 8 }}>
+                {["#", "INCIDENT", "SEVERITY", "OCCURRENCES", "LAST SEEN", ""].map((h, i) => (
+                  <div key={h} style={{ fontSize: 9.5, fontWeight: 840, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
               </div>
               {topThreatsError ? (
@@ -637,52 +1196,78 @@ export function HomePage() {
               ) : topThreats.length === 0 && (
                 <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 12.5, textAlign: "center" }}>No incidents detected</div>
               )}
-              {!topThreatsError && topThreats.map((t, i) => (
-                <div
-                  key={t.threatCode}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "26px 1fr 80px 60px",
-                    alignItems: "center",
-                    padding: "8px 16px",
-                    borderBottom: "1px solid rgba(220,38,38,0.14)",
-                    background: i === 0 ? "rgba(220,38,38,0.09)" : "transparent",
-                    boxShadow: i === 0 ? "inset 3px 0 0 var(--threat)" : "inset 3px 0 0 transparent",
-                  }}
-                >
+              {!topThreatsError && topThreats.map((t, i) => {
+                // Dummy last seen data
+                const lastSeenOptions = ["2m ago", "5m ago", "12m ago", "1h ago", "3h ago"];
+                const lastSeen = lastSeenOptions[i % lastSeenOptions.length];
+
+                return (
                   <div
+                    key={t.threatCode}
+                    onClick={() => {
+                      setBottomTab("threats");
+                      setThreatStatusFilter("Flagged");
+                    }}
                     style={{
-                      width: 21,
-                      height: 21,
-                      borderRadius: 6,
                       display: "grid",
-                      placeItems: "center",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 9.5,
-                      fontWeight: 700,
-                      background: i === 0 ? "var(--threat)" : "rgba(220,38,38,0.12)",
-                      color: i === 0 ? "#fff" : "var(--threat)",
+                      gridTemplateColumns: "26px 1fr 80px 90px 80px 24px",
+                      alignItems: "center",
+                      padding: "10px 20px",
+                      borderBottom: "1px solid rgba(220,38,38,0.14)",
+                      background: i === 0 ? "rgba(220,38,38,0.09)" : "transparent",
+                      boxShadow: i === 0 ? "inset 3px 0 0 var(--threat)" : "none",
+                      cursor: "pointer",
+                      transition: "background 120ms",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.background = "rgba(220,38,38,0.12)";
+                      const arrow = e.currentTarget.querySelector(".arrow-icon") as HTMLElement;
+                      if (arrow) arrow.style.transform = "rotate(-45deg)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.background = i === 0 ? "rgba(220,38,38,0.09)" : "transparent";
+                      const arrow = e.currentTarget.querySelector(".arrow-icon") as HTMLElement;
+                      if (arrow) arrow.style.transform = "rotate(0deg)";
                     }}
                   >
-                    {String(i + 1).padStart(2, "0")}
+                    <div
+                      style={{
+                        width: 21,
+                        height: 21,
+                        borderRadius: 6,
+                        display: "grid",
+                        placeItems: "center",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 9.5,
+                        fontWeight: 840,
+                        background: i === 0 ? "var(--threat)" : "rgba(220,38,38,0.12)",
+                        color: i === 0 ? "#fff" : "var(--threat)",
+                      }}
+                    >
+                      {String(i + 1).padStart(2, "0")}
+                    </div>
+                    <div style={{ fontSize: 12.5, fontWeight: 720, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titleOrUnknown(t.title)}</div>
+                    <div style={{ textAlign: "right" }}>
+                      <SeverityPill severity={getThreatSeverity(t.threatCode)} />
+                    </div>
+                    <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 840, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
+                      {t.count.toLocaleString()}
+                    </div>
+                    <div style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: "var(--fg-muted)", fontFamily: "var(--font-body)" }}>
+                      {lastSeen}
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
+                      <div className="arrow-icon" style={{ transition: "transform 200ms ease", display: "flex" }}>
+                        <Icon name="arrowRight" size={14} style={{ color: "var(--fg-muted)" }} />
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titleOrUnknown(t.title)}</div>
-                  <div style={{ textAlign: "right" }}>
-                    <SeverityPill severity={getThreatSeverity(t.threatCode)} />
-                  </div>
-                  <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
-                    {t.count.toLocaleString()}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {!topThreatsError && topThreats.length > 0 && (
-                <div style={{ padding: "12px 16px" }}>
-                  <button
-                    onClick={() => setBottomTab("threats")}
-                    style={{ background: "none", border: "none", fontSize: 12.5, fontWeight: 600, color: "var(--threat)", cursor: "pointer", padding: 0 }}
-                  >
-                    View all incidents →
-                  </button>
+                <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(220,38,38,0.14)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Showing top {topThreats.length} of {metrics.threatCount} incidents</span>
+                  <button onClick={() => setBottomTab("threats")} style={{ background: "none", border: "none", fontSize: 12, fontWeight: 600, color: "var(--threat)", cursor: "pointer", padding: 0 }}>View all incidents →</button>
                 </div>
               )}
             </>
@@ -737,8 +1322,8 @@ export function HomePage() {
           {/* Agents view */}
           {volumeTab === "agents" && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)" }}>
-                {["#", "AGENT", "IXNS"].map((h, i) => (
+              <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 24px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)" }}>
+                {["#", "AGENT", "IXNS", ""].map((h, i) => (
                   <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
               </div>
@@ -754,9 +1339,17 @@ export function HomePage() {
                       <div
                         key={a.agentID}
                         onClick={() => navigate(`/agents/${a.agentID}`)}
-                        style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px", alignItems: "center", padding: "10px 20px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)")}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+                        style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 24px", alignItems: "center", padding: "10px 20px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)";
+                          const arrow = e.currentTarget.querySelector(".arrow-icon") as HTMLElement;
+                          if (arrow) arrow.style.transform = "rotate(-45deg)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLDivElement).style.background = "transparent";
+                          const arrow = e.currentTarget.querySelector(".arrow-icon") as HTMLElement;
+                          if (arrow) arrow.style.transform = "rotate(0deg)";
+                        }}
                       >
                         <div style={{ width: 28, height: 28, borderRadius: 8, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, background: i === 0 ? "#0a2240" : "var(--bg-3)", color: i === 0 ? "#fff" : "var(--fg-muted)" }}>
                           {String(i + 1).padStart(2, "0")}
@@ -766,6 +1359,11 @@ export function HomePage() {
                         </div>
                         <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
                           {a.totalInteractions.toLocaleString()}
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
+                          <div className="arrow-icon" style={{ transition: "transform 200ms ease", display: "flex" }}>
+                            <Icon name="arrowRight" size={14} style={{ color: "var(--fg-muted)" }} />
+                          </div>
                         </div>
                       </div>
                     );
@@ -782,8 +1380,8 @@ export function HomePage() {
           {/* Apps view — matches TopAppsList dark design */}
           {volumeTab === "apps" && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "36px 22px 1fr 76px 72px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                {["#", "", "APP", "IXNS", "SHARE"].map((h, i) => (
+              <div style={{ display: "grid", gridTemplateColumns: "36px 22px 1fr 76px 72px 24px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                {["#", "", "APP", "IXNS", "SHARE", ""].map((h, i) => (
                   <div key={i} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase" as const, textAlign: (i > 2 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
               </div>
@@ -802,10 +1400,18 @@ export function HomePage() {
                         key={a.name}
                         onClick={() => navigate(`/tools/${encodeURIComponent(a.name)}`)}
                         style={{ cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 20px" }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)")}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)";
+                          const arrow = e.currentTarget.querySelector(".arrow-icon") as HTMLElement;
+                          if (arrow) arrow.style.transform = "rotate(-45deg)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLDivElement).style.background = "transparent";
+                          const arrow = e.currentTarget.querySelector(".arrow-icon") as HTMLElement;
+                          if (arrow) arrow.style.transform = "rotate(0deg)";
+                        }}
                       >
-                        <div style={{ display: "grid", gridTemplateColumns: "36px 22px 1fr 76px 72px", alignItems: "center", padding: "10px 0 4px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "36px 22px 1fr 76px 72px 24px", alignItems: "center", padding: "10px 0 4px" }}>
                           <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: i === 0 ? "#fff" : "rgba(255,255,255,0.4)" }}>
                             {String(i + 1).padStart(2, "0")}
                           </div>
@@ -816,6 +1422,11 @@ export function HomePage() {
                           </div>
                           <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.6)", fontVariantNumeric: "tabular-nums" }}>
                             {share}%
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
+                            <div className="arrow-icon" style={{ transition: "transform 200ms ease", display: "flex" }}>
+                              <Icon name="arrowRight" size={14} style={{ color: "rgba(255,255,255,0.4)" }} />
+                            </div>
                           </div>
                         </div>
                         <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginBottom: 8 }}>
@@ -936,6 +1547,76 @@ export function HomePage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={showThreatsInfo}
+        title="Incidents Metric"
+        onClose={() => setShowThreatsInfo(false)}
+        width={560}
+        footer={
+          <button type="button" className="btn primary" onClick={() => setShowThreatsInfo(false)}>
+            Got it
+          </button>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ fontSize: 14, color: "var(--fg-dim)", lineHeight: 1.6 }}>
+            The <strong>Incidents</strong> metric displays security incidents detected by AgentDNA across all monitored agents and applications in real-time.
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+              Severity Levels
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: "#7F1D1D", flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 2 }}>Critical</div>
+                  <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+                    Immediate action required. Threats that pose severe security risks such as data exfiltration, privilege escalation, or system compromise.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: "#E57373", flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 2 }}>High</div>
+                  <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+                    Significant security concerns requiring prompt investigation, including unauthorized access attempts and policy violations.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: "#FFB74D", flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 2 }}>Medium</div>
+                  <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+                    Moderate risk activities that should be reviewed and monitored for escalation patterns.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: "#FFA726", flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 2 }}>Low</div>
+                  <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+                    Minor anomalies or informational alerts that may indicate potential issues requiring awareness.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ padding: "12px 14px", background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.15)", borderRadius: 8, fontSize: 12, color: "var(--fg-dim)", lineHeight: 1.5 }}>
+            <strong style={{ color: "var(--accent)" }}>Tip:</strong> Click on the "View Flagged" button in the alert banner above to quickly review all incidents that require immediate attention.
+          </div>
+        </div>
       </Modal>
     </div>
   );

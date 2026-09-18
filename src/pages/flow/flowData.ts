@@ -268,32 +268,13 @@ function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
 /**
  * Group step indices into rounds that play together.
  *
- * A fan-out — one agent dispatching to several others at once — should light up
- * as a single beat rather than a sequence. Consecutive request hops leaving the
- * same node for different targets are treated as concurrent; when the diagram
- * supplies epochs, they must match too, so genuinely sequential calls from the
- * same source stay separate.
- *
- * Responses always stand alone: a reply is a distinct beat even when several
- * arrive from a fan-out.
+ * Each interaction now gets its own beat for individual playback.
+ * Previously concurrent interactions (fan-outs) are now played sequentially,
+ * one beat per interaction.
  */
 export function groupParallelRounds(steps: FlowStep[]): number[][] {
-  const rounds: number[][] = [];
-  for (let i = 0; i < steps.length; i++) {
-    const s = steps[i];
-    const open = rounds[rounds.length - 1];
-    const prev = open ? steps[open[open.length - 1]] : null;
-    const concurrent =
-      prev != null &&
-      s.dir === "request" &&
-      prev.dir === "request" &&
-      s.from === prev.from &&
-      s.to !== prev.to &&
-      (s.epoch == null || prev.epoch == null || s.epoch === prev.epoch);
-    if (concurrent && open) open.push(i);
-    else rounds.push([i]);
-  }
-  return rounds;
+  // Each step gets its own round - one beat per interaction
+  return steps.map((_, i) => [i]);
 }
 
 
