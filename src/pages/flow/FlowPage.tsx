@@ -5,7 +5,7 @@ import { TraceInspector } from "../../components/TraceInspector";
 import { useIntent, useIntentBlockData, useIntentInteractions } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
 import { FlowCanvas } from "./FlowCanvas";
-import { buildFlowFromIntent, buildTraceFromBlocks, groupParallelRounds, type Flow, type FlowNode } from "./flowData";
+import { buildFlowFromIntent, buildInteractionTrace, buildTraceFromBlocks, groupParallelRounds, type Flow, type FlowNode } from "./flowData";
 import { fetchIntents, flattenIntentBlocks } from "../../data/api";
 import type { Intent, Interaction } from "../../types";
 
@@ -64,21 +64,20 @@ export function FlowPage() {
     return base;
   }, [intent, interactions, blocks, resolve]);
 
-  // Maps each step's spanId to the original Interaction record it came from,
-  // so the trace inspector's raw-data panel can show the exact same JSON the
-  // interaction drawer shows for that interaction, instead of a generic blob.
-  const interactionBySpanId = useMemo(() => {
-    if (!flow) return {};
-    const byId = new Map(interactions.map((ix) => [ix.id, ix]));
-    const map: Record<string, Interaction> = {};
-    for (const s of flow.steps) {
-      if (s.interactionID) {
-        const match = byId.get(s.interactionID);
-        if (match) map[s.spanId] = match;
-      }
-    }
-    return map;
+  // The Envelope inspector lists interactions, nested by who called whom. Names come
+  // from the flow's resolved nodes so rows match what the canvas and rail show.
+  const interactionTrace = useMemo(() => {
+    if (!flow) return null;
+    const nameByDid = new Map(flow.nodes.filter((n) => n.did).map((n) => [n.did!, n.name]));
+    return buildInteractionTrace(flow.intent, interactions, (did) => nameByDid.get(did));
   }, [flow, interactions]);
+
+  // Each interaction row's span id is the interaction id, so the raw-data panel shows
+  // the exact same JSON the interaction drawer shows for it.
+  const interactionBySpanId = useMemo(
+    () => Object.fromEntries(interactions.map((ix) => [ix.id, ix])) as Record<string, Interaction>,
+    [interactions],
+  );
 
   const N = flow?.steps.length ?? 0;
 
@@ -168,7 +167,7 @@ export function FlowPage() {
                       <button
                         className="sl-data-btn"
                         title="Inspect trace data"
-                        onClick={() => setInspectSpanId(flow.steps[step]?.spanId || flow.trace.trace.id)}
+                        onClick={() => setInspectSpanId(flow.steps[step]?.interactionID || interactionTrace?.trace.id || "")}
                       >
                         <Icon name="flow" size={12} />
                         Envelope 
@@ -302,13 +301,14 @@ export function FlowPage() {
         )}
       </div>
 
-      {inspectSpanId !== null && flow && (
+      {inspectSpanId !== null && interactionTrace && (
         <TraceInspector
-          trace={flow.trace}
+          trace={interactionTrace}
           openSpanId={inspectSpanId}
           onClose={() => setInspectSpanId(null)}
           rawData={blocks}
           interactionBySpanId={interactionBySpanId}
+          noun={{ one: "interaction", many: "interactions" }}
         />
       )}
     </div>

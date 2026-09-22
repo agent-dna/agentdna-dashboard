@@ -2,7 +2,8 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { Icon } from "../components/Icon";
 import { useAuth } from "../context/AuthContext";
 import { fetchTokenUsage, type TokenUsage } from "../api/keys";
-import { fetchUserProfile, fetchAdminProfile, updateUserProfile, changePassword, type UserProfile, type AdminProfile } from "../api/profile";
+import { fetchUserProfile, fetchAdminProfile, updateUserProfile, updatePassword, MIN_PASSWORD_LENGTH, type UserProfile, type AdminProfile } from "../api/profile";
+import { adminUpdatePassword, adminUsernameFromToken } from "../api/auth";
 import { ApiError } from "../api/client";
 
 function maskKey(key: string) {
@@ -33,7 +34,6 @@ export function ProfilePage() {
   const [editSaving, setEditSaving] = useState(false);
 
   const [pwOpen, setPwOpen] = useState(false);
-  const [pwCurrent, setPwCurrent] = useState("");
   const [pwNew, setPwNew] = useState("");
   const [pwConfirm, setPwConfirm] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
@@ -118,13 +118,17 @@ export function ProfilePage() {
   }
 
   async function handlePasswordChange() {
-    if (!pwCurrent.trim()) { setPwError("Current password is required."); return; }
     if (!pwNew.trim()) { setPwError("New password cannot be empty."); return; }
+    if (pwNew.length < MIN_PASSWORD_LENGTH) { setPwError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`); return; }
     if (pwNew !== pwConfirm) { setPwError("New passwords do not match."); return; }
+    // Admins change it on the admin server, keyed by the username they log in with.
+    const adminUsername = isAdmin ? adminUsernameFromToken() || adminProfile?.name?.trim() : null;
+    if (isAdmin && !adminUsername) { setPwError("Couldn't determine your admin username — please sign in again."); return; }
     setPwSaving(true); setPwError(null);
     try {
-      await changePassword({ currentPassword: pwCurrent, newPassword: pwNew });
-      setPwOpen(false); setPwCurrent(""); setPwNew(""); setPwConfirm("");
+      if (isAdmin) await adminUpdatePassword(adminUsername!, pwNew);
+      else await updatePassword(pwNew);
+      setPwOpen(false); setPwNew(""); setPwConfirm("");
       setPwSuccess(true); window.setTimeout(() => setPwSuccess(false), 4000);
     } catch (err) {
       setPwError(err instanceof ApiError ? err.message : "Failed to change password.");
@@ -258,13 +262,19 @@ export function ProfilePage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
                     <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>Change password</span>
-                    <button className="btn ghost" onClick={() => { setPwOpen(false); setPwError(null); setPwCurrent(""); setPwNew(""); setPwConfirm(""); }} style={{ fontSize: 12, padding: "4px 8px" }}>
+                    <button className="btn ghost" onClick={() => { setPwOpen(false); setPwError(null); setPwNew(""); setPwConfirm(""); }} style={{ fontSize: 12, padding: "4px 8px" }}>
                       Cancel
                     </button>
                   </div>
-                  <input type="password" placeholder="Current password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} style={fieldInputStyle} />
-                  <input type="password" placeholder="New password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} style={fieldInputStyle} />
-                  <input type="password" placeholder="Confirm new password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} style={fieldInputStyle} />
+                  <input
+                    type="password"
+                    placeholder={`New password (min ${MIN_PASSWORD_LENGTH} characters)`}
+                    autoComplete="new-password"
+                    value={pwNew}
+                    onChange={(e) => setPwNew(e.target.value)}
+                    style={fieldInputStyle}
+                  />
+                  <input type="password" placeholder="Confirm new password" autoComplete="new-password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} style={fieldInputStyle} />
                   {pwError && (
                     <div style={{ padding: "8px 10px", borderRadius: 7, background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.18)", color: "var(--threat)", fontSize: 12 }}>
                       {pwError}

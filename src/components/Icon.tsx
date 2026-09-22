@@ -1,6 +1,11 @@
 import type { ReactElement, SVGProps } from "react";
 
 export type IconName =
+  | "overview"
+  | "observatory"
+  | "threats"
+  | "policies"
+  | "apps"
   | "home"
   | "intents"
   | "agents"
@@ -43,35 +48,68 @@ export type IconName =
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
   name: IconName;
   size?: number;
+  /** Adds the 9px notification dot (used with `bell`). */
+  dot?: boolean;
 }
 
+const overview = (
+  <>
+    <path d="M3 10.5L12 3l9 7.5" />
+    <path d="M5 9v11a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V9" />
+  </>
+);
+
+const observatory = (
+  <>
+    <circle cx="12" cy="12" r="3.5" />
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" />
+  </>
+);
+
+const threats = (
+  <>
+    <path d="M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" />
+    <path d="M12 9v4M12 17h.01" />
+  </>
+);
+
+const policies = (
+  <>
+    <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+    <path d="M9 12l2 2 4-4" />
+  </>
+);
+
+const apps = (
+  <>
+    <path d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z" />
+    <path d="M3.5 7.25L12 12l8.5-4.75M12 12v9.5" />
+  </>
+);
+
 const PATHS: Record<IconName, ReactElement> = {
-  home: <path d="M3 11l9-8 9 8M5 10v10h4v-6h6v6h4V10" />,
-  intents: (
-    <>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
-    </>
-  ),
+  overview,
+  observatory,
+  threats,
+  policies,
+  apps,
+  home: overview,
+  intents: observatory,
   agents: (
     <>
-      <circle cx="9" cy="8" r="3" />
-      <circle cx="17" cy="14" r="3" />
-      <path d="M3 20c0-3 2.7-5 6-5M11 20c0-2 1.5-3 3-3.5" />
+      <circle cx="7" cy="8" r="3" />
+      <circle cx="17" cy="16" r="3" />
+      <path d="M10 7.5a9 9 0 017 5.5" />
+      <path d="M7 11a9 9 0 007 5" />
     </>
   ),
   interactions: (
     <>
-      <path d="M4 7h10l-2-2M20 17H10l2 2" />
-      <path d="M4 7v0M20 17v0" />
+      <path d="M4 8h14M14 4l4 4-4 4" />
+      <path d="M20 16H6M10 12l-4 4 4 4" />
     </>
   ),
-  alerts: (
-    <>
-      <path d="M12 3l9 16H3z" />
-      <path d="M12 10v4M12 17v.5" />
-    </>
-  ),
+  alerts: threats,
   search: (
     <>
       <circle cx="11" cy="11" r="7" />
@@ -130,8 +168,9 @@ const PATHS: Record<IconName, ReactElement> = {
   ),
   eye: (
     <>
-      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" />
-      <circle cx="12" cy="12" r="3" />
+      <path d="M2 12Q12 1.5 22 12Q12 22.5 2 12z" />
+      <circle cx="12" cy="12" r="3.5" />
+      <circle cx="12" cy="12" r="1" />
     </>
   ),
   eyeOff: (
@@ -140,12 +179,7 @@ const PATHS: Record<IconName, ReactElement> = {
       <line x1="1" y1="1" x2="23" y2="23" />
     </>
   ),
-  shield: (
-    <>
-      <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
-      <path d="M9 12l2 2 4-4" />
-    </>
-  ),
+  shield: policies,
   zap: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
   activity: <path d="M3 12h4l3-8 4 16 3-8h4" />,
   clock: (
@@ -168,12 +202,7 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="M9 6h6M8 9h8M8 15h8M9 18h6" />
     </>
   ),
-  box: (
-    <>
-      <path d="M3 7l9-4 9 4-9 4z" />
-      <path d="M3 7v10l9 4M21 7v10l-9 4" />
-    </>
-  ),
+  box: apps,
   copy: (
     <>
       <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -223,8 +252,8 @@ const PATHS: Record<IconName, ReactElement> = {
   ),
 };
 
-export function Icon({ name, size = 18, ...rest }: IconProps) {
-  return (
+export function Icon({ name, size = 18, dot, ...rest }: IconProps) {
+  const svg = (
     <svg
       width={size}
       height={size}
@@ -238,6 +267,13 @@ export function Icon({ name, size = 18, ...rest }: IconProps) {
     >
       {PATHS[name]}
     </svg>
+  );
+  if (!dot) return svg;
+  return (
+    <span className="icon-with-dot">
+      {svg}
+      <span className="icon-dot" />
+    </span>
   );
 }
 

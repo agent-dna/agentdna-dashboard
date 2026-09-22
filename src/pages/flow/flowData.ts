@@ -975,6 +975,98 @@ export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): Flo
   };
 }
 
+// ---- Interaction tree (Envelope inspector) ----
+//
+// One span per interaction, keyed by the interaction's own id, nested by call
+// stack: a call sits under the most recent open call whose target is its
+// initiator. Tools can't call onward, so they're never pushed as a frame.
+
+export function buildInteractionTrace(
+  intent: Intent,
+  interactions: Interaction[],
+  /** DID → display name; falls back to the name on the interaction, then a short DID. */
+  nameOf: (did: string) => string | undefined,
+): FlowTrace {
+  // Same ordering as buildFlowFromIntent, so the tree and the step rail agree on sequence.
+  const sorted = [...interactions].sort((a, b) => b.created - a.created);
+  const name = (ref: Interaction["initiator"]) => nameOf(ref.id) || ref.name || shortDid(ref.id);
+  const halted = sorted.some((ix) => ix.threat);
+
+  const allSpans: TraceSpan[] = [];
+  const root: TraceSpan = {
+    id: `sp_${sanitize(intent.id)}_ixroot`,
+    name: intent.name || `Intent · ${intent.id.slice(-8)}`,
+    kind: "chain",
+    label: "INTENT",
+    status: halted ? "blocked" : "ok",
+    input: "",
+    output: "",
+    model: null,
+    parentId: null,
+    metadata: { intentId: intent.id, interactions: sorted.length, status: halted ? "halted" : "finished" },
+    children: [],
+  };
+  allSpans.push(root);
+
+  const stack: Array<{ did: string; span: TraceSpan }> = [{ did: "__root__", span: root }];
+
+  for (const ix of sorted) {
+    while (stack.length > 1 && stack[stack.length - 1].did !== ix.initiator.id) stack.pop();
+    const parent = stack[stack.length - 1].span;
+    const isTool = ix.targetType === "tool";
+    const from = name(ix.initiator);
+    const to = name(ix.target);
+
+    // Interactions carry no payload of their own, so Preview splits the record into
+    // what was asked (who → whom) and what came back (verdict, runtime, threat).
+    const span: TraceSpan = {
+      id: ix.id,
+      name: `${from} → ${to}`,
+      kind: isTool ? "tool" : "agent",
+      label: ix.blockType || (isTool ? "Tool call" : "Agent call"),
+      status: ix.threat ? "blocked" : "ok",
+      input: JSON.stringify({
+        from: { name: from, id: ix.initiator.id },
+        to: { name: to, id: ix.target.id, type: ix.targetType },
+        intent: { id: ix.intent?.id, name: ix.intent?.name },
+      }),
+      output: JSON.stringify({
+        verdict: ix.threat ? "blocked" : "allowed",
+        runtime: ix.runtime,
+        ...(ix.threatID ? { threatID: ix.threatID } : {}),
+        ...(ix.message ? { message: ix.message } : {}),
+      }),
+      model: null,
+      parentId: parent.id,
+      metadata: {
+        interactionId: ix.id,
+        ...(ix.blockType ? { blockType: ix.blockType } : {}),
+        created: ix.created,
+        runtime: ix.runtime,
+      },
+      children: [],
+    };
+    allSpans.push(span);
+    parent.children.push(span);
+    if (!isTool) stack.push({ did: ix.target.id, span });
+  }
+
+  const spanById: Record<string, TraceSpan> = {};
+  for (const s of allSpans) spanById[s.id] = s;
+
+  return {
+    trace: root,
+    spanById,
+    traceId: `tr_${sanitize(intent.id).slice(-8)}`,
+    sessionId: `sess_${sanitize(intent.id).slice(-6)}`,
+    userId: intent.initiator?.name || "operator",
+    env: "prod",
+    totalTokensIn: 0,
+    totalTokensOut: 0,
+    totalCost: 0,
+  };
+}
+
 function sanitize(s: string): string {
   return s.replace(/[^a-zA-Z0-9]/g, "_");
 }

@@ -37,6 +37,19 @@ const REVIEW_STATUS_OPTIONS: IntentReviewStatus[] = ["Flagged", "Ongoing", "Ackn
 const SEVERITY_OPTIONS: ThreatSeverity[] = ["Critical", "High", "Medium", "Low"];
 const SEVERITY_RANK: Record<ThreatSeverity, number> = { Critical: 4, High: 3, Medium: 2, Low: 1, Warning: 0 };
 const severityRank = (s: ThreatSeverity | null) => (s ? SEVERITY_RANK[s] : -1);
+/** Incidents card legend + severity bar (and the matching swatches in its info popup). */
+const INCIDENT_SEVERITY_COLORS = {
+  Critical: "#7F1D1D",
+  High: "#E57373",
+  Medium: "#FFB74D",
+  Low: "#10B981",
+} as const;
+/** "Safe" share in the Interactions/Intents bars and the Agents "Active" bar — same green as Low severity. */
+const SAFE_COLOR = "#10B981";
+/** Incident / blocked share in the Interactions & Intents bars and the incidents chart series — the High severity red. */
+const INCIDENT_COLOR = INCIDENT_SEVERITY_COLORS.High;
+/** Top Threats card lists at most this many error codes, however many /top-threats returns. */
+const TOP_THREATS_LIMIT = 5;
 
 const REVIEW_STATUS_ICON: Record<IntentReviewStatus, "flag" | "refresh" | "check"> = {
   Flagged: "flag",
@@ -211,6 +224,11 @@ export function HomePage() {
   const intentsState = useIntentsPaged(intentsPage);
   const threatsListState = useThreatsListPaged(threatsPage);
   const { data: topThreats, error: topThreatsError } = useTopThreats();
+  // Only the card's list is capped — the severity totals below still sum every code.
+  const topThreatsShown = useMemo(
+    () => [...(topThreats || [])].sort((a, b) => b.count - a.count).slice(0, TOP_THREATS_LIMIT),
+    [topThreats],
+  );
   const seriesState = useSeries(series);
   const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
 
@@ -594,6 +612,13 @@ export function HomePage() {
   const highThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "High").reduce((sum, t) => sum + t.count, 0);
   const mediumThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "Medium").reduce((sum, t) => sum + t.count, 0);
   const lowThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "Low").reduce((sum, t) => sum + t.count, 0);
+  // Shared by the Incidents card's legend row and its severity bar, so the two always match.
+  const severitySegments = [
+    { label: "Critical", count: criticalThreats, color: INCIDENT_SEVERITY_COLORS.Critical },
+    { label: "High", count: highThreats, color: INCIDENT_SEVERITY_COLORS.High },
+    { label: "Medium", count: mediumThreats, color: INCIDENT_SEVERITY_COLORS.Medium },
+    { label: "Low", count: lowThreats, color: INCIDENT_SEVERITY_COLORS.Low },
+  ];
   const urgentCount = criticalThreats + highThreats;
   const totalThreatsBySeverity = criticalThreats + highThreats + mediumThreats + lowThreats || 1;
 
@@ -759,16 +784,12 @@ export function HomePage() {
           {/* Severity Breakdown Labels */}
           {metrics.threatCount > 0 && (
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
-                {[
-                  { label: "Critical", count: criticalThreats, color: "#7F1D1D" },
-                  { label: "High", count: highThreats, color: "#E57373" },
-                  { label: "Medium", count: mediumThreats, color: "#FFB74D" },
-                  { label: "Low", count: lowThreats, color: "#FFA726" },
-                ].map(({ label, count, color }) => {
+              {/* Single line: tighter gaps and no wrapping so all four severities sit on one row. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "nowrap", whiteSpace: "nowrap", minWidth: 0 }}>
+                {severitySegments.map(({ label, count, color }) => {
                   if (count === 0) return null;
                   return (
-                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
                       {label} <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{count}</span>
                     </div>
@@ -778,12 +799,7 @@ export function HomePage() {
 
               {/* Severity Bar */}
               <div style={{ display: "flex", width: "100%", height: 6, borderRadius: 999, overflow: "hidden", background: "var(--bg-3)" }}>
-                {[
-                  { label: "Critical", count: criticalThreats, color: "#7F1D1D" },
-                  { label: "High", count: highThreats, color: "#E57373" },
-                  { label: "Medium", count: mediumThreats, color: "#FFB74D" },
-                  { label: "Low", count: lowThreats, color: "#FFA726" },
-                ].map(({ label, count, color }) => {
+                {severitySegments.map(({ label, count, color }) => {
                   const percentage = totalThreatsBySeverity > 0 ? (count / totalThreatsBySeverity) * 100 : 0;
                   if (percentage === 0) return null;
                   return (
@@ -870,13 +886,13 @@ export function HomePage() {
           {/* Safe vs Incident Bar */}
           {metrics.interactionsCount > 0 && (
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563EB", flexShrink: 0 }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "nowrap", whiteSpace: "nowrap", minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: SAFE_COLOR, flexShrink: 0 }} />
                   Safe <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.interactionsCount - metrics.threatCount}</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#7F1D1D", flexShrink: 0 }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: INCIDENT_COLOR, flexShrink: 0 }} />
                   Incidents <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.threatCount}</span>
                 </div>
               </div>
@@ -886,7 +902,7 @@ export function HomePage() {
                 <div
                   style={{
                     width: `${((metrics.interactionsCount - metrics.threatCount) / metrics.interactionsCount) * 100}%`,
-                    background: "#2563EB",
+                    background: SAFE_COLOR,
                     transition: "width 300ms ease",
                   }}
                   title={`Safe interactions: ${metrics.interactionsCount - metrics.threatCount}`}
@@ -894,7 +910,7 @@ export function HomePage() {
                 <div
                   style={{
                     width: `${(metrics.threatCount / metrics.interactionsCount) * 100}%`,
-                    background: "#7F1D1D",
+                    background: INCIDENT_COLOR,
                     transition: "width 300ms ease",
                   }}
                   title={`Incident interactions: ${metrics.threatCount}`}
@@ -970,9 +986,9 @@ export function HomePage() {
           {/* Active/Total Bar */}
           {metrics.agentCount > 0 && (
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563EB", flexShrink: 0 }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "nowrap", whiteSpace: "nowrap", minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: SAFE_COLOR, flexShrink: 0 }} />
                   Active <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.agentCount}</span>
                 </div>
               </div>
@@ -982,7 +998,7 @@ export function HomePage() {
                 <div
                   style={{
                     width: "100%",
-                    background: "#2563EB",
+                    background: SAFE_COLOR,
                     transition: "width 300ms ease",
                   }}
                   title={`Active agents: ${metrics.agentCount}`}
@@ -1058,13 +1074,13 @@ export function HomePage() {
           {/* Safe vs Blocked Bar */}
           {metrics.intentCount > 0 && (
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563EB", flexShrink: 0 }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "nowrap", whiteSpace: "nowrap", minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: SAFE_COLOR, flexShrink: 0 }} />
                   Safe <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.intentCount - metrics.threatCount}</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#7F1D1D", flexShrink: 0 }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: INCIDENT_COLOR, flexShrink: 0 }} />
                   Blocked <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.threatCount}</span>
                 </div>
               </div>
@@ -1074,7 +1090,7 @@ export function HomePage() {
                 <div
                   style={{
                     width: `${((metrics.intentCount - metrics.threatCount) / metrics.intentCount) * 100}%`,
-                    background: "#2563EB",
+                    background: SAFE_COLOR,
                     transition: "width 300ms ease",
                   }}
                   title={`Safe intents: ${metrics.intentCount - metrics.threatCount}`}
@@ -1082,7 +1098,7 @@ export function HomePage() {
                 <div
                   style={{
                     width: `${(metrics.threatCount / metrics.intentCount) * 100}%`,
-                    background: "#7F1D1D",
+                    background: INCIDENT_COLOR,
                     transition: "width 300ms ease",
                   }}
                   title={`Blocked intents: ${metrics.threatCount}`}
@@ -1166,7 +1182,7 @@ export function HomePage() {
                   <span className="sw" style={{ background: "#2563EB" }} /> Interactions
                 </span>
                 <span className="it">
-                  <span className="sw" style={{ background: "#DC2626" }} /> Incidents
+                  <span className="sw" style={{ background: INCIDENT_COLOR }} /> Incidents
                 </span>
               </div>
               <div className="chart-wrap">
@@ -1177,7 +1193,7 @@ export function HomePage() {
                   formatY={(v) => (typeof v === "number" && v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)}
                   series={[
                     { key: "interactions", label: "Interactions", color: "#2563EB", data: data.total },
-                    { key: "threats", label: "Incidents", color: "#DC2626", data: data.threats },
+                    { key: "threats", label: "Incidents", color: INCIDENT_COLOR, data: data.threats },
                   ]}
                 />
               </div>
@@ -1196,7 +1212,7 @@ export function HomePage() {
               ) : topThreats.length === 0 && (
                 <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 12.5, textAlign: "center" }}>No incidents detected</div>
               )}
-              {!topThreatsError && topThreats.map((t, i) => {
+              {!topThreatsError && topThreatsShown.map((t, i) => {
                 // Dummy last seen data
                 const lastSeenOptions = ["2m ago", "5m ago", "12m ago", "1h ago", "3h ago"];
                 const lastSeen = lastSeenOptions[i % lastSeenOptions.length];
@@ -1266,7 +1282,9 @@ export function HomePage() {
               })}
               {!topThreatsError && topThreats.length > 0 && (
                 <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(220,38,38,0.14)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Showing top {topThreats.length} of {metrics.threatCount} incidents</span>
+                  <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                    Showing top {topThreatsShown.length} of {topThreats.length} incident type{topThreats.length === 1 ? "" : "s"}
+                  </span>
                   <button onClick={() => setBottomTab("threats")} style={{ background: "none", border: "none", fontSize: 12, fontWeight: 600, color: "var(--threat)", cursor: "pointer", padding: 0 }}>View all incidents →</button>
                 </div>
               )}
@@ -1572,7 +1590,7 @@ export function HomePage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div style={{ width: 16, height: 16, borderRadius: 4, background: "#7F1D1D", flexShrink: 0, marginTop: 2 }} />
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: INCIDENT_SEVERITY_COLORS.Critical, flexShrink: 0, marginTop: 2 }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 2 }}>Critical</div>
                   <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
@@ -1582,7 +1600,7 @@ export function HomePage() {
               </div>
 
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div style={{ width: 16, height: 16, borderRadius: 4, background: "#E57373", flexShrink: 0, marginTop: 2 }} />
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: INCIDENT_SEVERITY_COLORS.High, flexShrink: 0, marginTop: 2 }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 2 }}>High</div>
                   <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
@@ -1592,7 +1610,7 @@ export function HomePage() {
               </div>
 
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div style={{ width: 16, height: 16, borderRadius: 4, background: "#FFB74D", flexShrink: 0, marginTop: 2 }} />
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: INCIDENT_SEVERITY_COLORS.Medium, flexShrink: 0, marginTop: 2 }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 2 }}>Medium</div>
                   <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
@@ -1602,7 +1620,7 @@ export function HomePage() {
               </div>
 
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div style={{ width: 16, height: 16, borderRadius: 4, background: "#FFA726", flexShrink: 0, marginTop: 2 }} />
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: INCIDENT_SEVERITY_COLORS.Low, flexShrink: 0, marginTop: 2 }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 2 }}>Low</div>
                   <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>

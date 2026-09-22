@@ -18,6 +18,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { LandingPage } from "./pages/LockedPage";
 // import { LandingPage } from "./pages/LandingPage";
 import { FlowPage } from "./pages/flow/FlowPage";
+import { ObservabilityPage } from "./pages/observability/ObservabilityPage";
 import { DrawerProvider } from "./context/DrawerContext";
 import { TweaksProvider } from "./context/TweaksContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -57,6 +58,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="graph" element={<FlowPage />} />
                 <Route path="graph/:intentId" element={<FlowPage />} />
                 <Route path="interactions" element={<InteractionsPage />} />
+                <Route path="observability" element={<ObservabilityPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 {/* <Route path="locked" element={<LockedPage />} /> */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />

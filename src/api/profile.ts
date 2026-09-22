@@ -51,15 +51,20 @@ export function updateUserProfile(body: UpdateProfileBody): Promise<null> {
   });
 }
 
-export interface ChangePasswordBody {
-  currentPassword: string;
-  newPassword: string;
-}
+/** Server-side minimum for POST /update-password — checked client-side too so the user gets instant feedback. */
+export const MIN_PASSWORD_LENGTH = 8;
 
-export function changePassword(body: ChangePasswordBody): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>("/change-password", {
+/**
+ * Regular (non-admin) users: POST /update-password — sets a new password for the user in the token.
+ * Admins use `adminUpdatePassword` in api/auth.ts (admin server) instead.
+ * Only the new password is sent: the server does not ask for or verify the current one.
+ * Success carries no `data`; failures reject with ApiError carrying the server's message
+ * (e.g. "password must be at least 8 characters", "account not found").
+ */
+export function updatePassword(newPassword: string): Promise<void> {
+  return apiRequest<void>("/update-password", {
     method: "POST",
-    body,
+    body: { new_password: newPassword },
     auth: true,
   });
 }

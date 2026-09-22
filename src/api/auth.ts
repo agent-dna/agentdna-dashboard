@@ -1,4 +1,4 @@
-import { apiRequest, ApiError } from "./client";
+import { apiRequest, ApiError, getToken } from "./client";
 
 // ── Existing user login (original backend, unchanged) ──────────────────────
 
@@ -66,6 +66,32 @@ async function adminFetch(path: string, body: unknown): Promise<AdminRawResponse
 export async function adminLogin(username: string, password: string): Promise<string> {
   const res = await adminFetch("/login", { username, password });
   return res.data as string;
+}
+
+/**
+ * POST /agent-admin/v1/update-password — `{ username, new_password }` → `{ status, message, data: null }`.
+ * Keyed by admin username (not email); no current password is sent or checked.
+ * Resolves with the server's message; rejects with ApiError carrying its message when `status` is false.
+ */
+export async function adminUpdatePassword(username: string, newPassword: string): Promise<string> {
+  const res = await adminFetch("/update-password", { username, new_password: newPassword });
+  return res.message;
+}
+
+/**
+ * Username of the signed-in admin, from the admin JWT's `sub` claim — the same username they logged in
+ * with. Read from the token rather than the stored user, because profile edits can overwrite `user.email`.
+ */
+export function adminUsernameFromToken(): string | null {
+  const token = getToken();
+  const payload = token?.split(".")[1];
+  if (!payload) return null;
+  try {
+    const claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { sub?: unknown };
+    return typeof claims.sub === "string" && claims.sub.trim() ? claims.sub.trim() : null;
+  } catch {
+    return null;
+  }
 }
 
 /** POST /send-otp — public, triggers OTP email before registration */
