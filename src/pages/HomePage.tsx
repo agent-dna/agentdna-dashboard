@@ -16,7 +16,7 @@ import { SeverityPill } from "../components/SeverityPill";
 import { getThreatSeverity, type ThreatSeverity } from "../lib/threatSeverity";
 import { timeAgo, capitalizeFirst, titleOrUnknown } from "../lib/format";
 import type { Intent, Interaction, IntentReviewStatus } from "../types";
-import type { ThreatListItem, TopThreat } from "../data/api";
+import type { ThreatListItem } from "../data/api";
 import type { CSSProperties } from "react";
 
 /** Reddish tint + left accent for any row that represents/carries a threat. */
@@ -123,60 +123,6 @@ function FilterSelect<T extends string>({
         </option>
       ))}
     </select>
-  );
-}
-
-const SEVERITY_DONUT_COLORS: Record<"Critical" | "High" | "Medium" | "Low", string> = {
-  Critical: "#7F1D1D",
-  High: "#DC2626",
-  Medium: "#B45309",
-  Low: "#2563EB",
-};
-
-/**
- * Segmented bar (+ legend row) showing the Critical/High/Medium/Low share of
- * the top-5 threats by volume, weighted by each threat's count. Sits at the
- * top of the "Top 5 threats" card, above the table. Threats with no matching
- * severity (or "Warning") are excluded from both the bar and the percentage
- * base.
- */
-function SeverityBar({ topThreats }: { topThreats: TopThreat[] }) {
-  const buckets: Record<"Critical" | "High" | "Medium" | "Low", number> = { Critical: 0, High: 0, Medium: 0, Low: 0 };
-  let total = 0;
-  for (const t of topThreats) {
-    const sev = getThreatSeverity(t.threatCode);
-    if (sev === "Critical" || sev === "High" || sev === "Medium" || sev === "Low") {
-      buckets[sev] += t.count;
-      total += t.count;
-    }
-  }
-
-  if (total === 0) return null;
-
-  const keys = (Object.keys(SEVERITY_DONUT_COLORS) as (keyof typeof SEVERITY_DONUT_COLORS)[]).filter((k) => buckets[k] > 0);
-
-  return (
-    <div style={{ padding: "14px 20px 16px" }}>
-      <div style={{ display: "flex", width: "100%", height: 8, borderRadius: 999, overflow: "hidden" }}>
-        {keys.map((key) => (
-          <div key={key} style={{ width: `${(buckets[key] / total) * 100}%`, background: SEVERITY_DONUT_COLORS[key] }} />
-        ))}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, flexWrap: "wrap", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-          {keys.map((key) => (
-            <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: SEVERITY_DONUT_COLORS[key], flexShrink: 0 }} />
-              <span style={{ color: "var(--fg-muted)" }}>{key}</span>
-              <span style={{ color: "var(--fg)", fontWeight: 700 }}>{Math.round((buckets[key] / total) * 100)}%</span>
-            </div>
-          ))}
-        </div>
-        <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-          Total <span style={{ color: "var(--fg)", fontWeight: 700 }}>{total}</span>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -619,11 +565,7 @@ export function HomePage() {
     { label: "Medium", count: mediumThreats, color: INCIDENT_SEVERITY_COLORS.Medium },
     { label: "Low", count: lowThreats, color: INCIDENT_SEVERITY_COLORS.Low },
   ];
-  const urgentCount = criticalThreats + highThreats;
   const totalThreatsBySeverity = criticalThreats + highThreats + mediumThreats + lowThreats || 1;
-
-  // Find most recent threat
-  const mostRecentThreat = threatsList.length > 0 ? threatsList[0] : null;
 
   return (
     <div className="page">
@@ -1200,8 +1142,8 @@ export function HomePage() {
             </>
           ) : (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "26px 1fr 80px 90px 80px 24px", padding: "10px 20px 5px", borderBottom: "1px solid rgba(220,38,38,0.18)", marginTop: 8 }}>
-                {["#", "INCIDENT", "SEVERITY", "OCCURRENCES", "LAST SEEN", ""].map((h, i) => (
+              <div style={{ display: "grid", gridTemplateColumns: "26px 1fr 80px 90px 24px", padding: "10px 20px 5px", borderBottom: "1px solid rgba(220,38,38,0.18)", marginTop: 8 }}>
+                {["#", "INCIDENT", "SEVERITY", "OCCURRENCES", ""].map((h, i) => (
                   <div key={h} style={{ fontSize: 9.5, fontWeight: 840, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
               </div>
@@ -1213,10 +1155,6 @@ export function HomePage() {
                 <div style={{ padding: 28, color: "var(--fg-muted)", fontSize: 12.5, textAlign: "center" }}>No incidents detected</div>
               )}
               {!topThreatsError && topThreatsShown.map((t, i) => {
-                // Dummy last seen data
-                const lastSeenOptions = ["2m ago", "5m ago", "12m ago", "1h ago", "3h ago"];
-                const lastSeen = lastSeenOptions[i % lastSeenOptions.length];
-
                 return (
                   <div
                     key={t.threatCode}
@@ -1226,7 +1164,7 @@ export function HomePage() {
                     }}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "26px 1fr 80px 90px 80px 24px",
+                      gridTemplateColumns: "26px 1fr 80px 90px 24px",
                       alignItems: "center",
                       padding: "10px 20px",
                       borderBottom: "1px solid rgba(220,38,38,0.14)",
@@ -1268,9 +1206,6 @@ export function HomePage() {
                     </div>
                     <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 840, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
                       {t.count.toLocaleString()}
-                    </div>
-                    <div style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: "var(--fg-muted)", fontFamily: "var(--font-body)" }}>
-                      {lastSeen}
                     </div>
                     <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
                       <div className="arrow-icon" style={{ transition: "transform 200ms ease", display: "flex" }}>

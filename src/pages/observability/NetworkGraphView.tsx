@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { buildObsGraph, type ObsIntent } from './mockData';
+import { buildObsGraph } from './mockData';
 
 interface Zone {
   id: string;

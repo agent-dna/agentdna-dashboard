@@ -11,14 +11,6 @@ const STATUS_COLORS = {
   blocked: '#6B7280',
 };
 
-// Zone definitions
-const ZONES = [
-  { id: 'finance', label: 'FINANCE', color: '#6366F1' },
-  { id: 'data', label: 'DATA & RESEARCH', color: '#8B5CF6' },
-  { id: 'support', label: 'CUSTOMER SUPPORT', color: '#0EA5E9' },
-  { id: 'governance', label: 'GOVERNANCE', color: '#3B82F6' },
-];
-
 export function CytoscapeNetwork() {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -122,7 +114,7 @@ export function CytoscapeNetwork() {
             'background-color': (ele: NodeSingular) => STATUS_COLORS[ele.data('status') as keyof typeof STATUS_COLORS] || '#3B82F6',
             'background-gradient-stop-colors': (ele: NodeSingular) => {
               const color = STATUS_COLORS[ele.data('status') as keyof typeof STATUS_COLORS] || '#3B82F6';
-              return `${color} ${color}dd`;
+              return [color, `${color}dd`];
             },
             'background-gradient-direction': 'to-bottom-right',
             'label': 'data(label)',
@@ -143,7 +135,10 @@ export function CytoscapeNetwork() {
           style: {
             'border-width': 3,
             'border-color': '#60A5FA',
-            'box-shadow': '0 0 30px rgba(96, 165, 250, 0.6)',
+            // Cytoscape has no box-shadow; an underlay gives the same glow around the selected node.
+            'underlay-color': '#60A5FA',
+            'underlay-opacity': 0.35,
+            'underlay-padding': 8,
           },
         },
         {
