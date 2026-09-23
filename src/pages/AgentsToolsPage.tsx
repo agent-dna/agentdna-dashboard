@@ -10,6 +10,7 @@ import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics, useHomeMetrics } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { AppIcon } from "../components/AppIcon";
+import { EmptyAgentsState } from "../components/EmptyAgentsState";
 import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
 import { exportAgentsListPdf, exportToolsListPdf } from "../lib/exportListPdf";
@@ -34,8 +35,8 @@ export function AgentsToolsPage() {
   const toolsTotalPages = toolsState.data.totalPages || 1;
   const toolsTotal = toolsState.data.total || 0;
   const toolsPageSize = toolsState.data.pageSize || 10;
-  const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
-  const { data: homeMetrics } = useHomeMetrics();
+  const { data: agentsAppsMetrics, loading: metricsLoading } = useAgentsAppsMetrics();
+  const { data: homeMetrics, loading: homeMetricsLoading } = useHomeMetrics();
   const { openDrawer } = useDrawer();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
@@ -44,6 +45,14 @@ export function AgentsToolsPage() {
 
   const isAgents = tab === "agents";
   const rows = isAgents ? agents : tools;
+
+  // Admins see the org-wide count; a regular user only their own access-scoped agents.
+  const agentCount = isAdmin ? agentsAppsMetrics.metrics.totalAgents : homeMetrics.agentCount;
+  const countLoading = (isAdmin ? metricsLoading : homeMetricsLoading) || agentsState.loading;
+  // With no agents there is nothing to have called an app or raised a threat, so the
+  // remaining tiles read zero rather than showing org-wide numbers the user can't see behind.
+  const noAgents = !countLoading && agentCount === 0;
+  const m = agentsAppsMetrics.metrics;
 
   const agentCols: DataTableColumn<Agent>[] = [
     {
@@ -223,19 +232,23 @@ export function AgentsToolsPage() {
       </div>
 
       <div className="metrics">
-        <MetricTile label="Total Agents" value={isAdmin ? agentsAppsMetrics.metrics.totalAgents : homeMetrics.agentCount} icon="agents" sparkColor="#2563EB" spark={[]} />
-        <MetricTile label="Total Apps" value={agentsAppsMetrics.metrics.totalApps} icon="box" sparkColor="#0A2240" spark={[]} />
+        <MetricTile label="Total Agents" value={agentCount} icon="agents" sparkColor="#2563EB" spark={[]} />
+        <MetricTile label="Total Apps" value={noAgents ? 0 : m.totalApps} icon="box" sparkColor="#0A2240" spark={[]} />
         <MetricTile
           label="Avg. Reliability"
-          value={parseFloat(agentsAppsMetrics.metrics.avgReliability.toFixed(2))}
+          value={noAgents ? 0 : parseFloat(m.avgReliability.toFixed(2))}
           unit="%"
           icon="target"
           sparkColor="#0EA5E9"
           spark={[]}
         />
-        <MetricTile label="Total Threats" value={agentsAppsMetrics.metrics.totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Total Threats" value={noAgents ? 0 : m.totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
       </div>
 
+      {noAgents ? (
+        <EmptyAgentsState showBrowseLink={false} />
+      ) : (
+      <>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
         <TopAgentsList
           rows={
@@ -267,6 +280,7 @@ export function AgentsToolsPage() {
             id: a.name,
             name: a.name,
             interactions: a.totalInteractions,
+            threats: a.totalThreats,
           }))}
           totalApps={agentsAppsMetrics.metrics.totalApps}
           onRowClick={(r) => navigate(`/tools/${encodeURIComponent(r.name)}`)}
@@ -314,6 +328,8 @@ export function AgentsToolsPage() {
           />
         )}
       </div>
+      </>
+      )}
 
       <AgentRequestModal
         open={createOpen}
@@ -378,7 +394,7 @@ function TopAgentsList({
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)" }}>
-        {["#", "AGENT", "IXNS", "THREATS"].map((h, i) => (
+        {["#", "AGENT", "TXNS", "THREATS"].map((h, i) => (
           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase", textAlign: i > 1 ? "right" : "left" }}>{h}</div>
         ))}
       </div>
@@ -435,20 +451,19 @@ function TopAppsList({
   onRowClick: (r: VolumeRow) => void;
   onViewAll: () => void;
 }) {
-  const totalIxns = rows.reduce((s, r) => s + r.interactions, 0) || 1;
   const maxIxns = rows.reduce((m, r) => Math.max(m, r.interactions), 0) || 1;
   return (
     <div style={{ borderRadius: 14, background: "#0b1633", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ padding: "18px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: 16.5, fontWeight: 700, color: "#fff", marginBottom: 2 }}>Top apps by volume</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)" }}>Ranked by interactions</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)" }}>Ranked by interactions · incidents flagged</div>
         </div>
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.4)", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>LAST 30 DAYS</span>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "36px 28px 1fr 76px 72px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-        {["#", "", "APP", "IXNS", "SHARE"].map((h, i) => (
+        {["#", "", "APP", "IXNS", "INCIDENTS"].map((h, i) => (
           <div key={i} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", textAlign: i > 2 ? "right" : "left" }}>{h}</div>
         ))}
       </div>
@@ -458,7 +473,7 @@ function TopAppsList({
           <div style={{ padding: 28, color: "rgba(255,255,255,0.35)", fontSize: 14, textAlign: "center" }}>No data</div>
         )}
         {rows.map((r, i) => {
-          const share = Math.round((r.interactions / totalIxns) * 100);
+          const threats = r.threats ?? 0;
           const barPct = (r.interactions / maxIxns) * 100;
           return (
             <div
@@ -479,8 +494,10 @@ function TopAppsList({
                 <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
                   {r.interactions.toLocaleString()}
                 </div>
-                <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.6)", fontVariantNumeric: "tabular-nums" }}>
-                  {share}%
+                <div style={{ textAlign: "right" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 700, background: threats > 0 ? "rgba(248,113,113,0.16)" : "rgba(255,255,255,0.07)", color: threats > 0 ? "#f87171" : "rgba(255,255,255,0.4)", padding: "2px 8px", borderRadius: 4 }}>
+                    {threats.toLocaleString()}
+                  </span>
                 </div>
               </div>
               <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginBottom: 8 }}>

@@ -1294,7 +1294,7 @@ export function HomePage() {
                 Top {volumeTab === "agents" ? "agents" : "apps"} by volume
               </div>
               <div style={{ fontSize: 12, color: volumeTab === "apps" ? "rgba(255,255,255,0.45)" : "var(--fg-muted)" }}>
-                {volumeTab === "agents" ? "Ranked by interactions · incidents flagged" : "Ranked by interactions · share of total"}
+                Ranked by interactions · incidents flagged
               </div>
             </div>
             <div style={{ display: "flex", background: volumeTab === "apps" ? "rgba(255,255,255,0.07)" : "var(--bg-3)", borderRadius: 6, padding: 2 }}>
@@ -1386,7 +1386,7 @@ export function HomePage() {
           {volumeTab === "apps" && (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "36px 22px 1fr 76px 72px 24px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                {["#", "", "APP", "IXNS", "SHARE", ""].map((h, i) => (
+                {["#", "", "APP", "IXNS", "INCIDENTS", ""].map((h, i) => (
                   <div key={i} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase" as const, textAlign: (i > 2 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
               </div>
@@ -1395,10 +1395,9 @@ export function HomePage() {
                   <div style={{ padding: 24, color: "rgba(255,255,255,0.35)", fontSize: 14, textAlign: "center" }}>No apps yet.</div>
                 )}
                 {(() => {
-                  const totalIxns = agentsAppsMetrics.topApps.reduce((s, a) => s + a.totalInteractions, 0) || 1;
                   const maxIxns = agentsAppsMetrics.topApps.reduce((m, a) => Math.max(m, a.totalInteractions), 0) || 1;
                   return agentsAppsMetrics.topApps.map((a, i) => {
-                    const share = Math.round((a.totalInteractions / totalIxns) * 100);
+                    const threats = a.totalThreats ?? 0;
                     const barPct = (a.totalInteractions / maxIxns) * 100;
                     return (
                       <div
@@ -1425,8 +1424,10 @@ export function HomePage() {
                           <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
                             {a.totalInteractions.toLocaleString()}
                           </div>
-                          <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.6)", fontVariantNumeric: "tabular-nums" }}>
-                            {share}%
+                          <div style={{ textAlign: "right" }}>
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 700, background: threats > 0 ? "rgba(248,113,113,0.16)" : "rgba(255,255,255,0.07)", color: threats > 0 ? "#f87171" : "rgba(255,255,255,0.4)", padding: "2px 8px", borderRadius: 4 }}>
+                              {threats.toLocaleString()}
+                            </span>
                           </div>
                           <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
                             <div className="arrow-icon" style={{ transition: "transform 200ms ease", display: "flex" }}>
