@@ -126,6 +126,53 @@ function FilterSelect<T extends string>({
   );
 }
 
+/** Info modal shared by the Interactions / Agents / Intents metric cards. */
+function MetricInfoModal({
+  open, onClose, title, intro, rows, tip,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  intro: React.ReactNode;
+  rows: { color: string; label: string; text: string }[];
+  tip: React.ReactNode;
+}) {
+  return (
+    <Modal
+      open={open}
+      title={title}
+      onClose={onClose}
+      width={560}
+      footer={<button type="button" className="btn primary" onClick={onClose}>Got it</button>}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ fontSize: 14, color: "var(--fg-dim)", lineHeight: 1.6 }}>{intro}</div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+            What the bar shows
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {rows.map((r) => (
+              <div key={r.label} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 16, height: 16, borderRadius: 4, background: r.color, flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 2 }}>{r.label}</div>
+                  <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>{r.text}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ padding: "12px 14px", background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.15)", borderRadius: 8, fontSize: 12, color: "var(--fg-dim)", lineHeight: 1.5 }}>
+          <strong style={{ color: "var(--accent)" }}>Tip:</strong> {tip}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 /**
  * A threats-list row is already interaction-shaped — convert it so the
  * drawer can show it directly, with `message` inline (no GET /threat-by-id
@@ -165,6 +212,8 @@ export function HomePage() {
   const [threatStatusFilter, setThreatStatusFilter] = useState<IntentReviewStatus | "all">("all");
   const [threatSeverityFilter, setThreatSeverityFilter] = useState<ThreatSeverity | "all">("all");
   const [showThreatsInfo, setShowThreatsInfo] = useState(false);
+  /** Which metric card's info modal is open (Incidents has its own flag above). */
+  const [infoCard, setInfoCard] = useState<"interactions" | "agents" | "intents" | null>(null);
 
   const homeState = useHomeMetrics();
   const intentsState = useIntentsPaged(intentsPage);
@@ -792,6 +841,7 @@ export function HomePage() {
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
                 onMouseLeave={(e) => (e.currentTarget.style.color = "var(--fg-muted)")}
+                onClick={() => setInfoCard("interactions")}
                 title="Information about interactions"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -893,6 +943,7 @@ export function HomePage() {
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
                 onMouseLeave={(e) => (e.currentTarget.style.color = "var(--fg-muted)")}
+                onClick={() => setInfoCard("agents")}
                 title="Information about agents"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -981,6 +1032,7 @@ export function HomePage() {
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
                 onMouseLeave={(e) => (e.currentTarget.style.color = "var(--fg-muted)")}
+                onClick={() => setInfoCard("intents")}
                 title="Information about intents"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1571,6 +1623,41 @@ export function HomePage() {
           </div>
         </div>
       </Modal>
+
+      <MetricInfoModal
+        open={infoCard === "interactions"}
+        onClose={() => setInfoCard(null)}
+        title="Interactions Metric"
+        intro={<>Every recorded call between two participants in your org — agent to agent, or agent to app. Each hop of an intent counts as one interaction.</>}
+        rows={[
+          { color: SAFE_COLOR, label: "Safe", text: "Interactions that passed identity, trust and scope checks — the total minus flagged ones." },
+          { color: INCIDENT_COLOR, label: "Incidents", text: "Interactions where a threat was detected or policy blocked the call." },
+        ]}
+        tip={<>Open <strong>Interactions</strong> in the sidebar for the full log, or click any incident in the Security events table to jump to the flagged ones.</>}
+      />
+
+      <MetricInfoModal
+        open={infoCard === "agents"}
+        onClose={() => setInfoCard(null)}
+        title="Agents Metric"
+        intro={<>AI agents registered to your organization. The 24-hour figure counts agents added since yesterday.</>}
+        rows={[
+          { color: SAFE_COLOR, label: "Active", text: "Registered agents currently able to act. Revoked agents drop out of this count." },
+        ]}
+        tip={<>Open <strong>Agents &amp; Apps</strong> to see each agent's trust score, the apps it can reach, and its policy.</>}
+      />
+
+      <MetricInfoModal
+        open={infoCard === "intents"}
+        onClose={() => setInfoCard(null)}
+        title="Intents Metric"
+        intro={<>Tasks a user handed to your agents. One intent covers the whole chain of work it sets off, however many agents and apps it touches.</>}
+        rows={[
+          { color: SAFE_COLOR, label: "Safe", text: "Intents that ran with no threat detected along the way." },
+          { color: INCIDENT_COLOR, label: "Blocked", text: "Intents halted by a policy violation or a detected threat before they finished." },
+        ]}
+        tip={<>Open <strong>Intents</strong> to review each one, or click an intent to replay its flow hop by hop.</>}
+      />
     </div>
   );
 }

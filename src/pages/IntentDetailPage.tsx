@@ -7,7 +7,7 @@ import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell } from "../components/EntityCell";
 import { EntityLink } from "../components/EntityLink";
 import { entityPath } from "../lib/entityLinks";
-import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { useResolveName, resolveDisplayName, shortDid } from "../context/DirectoryContext";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
 import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useThreatByID } from "../data/hooks";
@@ -37,6 +37,17 @@ export function IntentDetailPage() {
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
   const resolve = useResolveName();
+
+  /**
+   * Owner label: a real display name when the backend or the directory has one, otherwise the
+   * initiator's full DID (not the "did:abc…1234" short form, and never a bare "—").
+   */
+  function ownerLabel(initiator: { id: string; name: string }): { text: string; isDid: boolean } {
+    const resolved = resolveDisplayName(resolve, initiator);
+    const unresolved = !resolved || resolved === "—" || resolved === shortDid(initiator.id);
+    if (unresolved && initiator.id) return { text: initiator.id, isDid: true };
+    return { text: resolved || "—", isDid: false };
+  }
   const { refetch: refetchIntentReview } = useIntentReview();
   const [tab, setTab] = useState<Tab>("interactions");
   const [interactionsPage, setInteractionsPage] = useState(1);
@@ -248,18 +259,26 @@ export function IntentDetailPage() {
                 >
                   Owner
                 </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: 20,
-                    fontWeight: 600,
-                    color: "var(--fg)",
-                    letterSpacing: "-0.01em",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {resolveDisplayName(resolve, intent.initiator)}
-                </div>
+                {(() => {
+                  const owner = ownerLabel(intent.initiator);
+                  return (
+                    <div
+                      title={owner.isDid ? owner.text : undefined}
+                      style={{
+                        // A DID is long and not a name — render it in mono at a size that fits.
+                        fontFamily: owner.isDid ? "var(--font-mono)" : "var(--font-display)",
+                        fontSize: owner.isDid ? 13 : 20,
+                        fontWeight: 600,
+                        color: "var(--fg)",
+                        letterSpacing: owner.isDid ? "0" : "-0.01em",
+                        wordBreak: "break-all",
+                        lineHeight: owner.isDid ? 1.45 : undefined,
+                      }}
+                    >
+                      {owner.text}
+                    </div>
+                  );
+                })()}
                 {intent.provenanceRecordID ? (
                   <a
                     href={`https://testnetexplorer.rubix.net/transaction-explorer?tx=${intent.provenanceRecordID}`}

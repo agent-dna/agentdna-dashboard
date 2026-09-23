@@ -3,6 +3,8 @@ import { apiRequest } from "./client";
 export interface UserProfile {
   name: string;
   email: string;
+  /** Empty until the account is linked; the server sends "none" for an unlinked user. */
+  did: string;
   apiKey: string;
   organizationID: string;
   createdAt: string;
@@ -20,6 +22,7 @@ export function fetchUserProfile(): Promise<UserProfile> {
 export interface AdminProfile {
   name: string;
   email: string;
+  did: string;
   organizationID: string;
   apiKey: string;
   agentCount: number;

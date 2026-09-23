@@ -7,8 +7,8 @@
  *   - interactions: from /intent-info.interactions (each interaction is one hop)
  *   - resolve: DID → { name, kind } lookup from DirectoryContext
  *
- * Output: a `Flow` with normalized 0..1 node coordinates in a clean tiered
- * layout (operator → orchestrator → workers → tools).
+ * Output: a `Flow` with normalized 0..1 node coordinates, laid out left-to-right
+ * by call depth (initiator → each hop in its own column).
  */
 
 import type { Intent, Interaction } from "../../types";
@@ -26,7 +26,7 @@ export interface FlowNode {
   label: string;
   /** Raw DID this node was built from — `id` is a sanitized derivative. */
   did?: string;
-  /** normalized 0..1 — set by tierLayout */
+  /** normalized 0..1 — set by depthLayout */
   x: number;
   y: number;
   /** true if this node was the source/target of a blocked hop */
@@ -110,69 +110,15 @@ export interface Flow {
   rawDiagram?: unknown;
 }
 
-/* ------- tier layout ------- */
-
-function tierLayout(nodes: FlowNode[], orchId: string | null, steps: FlowStep[]): FlowNode[] {
-  const order: Record<string, number> = {};
-  let o = 0;
-  for (const s of steps) {
-    for (const id of [s.from, s.to]) {
-      if (order[id] == null) order[id] = o++;
-    }
-  }
-
-  const cols: Record<"human" | "orch" | "worker" | "tool", FlowNode[]> = {
-    human: [],
-    orch: [],
-    worker: [],
-    tool: [],
-  };
-  for (const n of nodes) {
-    const tier = n.kind === "human" ? "human" : n.id === orchId ? "orch" : n.kind === "tool" ? "tool" : "worker";
-    cols[tier].push(n);
-  }
-
-  // Only the tiers that actually have nodes get an X slot — and we space those
-  // evenly across the canvas (with margins) so the graph is always centred
-  // regardless of which tiers are missing.
-  const tierOrder = ["human", "orch", "worker", "tool"] as const;
-  const activeTiers = tierOrder.filter((t) => cols[t].length > 0);
-
-  const place = (arr: FlowNode[], x: number) => {
-    arr.sort((a, b) => (order[a.id] ?? 0) - (order[b.id] ?? 0));
-    const k = arr.length;
-    const half = Math.min(0.34, 0.17 * (k - 1));
-    arr.forEach((n, i) => {
-      n.x = x;
-      n.y = k === 1 ? 0.5 : 0.5 - half + 2 * half * (i / (k - 1));
-    });
-  };
-
-  if (activeTiers.length === 0) return nodes;
-  if (activeTiers.length === 1) {
-    place(cols[activeTiers[0]], 0.5);
-  } else {
-    const xStart = 0.14;
-    const xEnd = 0.86;
-    const step = (xEnd - xStart) / (activeTiers.length - 1);
-    activeTiers.forEach((tier, i) => {
-      place(cols[tier], xStart + step * i);
-    });
-  }
-
-  return nodes;
-}
-
 /* ------- depth layout (DAG layering) ------- */
 
 /**
  * Lay nodes out by longest-path depth from the initiator instead of by role.
  *
- * The role-based `tierLayout` collapses every agent into a single "worker"
- * column, so a parallel flow (A fans out to B and C, both returning to A) ends
- * up with A sitting alongside its own children and every edge drawn as an
- * intra-column arc. Layering by depth puts each hop in its own column and lets
- * concurrent siblings share one.
+ * A role-based layout collapses every agent into a single "worker" column, so a chain
+ * reads as one vertical stack and a parallel flow (A fans out to B and C, both returning
+ * to A) draws every edge as an intra-column arc. Layering by depth gives each hop its own
+ * column — a horizontal chain — and lets concurrent siblings share one.
  *
  * Response hops are excluded from the depth graph: they point back up the tree
  * and would otherwise form cycles that have no valid layering.
@@ -307,11 +253,10 @@ function attachProvenance(steps: FlowStep[], nodes: FlowNode[]): { node: FlowNod
     ? [{ from: initiatorId, to: PROVENANCE_ID, label: "", threat: anyBlocked, stepIndex: steps.length - 1 }]
     : [];
 
-  // Sit directly beneath the node that closes the flow, so the layout still
-  // reads left-to-right chronologically even though the seal line itself
-  // reaches back to the initiator. Y is kept well inside the frame — the
-  // node's caption renders below it and would otherwise clip off the canvas.
-  const anchor = last ? nodes.find((n) => n.id === last.to) : undefined;
+  // Sit directly beneath the initiator — the seal line runs from there, so the drop reads as a
+  // short vertical hop rather than a long diagonal across the chain. Y is kept well inside the
+  // frame: the node's caption renders below it and would otherwise clip off the canvas.
+  const anchor = nodes.find((n) => n.id === initiatorId) ?? (last ? nodes.find((n) => n.id === last.to) : undefined);
   const node: FlowNode = {
     id: PROVENANCE_ID,
     kind: "provenance",
@@ -439,7 +384,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     }
   }
 
-  tierLayout(nodes, null, rawSteps as FlowStep[]);
+  depthLayout(nodes, rawSteps as FlowStep[]);
 
   const halted = rawSteps.some((s) => s.verdict === "blocked");
 

@@ -23,6 +23,7 @@ export function ProfilePage() {
 
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [didCopied, setDidCopied] = useState(false);
   const [msgSubject, setMsgSubject] = useState("");
   const [msgBody, setMsgBody] = useState("");
   const [usage, setUsage] = useState<TokenUsage | null>(null);
@@ -65,6 +66,10 @@ export function ProfilePage() {
   const displayEmail = activeProfile?.email || user?.email || "—";
   const displayOrg = activeProfile?.organizationID || user?.org_id || (isAdmin ? "AGENT_DNA_BETA" : "");
   const displayRole = isAdmin ? "Administrator" : "User";
+  // The server sends "none" for a user whose DID isn't linked yet; the JWT claim is the fallback.
+  const rawDid = activeProfile?.did || user?.did || "";
+  const hasDid = !!rawDid && rawDid !== "none";
+  const displayDid = hasDid ? rawDid : "Not linked yet";
 
   function formatDate(dateStr: string) {
     try { return new Date(dateStr).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); }
@@ -81,6 +86,12 @@ export function ProfilePage() {
   async function handleCopy() {
     if (!apiKey) return;
     try { await navigator.clipboard.writeText(apiKey); setCopied(true); window.setTimeout(() => setCopied(false), 2000); }
+    catch { /* clipboard unavailable */ }
+  }
+
+  async function handleCopyDid() {
+    if (!hasDid) return;
+    try { await navigator.clipboard.writeText(rawDid); setDidCopied(true); window.setTimeout(() => setDidCopied(false), 2000); }
     catch { /* clipboard unavailable */ }
   }
 
@@ -176,6 +187,24 @@ export function ProfilePage() {
               {/* Role */}
               <AccountDetailCell label="Role">
                 {displayRole}
+              </AccountDetailCell>
+
+              {/* DID — full width, since it's far longer than the other values */}
+              <AccountDetailCell
+                label="DID"
+                fullWidth
+                mono
+                action={hasDid && !profileLoading ? (
+                  <button
+                    onClick={handleCopyDid}
+                    title="Copy DID"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: didCopied ? "var(--safe)" : "var(--fg-muted)", padding: 4, display: "flex", flexShrink: 0 }}
+                  >
+                    <Icon name={didCopied ? "check" : "copy"} size={15} />
+                  </button>
+                ) : null}
+              >
+                {profileLoading ? "—" : displayDid}
               </AccountDetailCell>
             </div>
           </div>
@@ -399,13 +428,24 @@ export function ProfilePage() {
 }
 
 /** One read-only field in the Account details grid. */
-function AccountDetailCell({ label, children }: { label: string; children: React.ReactNode }) {
+function AccountDetailCell({ label, children, fullWidth = false, mono = false, action = null }: {
+  label: string;
+  children: React.ReactNode;
+  /** Span the whole grid row — for values too long to sit in one column. */
+  fullWidth?: boolean;
+  mono?: boolean;
+  /** Trailing control pinned to the right of the value, e.g. a copy button. */
+  action?: React.ReactNode;
+}) {
   return (
-    <div style={{ padding: "14px 16px", background: "var(--bg-0, var(--bg))", border: "1px solid var(--line)", borderRadius: 9 }}>
+    <div style={{ padding: "14px 16px", background: "var(--bg-0, var(--bg))", border: "1px solid var(--line)", borderRadius: 9, gridColumn: fullWidth ? "1 / -1" : undefined }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--fg-muted)", marginBottom: 6 }}>
         {label}
       </div>
-      <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--fg)", wordBreak: "break-all" }}>{children}</span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontSize: mono ? 12.5 : 13.5, fontWeight: 500, color: "var(--fg)", wordBreak: "break-all", fontFamily: mono ? "var(--font-mono)" : undefined }}>{children}</span>
+        {action}
+      </div>
     </div>
   );
 }
