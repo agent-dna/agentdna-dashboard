@@ -716,14 +716,14 @@ export function HomePage() {
             background: "var(--bg-1)",
             border: "1px solid var(--line)",
             borderRadius: 12,
-            padding: "18px 20px",
+            padding: "14px 16px",
             position: "relative" as const,
             overflow: "hidden",
             boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
           }}
         >
           {/* Title with Info Icon */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
                 Incidents
@@ -754,8 +754,8 @@ export function HomePage() {
           </div>
 
           {/* Main Count with Change Indicator */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
-            <div style={{ fontSize: 36, fontWeight: 700, color: "var(--threat)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 30, fontWeight: 700, color: "var(--threat)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
               {metrics.threatCount}
             </div>
             {metrics.threatCount24hChange != null && metrics.threatCount24hChange > 0 && (
@@ -777,8 +777,8 @@ export function HomePage() {
           {/* Severity Breakdown Labels */}
           {metrics.threatCount > 0 && (
             <div>
-              {/* Single line: tighter gaps and no wrapping so all four severities sit on one row. */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "nowrap", whiteSpace: "nowrap", minWidth: 0 }}>
+              {/* Two columns: four severities on one row overflowed the card and clipped "Low". */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "center", gap: "4px 10px", marginBottom: 8, minWidth: 0 }}>
                 {severitySegments.map(({ label, count, color }) => {
                   if (count === 0) return null;
                   return (
@@ -818,14 +818,14 @@ export function HomePage() {
             background: "var(--bg-1)",
             border: "1px solid var(--line)",
             borderRadius: 12,
-            padding: "18px 20px",
+            padding: "14px 16px",
             position: "relative" as const,
             overflow: "hidden",
             boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
           }}
         >
           {/* Title with Info Icon */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
                 Interactions
@@ -856,8 +856,8 @@ export function HomePage() {
           </div>
 
           {/* Main Count with Change Indicator */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
-            <div style={{ fontSize: 36, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 30, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
               {metrics.interactionsCount >= 1000 ? (metrics.interactionsCount / 1000).toFixed(1) : metrics.interactionsCount}
               {metrics.interactionsCount >= 1000 && <span style={{ fontSize: 16, color: "var(--fg-muted)", marginLeft: 4, fontWeight: 400 }}>k</span>}
             </div>
@@ -920,14 +920,14 @@ export function HomePage() {
             background: "var(--bg-1)",
             border: "1px solid var(--line)",
             borderRadius: 12,
-            padding: "18px 20px",
+            padding: "14px 16px",
             position: "relative" as const,
             overflow: "hidden",
             boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
           }}
         >
           {/* Title with Info Icon */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
                 Agents
@@ -958,8 +958,8 @@ export function HomePage() {
           </div>
 
           {/* Main Count with Change Indicator */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
-            <div style={{ fontSize: 36, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 30, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
               {metrics.agentCount}
             </div>
             {metrics.agentCount24hChange != null && metrics.agentCount24hChange > 0 && (
@@ -1009,14 +1009,14 @@ export function HomePage() {
             background: "var(--bg-1)",
             border: "1px solid var(--line)",
             borderRadius: 12,
-            padding: "18px 20px",
+            padding: "14px 16px",
             position: "relative" as const,
             overflow: "hidden",
             boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
           }}
         >
           {/* Title with Info Icon */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
                 Apps
@@ -1047,8 +1047,8 @@ export function HomePage() {
           </div>
 
           {/* Main Count with Change Indicator */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
-            <div style={{ fontSize: 36, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 30, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
               {metrics.appCount}
             </div>
             {metrics.appCount24hChange != null && metrics.appCount24hChange > 0 && (
@@ -1098,14 +1098,14 @@ export function HomePage() {
             background: "var(--bg-1)",
             border: "1px solid var(--line)",
             borderRadius: 12,
-            padding: "18px 20px",
+            padding: "14px 16px",
             position: "relative" as const,
             overflow: "hidden",
             boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
           }}
         >
           {/* Title with Info Icon */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
                 Intents
@@ -1136,8 +1136,8 @@ export function HomePage() {
           </div>
 
           {/* Main Count with Change Indicator */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
-            <div style={{ fontSize: 36, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 30, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
               {metrics.intentCount}
             </div>
             {metrics.intentCount24hChange != null && metrics.intentCount24hChange > 0 && (
