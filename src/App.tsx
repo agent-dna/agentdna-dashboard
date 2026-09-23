@@ -67,7 +67,8 @@ export function App() {
     { to: "/agents", label: "Agents & Apps", icon: "agents" },
     { to: "/requests", label: "Requests", icon: "box", badge: pendingCount > 0 ? pendingCount : undefined },
     { to: "/interactions", label: "Interactions", icon: "interactions" },
-    { to: "/observability", label: "Observability", icon: "activity" },
+    // Hidden for now — the /observability route still works if you navigate to it directly.
+    // { to: "/observability", label: "Observability", icon: "activity" },
   ];
 
   const collapsed = tweaks.sidebar === "collapsed";

@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { Icon } from "../components/Icon";
 import { useAuth } from "../context/AuthContext";
 import { fetchTokenUsage, type TokenUsage } from "../api/keys";
-import { fetchUserProfile, fetchAdminProfile, updateUserProfile, updatePassword, MIN_PASSWORD_LENGTH, type UserProfile, type AdminProfile } from "../api/profile";
+import { fetchUserProfile, fetchAdminProfile, updatePassword, MIN_PASSWORD_LENGTH, type UserProfile, type AdminProfile } from "../api/profile";
 import { adminUpdatePassword, adminUsernameFromToken } from "../api/auth";
 import { ApiError } from "../api/client";
 
@@ -27,11 +27,6 @@ export function ProfilePage() {
   const [msgBody, setMsgBody] = useState("");
   const [usage, setUsage] = useState<TokenUsage | null>(null);
   const [usageLoading, setUsageLoading] = useState(true);
-
-  const [editField, setEditField] = useState<"name" | "email" | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [editError, setEditError] = useState<string | null>(null);
-  const [editSaving, setEditSaving] = useState(false);
 
   const [pwOpen, setPwOpen] = useState(false);
   const [pwNew, setPwNew] = useState("");
@@ -95,28 +90,6 @@ export function ProfilePage() {
     window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${sub}&body=${body}`;
   }
 
-  function startEdit(field: "name" | "email") {
-    setEditField(field);
-    setEditValue(field === "name" ? (displayName || "") : (activeProfile?.email || ""));
-    setEditError(null);
-  }
-
-  function cancelEdit() { setEditField(null); setEditValue(""); setEditError(null); }
-
-  async function saveEdit() {
-    if (!editField || !editValue.trim()) return;
-    setEditSaving(true); setEditError(null);
-    try {
-      await updateUserProfile({ [editField]: editValue.trim() });
-      const trimmed = editValue.trim();
-      setProfile((prev) => prev ? { ...prev, [editField!]: trimmed } : prev);
-      if (editField === "email") patchUser({ email: trimmed });
-      cancelEdit();
-    } catch (err) {
-      setEditError(err instanceof ApiError ? err.message : "Failed to save changes.");
-    } finally { setEditSaving(false); }
-  }
-
   async function handlePasswordChange() {
     if (!pwNew.trim()) { setPwError("New password cannot be empty."); return; }
     if (pwNew.length < MIN_PASSWORD_LENGTH) { setPwError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`); return; }
@@ -171,15 +144,6 @@ export function ProfilePage() {
             {memberSince && <span style={pillStyle}>Since {memberSince}</span>}
           </div>
         </div>
-
-        <button
-          className="btn"
-          onClick={() => startEdit("name")}
-          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6 }}
-        >
-          <Icon name="user" size={13} />
-          Edit profile
-        </button>
       </div>
 
       {/* ── Two-column layout ── */}
@@ -195,49 +159,25 @@ export function ProfilePage() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
               {/* Name */}
-              <AccountDetailCell
-                label="Name"
-                editing={editField === "name"}
-                editValue={editValue}
-                saving={editSaving}
-                onEdit={() => startEdit("name")}
-                onChange={setEditValue}
-                onSave={saveEdit}
-                onCancel={cancelEdit}
-              >
+              <AccountDetailCell label="Name">
                 {profileLoading ? "—" : (displayName || "—")}
               </AccountDetailCell>
 
               {/* Email */}
-              <AccountDetailCell
-                label="Email"
-                editing={editField === "email"}
-                editValue={editValue}
-                saving={editSaving}
-                onEdit={() => startEdit("email")}
-                onChange={setEditValue}
-                onSave={saveEdit}
-                onCancel={cancelEdit}
-              >
+              <AccountDetailCell label="Email">
                 {profileLoading ? "—" : displayEmail}
               </AccountDetailCell>
 
               {/* Organization */}
-              <AccountDetailCell label="Organization" readonly>
+              <AccountDetailCell label="Organization">
                 {profileLoading ? "—" : displayOrg}
               </AccountDetailCell>
 
               {/* Role */}
-              <AccountDetailCell label="Role" readonly>
+              <AccountDetailCell label="Role">
                 {displayRole}
               </AccountDetailCell>
             </div>
-
-            {editError && (
-              <div style={{ marginTop: 14, padding: "8px 10px", borderRadius: 7, background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.18)", color: "var(--threat)", fontSize: 12 }}>
-                {editError}
-              </div>
-            )}
           </div>
 
           {/* Security */}
@@ -458,50 +398,14 @@ export function ProfilePage() {
   );
 }
 
-function AccountDetailCell({
-  label, children, readonly = false, editing = false, editValue = "", saving = false,
-  onEdit, onChange, onSave, onCancel,
-}: {
-  label: string;
-  children: React.ReactNode;
-  readonly?: boolean;
-  editing?: boolean;
-  editValue?: string;
-  saving?: boolean;
-  onEdit?: () => void;
-  onChange?: (v: string) => void;
-  onSave?: () => void;
-  onCancel?: () => void;
-}) {
+/** One read-only field in the Account details grid. */
+function AccountDetailCell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ padding: "14px 16px", background: "var(--bg-0, var(--bg))", border: "1px solid var(--line)", borderRadius: 9 }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--fg-muted)", marginBottom: 6 }}>
         {label}
       </div>
-      {editing ? (
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <input
-            autoFocus
-            value={editValue}
-            onChange={(e) => onChange?.(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") onSave?.(); if (e.key === "Escape") onCancel?.(); }}
-            style={{ ...fieldInputStyle, padding: "5px 8px", fontSize: 12 }}
-          />
-          <button className="btn primary" onClick={onSave} disabled={saving} style={{ fontSize: 11, padding: "5px 10px", whiteSpace: "nowrap" }}>
-            {saving ? "…" : "Save"}
-          </button>
-          <button className="btn ghost" onClick={onCancel} style={{ fontSize: 11, padding: "5px 8px" }}>×</button>
-        </div>
-      ) : (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--fg)", wordBreak: "break-all" }}>{children}</span>
-          {!readonly && onEdit && (
-            <button onClick={onEdit} style={{ background: "none", border: "1px solid var(--line)", borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 600, color: "var(--accent)", cursor: "pointer", flexShrink: 0, fontFamily: "var(--font-body)" }}>
-              Edit
-            </button>
-          )}
-        </div>
-      )}
+      <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--fg)", wordBreak: "break-all" }}>{children}</span>
     </div>
   );
 }
