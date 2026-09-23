@@ -109,6 +109,7 @@ function homeMetrics() {
     .slice(0, 5);
   return {
     agentCount: agents.length,
+    appCount: tools.length,
     intentCount: intents.length,
     interactionsCount: interactionsTotal,
     threatCount: totalThreats,

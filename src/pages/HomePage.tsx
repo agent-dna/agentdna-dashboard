@@ -213,7 +213,7 @@ export function HomePage() {
   const [threatSeverityFilter, setThreatSeverityFilter] = useState<ThreatSeverity | "all">("all");
   const [showThreatsInfo, setShowThreatsInfo] = useState(false);
   /** Which metric card's info modal is open (Incidents has its own flag above). */
-  const [infoCard, setInfoCard] = useState<"interactions" | "agents" | "intents" | null>(null);
+  const [infoCard, setInfoCard] = useState<"interactions" | "agents" | "apps" | "intents" | null>(null);
 
   const homeState = useHomeMetrics();
   const intentsState = useIntentsPaged(intentsPage);
@@ -707,7 +707,9 @@ export function HomePage() {
         </div>
       </div>
 
-      <div className="metrics">
+      {/* .metrics is a fixed 4-up grid shared with other pages; the home page now has
+          five cards, so widen it here only. */}
+      <div className="metrics" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
         {/* Active Threats Card - Professional security platform design */}
         <div
           style={{
@@ -995,6 +997,95 @@ export function HomePage() {
                     transition: "width 300ms ease",
                   }}
                   title={`Active agents: ${metrics.agentCount}`}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Apps Card */}
+        <div
+          style={{
+            background: "var(--bg-1)",
+            border: "1px solid var(--line)",
+            borderRadius: 12,
+            padding: "18px 20px",
+            position: "relative" as const,
+            overflow: "hidden",
+            boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
+          }}
+        >
+          {/* Title with Info Icon */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-muted)", letterSpacing: "0.02em", textTransform: "uppercase" }}>
+                Apps
+              </div>
+              <button
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 2,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--fg-muted)",
+                  transition: "color 120ms",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--fg-muted)")}
+                onClick={() => setInfoCard("apps")}
+                title="Information about apps"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Main Count with Change Indicator */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
+            <div style={{ fontSize: 36, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums", lineHeight: 1, fontFamily: "var(--font-display)" }}>
+              {metrics.appCount}
+            </div>
+            {metrics.appCount24hChange != null && metrics.appCount24hChange > 0 && (
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--fg-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
+                }}
+              >
+                +{metrics.appCount24hChange} · 24hr
+              </div>
+            )}
+          </div>
+
+          {/* Connected Bar */}
+          {metrics.appCount > 0 && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "nowrap", whiteSpace: "nowrap", minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: SAFE_COLOR, flexShrink: 0 }} />
+                  Connected <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{metrics.appCount}</span>
+                </div>
+              </div>
+
+              {/* Horizontal Bar */}
+              <div style={{ display: "flex", width: "100%", height: 6, borderRadius: 999, overflow: "hidden", background: "var(--bg-3)" }}>
+                <div
+                  style={{
+                    width: "100%",
+                    background: SAFE_COLOR,
+                    transition: "width 300ms ease",
+                  }}
+                  title={`Connected apps: ${metrics.appCount}`}
                 />
               </div>
             </div>
@@ -1646,6 +1737,17 @@ export function HomePage() {
           { color: SAFE_COLOR, label: "Active", text: "Registered agents currently able to act. Revoked agents drop out of this count." },
         ]}
         tip={<>Open <strong>Agents &amp; Apps</strong> to see each agent's trust score, the apps it can reach, and its policy.</>}
+      />
+
+      <MetricInfoModal
+        open={infoCard === "apps"}
+        onClose={() => setInfoCard(null)}
+        title="Apps Metric"
+        intro={<>External tools and services your agents have actually called — a spreadsheet, a database, a payments API. An app is counted once it appears in a recorded interaction, so this reflects what your agents reach in practice rather than everything they could reach. The 24-hour figure counts apps first seen since yesterday.</>}
+        rows={[
+          { color: SAFE_COLOR, label: "Connected", text: "Apps currently reachable by at least one of your agents." },
+        ]}
+        tip={<>Open <strong>Agents &amp; Apps</strong> and switch to the Apps tab to see each app's interaction volume and the incidents raised against it.</>}
       />
 
       <MetricInfoModal

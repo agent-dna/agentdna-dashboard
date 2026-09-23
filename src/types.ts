@@ -114,6 +114,7 @@ export interface HomeAgentSummary {
 
 export interface HomeMetrics {
   agentCount: number;
+  appCount: number;
   intentCount: number;
   interactionsCount: number;
   threatCount: number;
@@ -121,6 +122,7 @@ export interface HomeMetrics {
   agentList: HomeAgentSummary[];
   // 24-hour changes
   agentCount24hChange?: number;
+  appCount24hChange?: number;
   intentCount24hChange?: number;
   interactionsCount24hChange?: number;
   threatCount24hChange?: number;

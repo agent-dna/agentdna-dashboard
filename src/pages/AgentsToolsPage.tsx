@@ -388,13 +388,13 @@ function TopAgentsList({
       <div style={{ padding: "18px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: "var(--fg)", marginBottom: 2 }}>Top agents by volume</div>
-          <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>Ranked by interactions · threats flagged</div>
+          <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>Ranked by interactions · incidents flagged</div>
         </div>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", background: "var(--bg-3)", color: "var(--fg-muted)", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>LAST 30 DAYS</span>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)" }}>
-        {["#", "AGENT", "TXNS", "THREATS"].map((h, i) => (
+        {["#", "AGENT", "TXNS", "INCIDENTS"].map((h, i) => (
           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase", textAlign: i > 1 ? "right" : "left" }}>{h}</div>
         ))}
       </div>
