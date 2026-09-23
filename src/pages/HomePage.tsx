@@ -718,6 +718,8 @@ export function HomePage() {
             borderRadius: 12,
             padding: "14px 16px",
             position: "relative" as const,
+            display: "flex",
+            flexDirection: "column" as const,
             overflow: "hidden",
             boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
           }}
@@ -776,7 +778,9 @@ export function HomePage() {
 
           {/* Severity Breakdown Labels */}
           {metrics.threatCount > 0 && (
-            <div>
+            /* marginTop:auto pins the bar to the card floor so every card's bar
+               lines up, however many legend rows sit above it. */
+            <div style={{ marginTop: "auto" }}>
               {/* Two columns: four severities on one row overflowed the card and clipped "Low". */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "center", gap: "4px 10px", marginBottom: 8, minWidth: 0 }}>
                 {severitySegments.map(({ label, count, color }) => {
@@ -820,6 +824,8 @@ export function HomePage() {
             borderRadius: 12,
             padding: "14px 16px",
             position: "relative" as const,
+            display: "flex",
+            flexDirection: "column" as const,
             overflow: "hidden",
             boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
           }}
@@ -879,7 +885,9 @@ export function HomePage() {
 
           {/* Safe vs Incident Bar */}
           {metrics.interactionsCount > 0 && (
-            <div>
+            /* marginTop:auto pins the bar to the card floor so every card's bar
+               lines up, however many legend rows sit above it. */
+            <div style={{ marginTop: "auto" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "nowrap", whiteSpace: "nowrap", minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: SAFE_COLOR, flexShrink: 0 }} />
@@ -922,6 +930,8 @@ export function HomePage() {
             borderRadius: 12,
             padding: "14px 16px",
             position: "relative" as const,
+            display: "flex",
+            flexDirection: "column" as const,
             overflow: "hidden",
             boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
           }}
@@ -980,7 +990,9 @@ export function HomePage() {
 
           {/* Active/Total Bar */}
           {metrics.agentCount > 0 && (
-            <div>
+            /* marginTop:auto pins the bar to the card floor so every card's bar
+               lines up, however many legend rows sit above it. */
+            <div style={{ marginTop: "auto" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "nowrap", whiteSpace: "nowrap", minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: SAFE_COLOR, flexShrink: 0 }} />
@@ -1011,6 +1023,8 @@ export function HomePage() {
             borderRadius: 12,
             padding: "14px 16px",
             position: "relative" as const,
+            display: "flex",
+            flexDirection: "column" as const,
             overflow: "hidden",
             boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
           }}
@@ -1069,7 +1083,9 @@ export function HomePage() {
 
           {/* Connected Bar */}
           {metrics.appCount > 0 && (
-            <div>
+            /* marginTop:auto pins the bar to the card floor so every card's bar
+               lines up, however many legend rows sit above it. */
+            <div style={{ marginTop: "auto" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "nowrap", whiteSpace: "nowrap", minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: SAFE_COLOR, flexShrink: 0 }} />
@@ -1100,6 +1116,8 @@ export function HomePage() {
             borderRadius: 12,
             padding: "14px 16px",
             position: "relative" as const,
+            display: "flex",
+            flexDirection: "column" as const,
             overflow: "hidden",
             boxShadow: "0 1px 2px rgba(15, 32, 70, 0.04)",
           }}
@@ -1158,7 +1176,9 @@ export function HomePage() {
 
           {/* Safe vs Blocked Bar */}
           {metrics.intentCount > 0 && (
-            <div>
+            /* marginTop:auto pins the bar to the card floor so every card's bar
+               lines up, however many legend rows sit above it. */
+            <div style={{ marginTop: "auto" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "nowrap", whiteSpace: "nowrap", minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 9.8, fontWeight: 500, color: "var(--fg-dim)", fontFamily: "var(--font-body)" }}>
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: SAFE_COLOR, flexShrink: 0 }} />
