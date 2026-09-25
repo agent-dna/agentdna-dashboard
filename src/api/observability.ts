@@ -5,7 +5,7 @@ import { apiRequest } from "./client";
  * Contract: docs/observability-api.md §4.
  */
 
-export type ObsRange = "24h" | "7d" | "30d";
+export type ObsRange = "24h" | "7d" | "30d" | "all";
 export type ObsStatus = "all" | "risk" | "flagged";
 export type ObsOutcome = "allowed" | "elevated" | "flagged";
 export type ObsWallResult = "pass" | "fail" | "review" | "not_tracked";

@@ -55,7 +55,7 @@ Why split it this way instead of one big graph call:
 
 | Param | Type | Default | Meaning |
 |---|---|---|---|
-| `range` | `24h` \| `7d` \| `30d` | `24h` | Only hops with `time >= now - range` are counted. |
+| `range` | `24h` \| `7d` \| `30d` \| `all` | `24h` | Only hops with `time >= now - range` are counted; `all` has no lower bound. The dashboard sends `all`. |
 | `status` | `all` \| `risk` \| `flagged` | `all` | `risk` = hops/intents whose outcome is `elevated` or `flagged`; `flagged` = outcome `flagged` only. Filters rows *and* recomputes counts over the filtered set. |
 
 - **Outcome enum** used everywhere: `"allowed" | "elevated" | "flagged"`. **Not "blocked":** the intent-workflow pipeline records interactions *after* they have already happened, so a threat code there can only ever mean flagged. "Blocked" is reserved for `/authorize-action` denials, which are the only confirmed real blocks and aren't persisted yet (§6).

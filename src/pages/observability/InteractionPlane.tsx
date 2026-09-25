@@ -86,8 +86,8 @@ const FILTERS: { key: Filter; label: string }[] = [
  * The canvas always loads everything in the window and filters client-side (so a filter
  * dims rather than removes); only the trace table asks the server with `status=`.
  */
-const REST: ObsScope = { range: "24h", status: "all" };
-const RANGE_LABEL = "Last 24h";
+const REST: ObsScope = { range: "all", status: "all" };
+const RANGE_LABEL = "All time";
 const USERS_PAGE = 50;
 
 /** Edges below this volume collapse to a small dot instead of a count pill. */
@@ -617,7 +617,7 @@ export function InteractionPlane() {
                 ) : (
                   <>
                     <div className="ip-state-title">No interactions yet</div>
-                    <div className="ip-state-body">Nothing reached an agent in the {RANGE_LABEL.toLowerCase()}.</div>
+                    <div className="ip-state-body">No interaction has reached an agent yet.</div>
                   </>
                 )}
               </div>
