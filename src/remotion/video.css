@@ -1,0 +1,13 @@
+/*
+ * The only stylesheet the video bundle pulls in: it re-uses the dashboard's
+ * design tokens (--fg, --accent, --font-display, …) so compositions can style
+ * themselves inline with the same variables the app uses.
+ */
+@import "../styles/dashboard.css";
+
+/* Remotion renders into #remotion-canvas, not #root, so re-assert the reset. */
+html,
+body {
+  margin: 0;
+  background: transparent;
+}

@@ -286,7 +286,9 @@ export function RequestsPage() {
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: "creation", label: "Agent Creation" },
-    ...(isAdmin ? [] : [{ key: "access-mine" as const, label: "My Access" }]),
+    // Hidden for now — the "access-mine" tab and its /agent-access-requests-list-user
+    // fetch still work; drop this line back in to bring it back for non-admins.
+    // ...(isAdmin ? [] : [{ key: "access-mine" as const, label: "My Access" }]),
     ...(isAdmin ? ([{ key: "users", label: "Users" }] as const) : []),
   ];
 

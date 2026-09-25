@@ -1,4 +1,4 @@
-import { dummyRespond, isDummyMode } from "../data/dummyRouter";
+import { dummyRespond, isDummyMode, isDevPreview } from "../data/dummyRouter";
 
 // No localhost fallback here on purpose — a deployed build with a missing/misconfigured
 // VITE_API_BASE_URL should fail loudly (see the guard in apiRequest/apiUpload below),
@@ -66,6 +66,11 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     if (out !== undefined) {
       console.log(`[DUMMY ${method} ${path}]`, query || {}, "→", out);
       return out as T;
+    }
+    // Offline preview: never touch the network. Status 0 keeps this clear of the
+    // 401 handler, which would otherwise wipe the session and bounce to login.
+    if (isDevPreview()) {
+      throw new ApiError(`dev preview: no mock for ${method} ${path}`, 0);
     }
   }
 
@@ -156,6 +161,9 @@ export async function apiUpload<T>(
     if (out !== undefined) {
       console.log(`[DUMMY ${method} ${path}] (multipart)`, "→", out);
       return out as T;
+    }
+    if (isDevPreview()) {
+      throw new ApiError(`dev preview: no mock for ${method} ${path}`, 0);
     }
   }
 

@@ -29,7 +29,7 @@ interface LocationState { from?: { pathname?: string } }
 export function LandingPage() {
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { user, login, loginAdmin, registerUser } = useAuth();
+  const { user, login, loginAdmin, registerUser, devPreview } = useAuth();
 
   const [screen, setScreen]         = useState<Screen>("auth");
   const [mode, setMode]             = useState<Mode>("signin");
@@ -432,6 +432,31 @@ export function LandingPage() {
               {btnLabel}
             </button>
           </form>
+
+          {/* Dev-only shortcut into the app with mock data — stripped from production builds. */}
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              onClick={() => {
+                devPreview();
+                navigate("/observability", { replace: true });
+              }}
+              style={{
+                marginTop: 12,
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: "1px dashed rgba(15,32,70,0.25)",
+                background: "transparent",
+                color: "#5B6B8C",
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Dev: open Observability without signing in
+            </button>
+          )}
 
           {/* divider */}
           {/* <div style={div}>

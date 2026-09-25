@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { login as apiLogin, adminLogin as apiAdminLogin, adminRegister as apiAdminRegister, registerAdminMiddleware, registerUser as apiRegisterUser, type LoginResponse } from "../api/auth";
 import { getToken, setToken, setUnauthorizedHandler } from "../api/client";
 import { fetchUserProfile, fetchAdminProfile } from "../api/profile";
-import { dummyCurrentUser, isDummyMode } from "../data/dummyRouter";
+import { dummyCurrentUser, isDummyMode, setDevPreview } from "../data/dummyRouter";
 
 const USER_KEY = "agentdna.user";
 const SESSION_START_KEY = "agentdna.sessionStart";
@@ -70,6 +70,11 @@ interface AuthContextValue {
   registerUser: (username: string, email: string, password: string, orgId: string, otp?: string) => Promise<void>;
   logout: () => void;
   patchUser: (patch: Partial<AuthUser>) => void;
+  /**
+   * Dev-only: drop into the app as the dummy user without hitting the login API.
+   * Guarded by import.meta.env.DEV, so it is a no-op in a production build.
+   */
+  devPreview: () => void;
 }
 
 const Ctx = createContext<AuthContextValue | null>(null);
@@ -163,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
 
   const logout = useCallback(() => {
+    setDevPreview(false);
     setToken(null);
     writeStoredUser(null);
     clearSessionStart();
@@ -348,9 +354,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const devPreview = useCallback(() => {
+    if (!import.meta.env.DEV) return;
+    // Turn on offline mock mode before the user lands, so no page can fire a
+    // real request and 401 the session away.
+    setDevPreview(true);
+    const u = dummyUser();
+    setUser(u);
+    setTokenState("dummy.jwt.token");
+    writeStoredUser(u);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser }),
-    [user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser],
+    () => ({ user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser, devPreview }),
+    [user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser, devPreview],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

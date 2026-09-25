@@ -205,8 +205,8 @@ export function HomePage() {
   const [bottomTab, setBottomTab] = useState<"intents" | "threats">("intents");
   const [intentsPage, setIntentsPage] = useState(1);
   const [threatsPage, setThreatsPage] = useState(1);
-  const [volumeTab, setVolumeTab] = useState<"agents" | "apps">("agents");
-  const [chartTab, setChartTab] = useState<"graph" | "threats">("graph");
+  const [volumeTab, setVolumeTab] = useState<"agents" | "apps">("apps");
+  const [chartTab, setChartTab] = useState<"graph" | "threats">("threats");
   const [threatMessage, setThreatMessage] = useState<ThreatListItem | null>(null);
   const [intentStatusFilter, setIntentStatusFilter] = useState<IntentReviewStatus | "all">("all");
   const [threatStatusFilter, setThreatStatusFilter] = useState<IntentReviewStatus | "all">("all");
@@ -330,11 +330,6 @@ export function HomePage() {
       key: "threats",
       label: "Incidents",
       render: (r) => <ThreatPill threat={r.threats > 0} />,
-    },
-    {
-      key: "reviewStatus",
-      label: "Status",
-      render: (r) => <ReviewStatusPill status={r.reviewStatus} />,
     },
     {
       key: "time",
@@ -1230,34 +1225,10 @@ export function HomePage() {
                 </div>
               </div>
             </div>
-            {chartTab === "graph" ? (
-              <div style={{ display: "flex", background: "var(--bg-3)", borderRadius: 6, padding: 2 }}>
-                {([{ key: "graph", label: "Graph" }, { key: "threats", label: "Incidents" }] as const).map((t) => {
-                  const active = chartTab === t.key;
-                  return (
-                    <button
-                      key={t.key}
-                      onClick={() => setChartTab(t.key)}
-                      style={{
-                        background: active ? "var(--surface)" : "transparent",
-                        border: "none",
-                        borderRadius: 5,
-                        padding: "4px 10px",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: active ? "var(--fg)" : "var(--fg-muted)",
-                        cursor: "pointer",
-                        boxShadow: active ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
-                        transition: "all 120ms",
-                      }}
-                    >
-                      {t.label}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* The switch renders in both views — when it only showed on the graph,
+                the incidents view was a one-way door. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {chartTab === "threats" && (
                 <button
                   style={{
                     background: "transparent",
@@ -1276,8 +1247,34 @@ export function HomePage() {
                   Last 24h
                   <Icon name="chevronDown" size={12} style={{ color: "var(--fg-muted)" }} />
                 </button>
+              )}
+              <div style={{ display: "flex", background: "var(--bg-3)", borderRadius: 6, padding: 2, flexShrink: 0 }}>
+                {([{ key: "graph", label: "Graph" }, { key: "threats", label: "Incidents" }] as const).map((t) => {
+                  const active = chartTab === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => setChartTab(t.key)}
+                      style={{
+                        background: active ? "var(--surface)" : "transparent",
+                        border: "none",
+                        borderRadius: 5,
+                        padding: "4px 10px",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: active ? "var(--fg)" : "var(--fg-muted)",
+                        cursor: "pointer",
+                        boxShadow: active ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
+                        transition: "all 120ms",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
               </div>
-            )}
+            </div>
           </div>
 
           {chartTab === "graph" ? (
@@ -1763,7 +1760,7 @@ export function HomePage() {
         open={infoCard === "apps"}
         onClose={() => setInfoCard(null)}
         title="Apps Metric"
-        intro={<>External tools and services your agents have actually called — a spreadsheet, a database, a payments API. An app is counted once it appears in a recorded interaction, so this reflects what your agents reach in practice rather than everything they could reach. The 24-hour figure counts apps first seen since yesterday.</>}
+        intro={<>Tools and Applications your agents have interacted with .</>}
         rows={[
           { color: SAFE_COLOR, label: "Connected", text: "Apps currently reachable by at least one of your agents." },
         ]}

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/api)",
+      "Bash(grep -nE \"^\\\\s*\\(export \\)?\\(async \\)?function|fetch\\\\\\(|apiFetch|`/api)",
+      "Bash(\\\\\"/api)",
+      "Bash('/|path:|BASE\" src/api/client.ts | head -80)",
+      "Bash(node -e \"console.log\\(require\\('playwright-core/package.json'\\).version\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5199/)",
+      "Bash(node drive.cjs)",
+      "Bash(sed -i '' 's#localhost:5199/\"#localhost:5199/login\"#; s#name: /preview/i#name: /open Observability/i#' drive.cjs)",
+      "Bash(perl -0pi -e 's#\\(click\\\\\\(\\\\\\);\\\\n\\)\\(  await page.waitForSelector\\\\\\(\"\\\\.ip-canvas\"\\\\\\);\\)#$1  await page.waitForURL\\(/dashboard|observability/\\);\\\\n  errors.length = 0; // ignore pre-login noise\\\\n  await page.goto\\(\"http://localhost:5199/observability\"\\);\\\\n$2#' drive.cjs)"
+    ]
+  }
+}

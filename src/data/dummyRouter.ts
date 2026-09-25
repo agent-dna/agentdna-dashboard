@@ -1,6 +1,32 @@
 import dummy from "./dummy.json";
 
+const PREVIEW_KEY = "agentdna.devPreview";
+
+/**
+ * Dev-only offline preview: browse the app with mock data and no network at all.
+ * Kept in sessionStorage so it survives the navigation off the login screen, and
+ * cleared on logout. Without this, uncovered endpoints 401 and boot you out.
+ */
+export function isDevPreview(): boolean {
+  if (!import.meta.env.DEV) return false;
+  try {
+    return sessionStorage.getItem(PREVIEW_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setDevPreview(on: boolean) {
+  try {
+    if (on) sessionStorage.setItem(PREVIEW_KEY, "1");
+    else sessionStorage.removeItem(PREVIEW_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function isDummyMode(): boolean {
+  if (isDevPreview()) return true;
   const v = (import.meta.env.VITE_DUMMY as string | undefined) || "";
   return v === "true" || v === "1";
 }

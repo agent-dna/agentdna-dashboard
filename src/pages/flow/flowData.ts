@@ -113,6 +113,20 @@ export interface Flow {
 /* ------- depth layout (DAG layering) ------- */
 
 /**
+ * Layout rules this pass guarantees, in priority order:
+ *  1. The intent's initiator owns the leftmost column, on its own.
+ *  2. Columns follow call depth, so the diagram reads left → right in call order.
+ *  3. Within a column, nodes are ordered to minimise edge crossings.
+ *  4. Nodes keep a minimum gap so icons and captions never sit on top of each other.
+ */
+const X_BAND = { start: 0.11, end: 0.89 };
+/** Stops above the provenance row (y 0.82) so the ledger never collides with a node. */
+const Y_BAND = { start: 0.12, end: 0.72 };
+/** Normalised minimums. Below these the band widens rather than letting nodes touch. */
+const MIN_ROW_GAP = 0.16;
+const MIN_COL_GAP = 0.12;
+
+/**
  * Lay nodes out by longest-path depth from the initiator instead of by role.
  *
  * A role-based layout collapses every agent into a single "worker" column, so a chain
@@ -126,7 +140,7 @@ export interface Flow {
 function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
   const ids = new Set(nodes.map((n) => n.id));
 
-  // First-appearance order, used to keep column ordering stable.
+  // First-appearance order, used to seed column ordering before crossing reduction.
   const order: Record<string, number> = {};
   let o = 0;
   for (const s of steps) {
@@ -137,8 +151,9 @@ function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
 
   // Forward (request) edges only, deduped.
   const outAdj = new Map<string, string[]>();
+  const inAdj = new Map<string, string[]>();
   const indeg = new Map<string, number>();
-  for (const id of ids) { outAdj.set(id, []); indeg.set(id, 0); }
+  for (const id of ids) { outAdj.set(id, []); inAdj.set(id, []); indeg.set(id, 0); }
 
   const seenEdge = new Set<string>();
   const forward: Array<[string, string]> = [];
@@ -151,6 +166,7 @@ function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
     seenEdge.add(key);
     forward.push([s.from, s.to]);
     outAdj.get(s.from)!.push(s.to);
+    inAdj.get(s.to)!.push(s.from);
     indeg.set(s.to, indeg.get(s.to)! + 1);
   }
 
@@ -181,7 +197,18 @@ function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
     }
   }
 
-  // Group into columns and spread each one vertically.
+  // Rule 1: the initiator is the flow's origin, so it alone holds column 0.
+  // Anything else that happens to have no parent is pushed one column in rather
+  // than sharing the left edge and muddying where the flow starts.
+  const initiatorId = flowOriginId(nodes, steps);
+  if (initiatorId && ids.has(initiatorId)) {
+    depth.set(initiatorId, 0);
+    for (const id of ids) {
+      if (id !== initiatorId && (depth.get(id) ?? 0) === 0) depth.set(id, 1);
+    }
+  }
+
+  // Group into columns.
   const byDepth = new Map<number, FlowNode[]>();
   for (const n of nodes) {
     const d = depth.get(n.id) ?? 0;
@@ -190,22 +217,97 @@ function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
   }
 
   const depths = Array.from(byDepth.keys()).sort((a, b) => a - b);
-  const xStart = 0.14;
-  const xEnd = 0.86;
-
-  depths.forEach((d, i) => {
+  const columns = depths.map((d) => {
     const col = byDepth.get(d)!;
     col.sort((a, b) => (order[a.id] ?? 0) - (order[b.id] ?? 0));
-    const x = depths.length === 1 ? 0.5 : xStart + ((xEnd - xStart) / (depths.length - 1)) * i;
+    return col;
+  });
+
+  reduceCrossings(columns, inAdj, outAdj, initiatorId);
+
+  // Rule 4: spread each axis across its band, widening the gap floor before
+  // letting two nodes land close enough for their icons or captions to touch.
+  const colGap = columns.length > 1
+    ? Math.max(MIN_COL_GAP, (X_BAND.end - X_BAND.start) / (columns.length - 1))
+    : 0;
+  const colSpan = colGap * (columns.length - 1);
+  const xStart = columns.length > 1 ? Math.max(0.06, X_BAND.start - (colSpan - (X_BAND.end - X_BAND.start)) / 2) : 0.5;
+
+  columns.forEach((col, i) => {
+    const x = columns.length === 1 ? 0.5 : xStart + colGap * i;
     const k = col.length;
-    const half = Math.min(0.34, 0.17 * (k - 1));
+    const rowGap = k > 1
+      ? Math.max(MIN_ROW_GAP, (Y_BAND.end - Y_BAND.start) / (k - 1))
+      : 0;
+    const span = rowGap * (k - 1);
+    const mid = (Y_BAND.start + Y_BAND.end) / 2;
     col.forEach((n, j) => {
       n.x = x;
-      n.y = k === 1 ? 0.5 : 0.5 - half + 2 * half * (j / (k - 1));
+      n.y = k === 1 ? mid : mid - span / 2 + rowGap * j;
     });
   });
 
   return nodes;
+}
+
+/**
+ * Whoever the flow starts from: the human who raised the intent, else the sender
+ * of the very first hop. Shared with the provenance pass so the seal drops from
+ * the same node the diagram starts at.
+ */
+function flowOriginId(nodes: FlowNode[], steps: FlowStep[]): string | undefined {
+  return nodes.find((n) => n.kind === "human")?.id ?? steps[0]?.from;
+}
+
+/**
+ * Rule 3: order each column by the median position of its neighbours in the
+ * previous/next column — the standard barycenter sweep. Without it, columns keep
+ * first-appearance order and edges cross each other for no structural reason.
+ * The initiator is pinned to the top of column 0 so the origin never drifts.
+ */
+function reduceCrossings(
+  columns: FlowNode[][],
+  inAdj: Map<string, string[]>,
+  outAdj: Map<string, string[]>,
+  initiatorId: string | undefined,
+) {
+  const indexIn = (col: FlowNode[]) => {
+    const m = new Map<string, number>();
+    col.forEach((n, i) => m.set(n.id, i));
+    return m;
+  };
+
+  /** Median neighbour index, or -1 when a node has no neighbour in that column. */
+  const median = (ids: string[], pos: Map<string, number>): number => {
+    const xs = ids.map((id) => pos.get(id)).filter((v): v is number => v != null).sort((a, b) => a - b);
+    if (xs.length === 0) return -1;
+    const mid = Math.floor(xs.length / 2);
+    return xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
+  };
+
+  const sweep = (col: FlowNode[], ref: Map<string, number>, adj: Map<string, string[]>) => {
+    const keyed = col.map((n, i) => ({ n, i, m: median(adj.get(n.id) ?? [], ref) }));
+    keyed.sort((a, b) => {
+      // Nodes with no neighbour keep their current slot rather than piling at the top.
+      if (a.m === -1 || b.m === -1) return a.i - b.i;
+      return a.m === b.m ? a.i - b.i : a.m - b.m;
+    });
+    return keyed.map((k) => k.n);
+  };
+
+  for (let pass = 0; pass < 4; pass++) {
+    for (let i = 1; i < columns.length; i++) {
+      columns[i] = sweep(columns[i], indexIn(columns[i - 1]), inAdj);
+    }
+    for (let i = columns.length - 2; i >= 0; i--) {
+      columns[i] = sweep(columns[i], indexIn(columns[i + 1]), outAdj);
+    }
+  }
+
+  if (initiatorId && columns[0]) {
+    const at = columns[0].findIndex((n) => n.id === initiatorId);
+    if (at > 0) columns[0].unshift(...columns[0].splice(at, 1));
+  }
 }
 
 
@@ -245,8 +347,9 @@ function attachProvenance(steps: FlowStep[], nodes: FlowNode[]): { node: FlowNod
 
   const last = steps[steps.length - 1];
   // Prefer the explicit human node; a purely agent-to-agent chain (no human
-  // in it) falls back to whoever sent the very first hop.
-  const initiatorId = nodes.find((n) => n.kind === "human")?.id ?? steps[0]?.from ?? last?.to;
+  // in it) falls back to whoever sent the very first hop. Same helper the layout
+  // uses, so the seal always drops from the node sitting in the first column.
+  const initiatorId = flowOriginId(nodes, steps) ?? last?.to;
   const anyBlocked = steps.some((s) => s.verdict === "blocked");
 
   const sealEdges: SealEdge[] = initiatorId
@@ -256,14 +359,18 @@ function attachProvenance(steps: FlowStep[], nodes: FlowNode[]): { node: FlowNod
   // Sit directly beneath the initiator — the seal line runs from there, so the drop reads as a
   // short vertical hop rather than a long diagonal across the chain. Y is kept well inside the
   // frame: the node's caption renders below it and would otherwise clip off the canvas.
-  const anchor = nodes.find((n) => n.id === initiatorId) ?? (last ? nodes.find((n) => n.id === last.to) : undefined);
+  // Rule: the ledger sits directly beneath whichever node writes to it, so the
+  // seal reads as a short vertical drop rather than a diagonal across the chain.
+  // Clamped inside the frame because the caption renders below the icon.
+  const writerId = sealEdges[0]?.from ?? initiatorId;
+  const anchor = nodes.find((n) => n.id === writerId) ?? (last ? nodes.find((n) => n.id === last.to) : undefined);
   const node: FlowNode = {
     id: PROVENANCE_ID,
     kind: "provenance",
     name: "Provenance Layer",
     label: "",
-    x: anchor ? anchor.x : 0.5,
-    y: 0.82,
+    x: anchor ? Math.min(0.92, Math.max(0.08, anchor.x)) : 0.5,
+    y: 0.86,
   };
 
   return { node, sealEdges };
