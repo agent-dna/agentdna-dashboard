@@ -21,6 +21,7 @@ import {
   GATE2_WALLS,
   PLANE_W,
   ROW_H,
+  AGENTS_VISIBLE,
   USER_LIST_TOP,
   USER_PITCH,
   ago,
@@ -90,6 +91,8 @@ const REST: ObsScope = { range: "all", status: "all" };
 const RANGE_LABEL = "All time";
 const USERS_PAGE = 50;
 
+/** Room either side of agent cards inside their scroll box, so the pick ring isn't clipped. */
+const AGENT_GUTTER = 8;
 /** Edges below this volume collapse to a small dot instead of a count pill. */
 const PILL_THRESHOLD = 10;
 const ORDER: PlaneColumn[] = ["u", "a", "p", "i"];
@@ -163,9 +166,11 @@ export function InteractionPlane() {
   const [hoverEdge, setHoverEdge] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const [userScroll, setUserScroll] = useState(0);
+  const [agentScroll, setAgentScroll] = useState(0);
   const [searchMiss, setSearchMiss] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const userListRef = useRef<HTMLDivElement>(null);
+  const agentListRef = useRef<HTMLDivElement>(null);
 
   /* ---------- Data ---------- */
 
@@ -225,6 +230,7 @@ export function InteractionPlane() {
   const NODES = model?.nodes ?? {};
   const planeH = model?.height ?? 760;
   const userListH = planeH - USER_LIST_TOP;
+  const agentSlot = model?.agentSlot ?? userListH;
 
   const booting = graph.loading || summary.loading || (userPages.length === 0 && !usersError);
   const bootError = graph.error || summary.error || (userPages.length === 0 ? usersError : null);
@@ -324,6 +330,17 @@ export function InteractionPlane() {
       const next = { ...upstream, [col]: id };
       return FLOWS.some((f) => matchesChain(f, next)) ? next : { [col]: id };
     });
+    if (col === "u") revealAgentsOf(id);
+  };
+
+  /** If none of a user's agents is on screen in the agent list, scroll to the first of them. */
+  const revealAgentsOf = (userId: string) => {
+    const ys = FLOWS.filter((f) => f.n[0] === userId && f.n[1]).map((f) => NODES[f.n[1]]?.y ?? Infinity);
+    if (!ys.length || ys.some((y) => y - agentScroll > 0 && y - agentScroll < userListH)) return;
+    revealAgent(Math.min(...ys));
+  };
+  const revealAgent = (y: number) => {
+    agentListRef.current?.scrollTo({ top: Math.max(0, y - userListH / 2), behavior: "smooth" });
   };
 
   const nodeHandlers = (id: string) => ({
@@ -366,18 +383,25 @@ export function InteractionPlane() {
 
   const byColumn = (t: PlaneColumn) => Object.values(NODES).filter((n) => n.t === t);
   const userNodes = byColumn("u");
+  const agentNodes = byColumn("a");
 
   /* ---------- Edges, count pills and tooltip ---------- */
 
-  /** Where a node's centre sits on the canvas; users follow the list's scroll position. */
+  /** How far a node's scrollable list (users, agents) is scrolled; other columns don't scroll. */
+  const scrollOf = (node: PlaneNode) => (node.t === "u" ? userScroll : node.t === "a" ? agentScroll : null);
+
+  /** Where a node's centre sits on the canvas; users and agents follow their list's scroll position. */
   const canvasY = (node: PlaneNode) => {
-    if (node.t !== "u") return node.y;
-    const y = USER_LIST_TOP + node.y - userScroll;
-    // Users scrolled out of view anchor their lines to the list's top/bottom edge.
+    const scroll = scrollOf(node);
+    if (scroll == null) return node.y;
+    const y = USER_LIST_TOP + node.y - scroll;
+    // Rows scrolled out of view anchor their lines to the list's top/bottom edge.
     return Math.max(USER_LIST_TOP + 10, Math.min(USER_LIST_TOP + userListH - 10, y));
   };
-  const userInView = (node: PlaneNode) => {
-    const y = node.y - userScroll;
+  const inView = (node: PlaneNode) => {
+    const scroll = scrollOf(node);
+    if (scroll == null) return true;
+    const y = node.y - scroll;
     return y > 0 && y < userListH;
   };
 
@@ -393,7 +417,7 @@ export function InteractionPlane() {
       const cx = (x1 + x2) / 2;
       const my = (y1 + y2) / 2;
       const vis = visibility(litEdges.has(e.id));
-      const offscreen = a.t === "u" && !userInView(a);
+      const offscreen = !inView(a) || !inView(b);
       return { e, a, d: `M${x1} ${y1} C${cx} ${y1} ${cx} ${y2} ${x2} ${y2}`, cx, my, vis, offscreen };
     });
 
@@ -475,6 +499,7 @@ export function InteractionPlane() {
       setChain({ [hit.t]: hit.id });
       setHovered(null);
       if (hit.t === "u") revealUser(hit.y);
+      if (hit.t === "a") revealAgent(hit.y);
       return;
     }
     // Not on a loaded page — ask the server, then add the user to the bottom of the list.
@@ -505,7 +530,7 @@ export function InteractionPlane() {
       ? `Summary unavailable · ${RANGE_LABEL}`
       : "Loading…";
 
-  const isEmpty = !!model && userNodes.length === 0 && byColumn("a").length === 0;
+  const isEmpty = !!model && userNodes.length === 0 && agentNodes.length === 0;
 
   return (
     <div className="ip-layout">
@@ -552,6 +577,7 @@ export function InteractionPlane() {
           <div className="ip-canvas" style={{ width: PLANE_W, height: planeH, transform: `scale(${scale})` }}>
             <GateBand
               left={204}
+              height={planeH}
               lit={cocaLit}
               tone="coca"
               name="COCA"
@@ -564,6 +590,7 @@ export function InteractionPlane() {
             />
             <GateBand
               left={GATE2_WALLS[0].left}
+              height={planeH}
               lit={gate2Lit}
               tone="coca"
               name="COCA"
@@ -576,6 +603,7 @@ export function InteractionPlane() {
             />
             <GateBand
               left={GATE2_WALLS[1].left}
+              height={planeH}
               lit={gate2Lit}
               tone="cbac"
               name="CBAC"
@@ -588,6 +616,7 @@ export function InteractionPlane() {
             />
             <GateBand
               left={GATE2_WALLS[2].left}
+              height={planeH}
               lit={gate2Lit}
               tone="whitelist"
               name="Whitelist"
@@ -724,15 +753,30 @@ export function InteractionPlane() {
               </div>
             </div>
 
-            {byColumn("a").map((n) => (
-              <div key={n.id} className="ip-node ip-node-agent" style={nodeBox(n)} title={n.ref} {...nodeHandlers(n.id)}>
-                <div className="ip-glyph ip-glyph-agent"><Icon name="agents" size={16} /></div>
-                <div className="ip-node-text">
-                  <div className="ip-node-name ip-display">{n.name}</div>
-                  <div className="ip-node-sub ip-mono">{n.sub}</div>
-                </div>
+            <div
+              ref={agentListRef}
+              className={`ip-user-list ip-agent-list${agentNodes.length > AGENTS_VISIBLE ? " scrolls" : ""}`}
+              style={{ left: COLUMNS.a[0] - AGENT_GUTTER, top: USER_LIST_TOP, height: userListH, width: COLUMNS.a[1] - COLUMNS.a[0] + AGENT_GUTTER * 2 }}
+              onScroll={(ev) => setAgentScroll(ev.currentTarget.scrollTop)}
+            >
+              <div style={{ position: "relative", height: agentNodes.length * agentSlot }}>
+                {agentNodes.map((n) => (
+                  <div
+                    key={n.id}
+                    className="ip-node ip-node-agent"
+                    style={{ left: AGENT_GUTTER, top: n.y - ROW_H.a / 2, width: COLUMNS.a[1] - COLUMNS.a[0], height: ROW_H.a, ...nodeLook(n) }}
+                    title={n.ref}
+                    {...nodeHandlers(n.id)}
+                  >
+                    <div className="ip-glyph ip-glyph-agent"><Icon name="agents" size={16} /></div>
+                    <div className="ip-node-text">
+                      <div className="ip-node-name ip-display">{n.name}</div>
+                      <div className="ip-node-sub ip-mono">{n.sub}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
 
             {byColumn("p").map((n) => (
               <div key={n.id} className="ip-node ip-node-app" style={nodeBox(n)} title={n.ref} {...nodeHandlers(n.id)}>
@@ -861,6 +905,7 @@ function ColumnLabel({ left, width, n, hint }: { left: number; width: number; n:
 
 interface GateBandProps {
   left: number;
+  height: number;
   lit: boolean;
   tone: "coca" | "cbac" | "whitelist";
   name: string;
@@ -873,9 +918,9 @@ interface GateBandProps {
   fail: string;
 }
 
-function GateBand({ left, lit, tone, name, icon, verb, desc, value, unit, fail }: GateBandProps) {
+function GateBand({ left, height, lit, tone, name, icon, verb, desc, value, unit, fail }: GateBandProps) {
   return (
-    <div className={`ip-gate ip-gate-${tone}${lit ? " lit" : ""}`} style={{ left }}>
+    <div className={`ip-gate ip-gate-${tone}${lit ? " lit" : ""}`} style={{ left, height }}>
       <div className="ip-gate-card">
         <div className="ip-gate-head">
           <Icon name={icon} size={14} />

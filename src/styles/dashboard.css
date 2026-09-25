@@ -2264,6 +2264,8 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 }
 .ip-user-list::-webkit-scrollbar { width: 6px; }
 .ip-user-list::-webkit-scrollbar-thumb { background: rgba(15,32,70,.25); border-radius: 99px; }
+/* Agent list reuses the user list's scroll box; the edge fade only matters once it scrolls. */
+.ip-agent-list:not(.scrolls) { -webkit-mask-image: none; mask-image: none; }
 
 .ip-gate {
   position: absolute; top: 0; width: 112px; height: 760px; box-sizing: border-box; border-radius: 12px; border: 1px solid;

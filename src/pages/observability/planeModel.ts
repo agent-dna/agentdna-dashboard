@@ -18,7 +18,7 @@ export interface PlaneNode {
   ref: string;
   name: string;
   /**
-   * Vertical centre. Users: relative to the top of the scrollable user list.
+   * Vertical centre. Users and agents: relative to the top of their scrollable list.
    * Everything else: relative to the canvas.
    */
   y: number;
@@ -62,6 +62,8 @@ export interface PlaneModel {
   edges: PlaneEdge[];
   flows: PlaneFlow[];
   height: number;
+  /** Row pitch in the agent list; the list shows AGENTS_VISIBLE rows and scrolls past that. */
+  agentSlot: number;
 }
 
 export const PLANE_W = 1452;
@@ -77,7 +79,9 @@ export const ROW_H: Record<PlaneColumn, number> = { u: 48, a: 60, p: 48, i: 60 }
 /** The user layer is a scrollable list below the column title. */
 export const USER_LIST_TOP = 56;
 export const USER_PITCH = 60;
-const PITCH: Record<"a" | "p" | "i", number> = { a: 76, p: 60, i: 72 };
+/** The agent layer is a scrollable list showing this many agents at a time. */
+export const AGENTS_VISIBLE = 10;
+const PITCH: Record<"p" | "i", number> = { p: 60, i: 72 };
 
 export const COLUMN_TYPE: Record<PlaneColumn, string> = { u: "User", a: "Agent", p: "App", i: "Intent" };
 
@@ -197,10 +201,11 @@ export function buildPlaneModel({ graph, users, userFlow, intents }: BuildInput)
 
   const height = Math.max(
     MIN_PLANE_H,
-    USER_LIST_TOP + 24 + Math.max(agents.length * PITCH.a, apps.length * PITCH.p, intentList.length * PITCH.i),
+    USER_LIST_TOP + 24 + Math.max(apps.length * PITCH.p, intentList.length * PITCH.i),
   );
 
-  const agentY = spread(agents.length, PITCH.a, height);
+  // Up to AGENTS_VISIBLE agents share the list's height evenly; past that the list scrolls.
+  const agentSlot = (height - USER_LIST_TOP) / Math.max(1, Math.min(agents.length, AGENTS_VISIBLE));
   agents.forEach((a, k) => {
     const id = nodeId("a", a.agentDID);
     nodes[id] = {
@@ -209,7 +214,7 @@ export function buildPlaneModel({ graph, users, userFlow, intents }: BuildInput)
       ref: a.agentDID,
       name: a.agentName || a.agentDID,
       sub: `${a.usersCount} user${a.usersCount === 1 ? "" : "s"}${a.revoked ? " · revoked" : ""}`,
-      y: agentY(k),
+      y: agentSlot * (k + 0.5),
     };
   });
 
@@ -323,5 +328,5 @@ export function buildPlaneModel({ graph, users, userFlow, intents }: BuildInput)
     });
   }
 
-  return { nodes, edges: [...edges.values()], flows, height };
+  return { nodes, edges: [...edges.values()], flows, height, agentSlot };
 }
