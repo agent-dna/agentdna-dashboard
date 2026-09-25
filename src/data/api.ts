@@ -1,10 +1,8 @@
-// Data layer — mixes real API calls with stubs for endpoints that don't exist yet.
+// Data layer — real API calls; shapes are mapped into the UI types here.
 // Shapes defined in src/types.ts; API contracts in the middleware README.
 
 import { apiRequest } from "../api/client";
-import { isDummyMode } from "./dummyRouter";
 import { getDirectorySnapshot, waitForDirectoryReady } from "./directoryCache";
-import dummy from "./dummy.json";
 import type {
   Agent,
   Tool,
@@ -705,9 +703,6 @@ export async function fetchAllIntents(): Promise<Intent[]> {
 }
 
 export async function fetchSeries(range: "24h" | "7d" | "30d"): Promise<TimeSeries> {
-  if (isDummyMode()) {
-    return dummySeries(range);
-  }
   try {
     const res = await apiRequest<{ safe: number[]; threats: number[] }>(
       "/interactions/series",
@@ -721,65 +716,6 @@ export async function fetchSeries(range: "24h" | "7d" | "30d"): Promise<TimeSeri
   } catch {
     return { total: [], safe: [], threats: [] };
   }
-}
-
-interface DummyInteractionForSeries {
-  time: string;
-  threat: boolean;
-}
-
-/**
- * Bucket dummy interactions into hourly (24h) or daily (7d) slots ending "now".
- * Built so the demo chart isn't flat — values come from the dummy.json times,
- * augmented with a small synthetic baseline so we don't show a row of zeros.
- */
-function dummySeries(range: "24h" | "7d" | "30d"): TimeSeries {
-  const ix: DummyInteractionForSeries[] = (dummy.intents as Array<{ interactions: DummyInteractionForSeries[] }>)
-    .flatMap((i) => i.interactions);
-
-  const buckets = range === "24h" ? 24 : range === "7d" ? 7 : 30;
-  const stepMs = range === "24h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
-  // Anchor on the latest interaction so the chart fills the whole window even
-  // if "now" has drifted past the seeded times.
-  const latest = ix.reduce(
-    (m, x) => Math.max(m, new Date(x.time).getTime()),
-    new Date(dummy.intents[0]?.startedAt || "").getTime() || 0,
-  ) || Date.now();
-  const endMs = latest;
-  const startMs = endMs - (buckets - 1) * stepMs;
-
-  const safe = Array<number>(buckets).fill(0);
-  const threats = Array<number>(buckets).fill(0);
-
-  for (const x of ix) {
-    const t = new Date(x.time).getTime();
-    if (Number.isNaN(t)) continue;
-    const b = Math.floor((t - startMs) / stepMs);
-    if (b < 0 || b >= buckets) continue;
-    if (x.threat) threats[b]++;
-    else safe[b]++;
-  }
-
-  // Layer a deterministic baseline so the chart looks alive even when the
-  // bucketed dataset is sparse.
-  const baseline = range === "24h"
-    ? [4, 3, 2, 2, 3, 4, 6, 9, 12, 15, 17, 19, 22, 24, 23, 21, 19, 17, 15, 13, 11, 9, 7, 5]
-    : range === "7d"
-    ? [42, 51, 48, 63, 70, 58, 66]
-    : [38, 42, 45, 50, 48, 55, 60, 58, 63, 66, 70, 68, 72, 75, 71, 69, 74, 78, 76, 80, 77, 73, 68, 65, 70, 74, 72, 76, 80, 78];
-  const threatBaseline = range === "24h"
-    ? [0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 4, 4, 3, 2, 2, 1, 1, 0, 0, 0, 0]
-    : range === "7d"
-    ? [3, 5, 4, 6, 7, 5, 4]
-    : [2, 3, 2, 4, 3, 5, 4, 3, 5, 6, 5, 4, 6, 7, 5, 4, 6, 7, 5, 6, 4, 3, 5, 4, 6, 5, 4, 6, 7, 5];
-
-  for (let i = 0; i < buckets; i++) {
-    safe[i] += baseline[i] ?? 0;
-    threats[i] += threatBaseline[i] ?? 0;
-  }
-
-  const total = safe.map((v, i) => v + threats[i]);
-  return { total, safe, threats };
 }
 
 export async function fetchHeatmap(): Promise<HeatmapRow[]> {

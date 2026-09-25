@@ -15,7 +15,7 @@ type Mode = "login" | "register";
 const USER_ORG_ID = "AGENT_DNA_BETA";
 
 export function LoginPage() {
-  const { user, login, loginAdmin, registerAdmin, registerUser, devPreview } = useAuth();
+  const { user, login, loginAdmin, registerAdmin, registerUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -244,30 +244,6 @@ export function LoginPage() {
             </button>
           </form>
 
-          {/* Dev-only shortcut into the app with mock data — stripped from production builds. */}
-          {import.meta.env.DEV && (
-            <button
-              type="button"
-              onClick={() => {
-                devPreview();
-                navigate("/observability", { replace: true });
-              }}
-              style={{
-                marginTop: 12,
-                width: "100%",
-                padding: "10px 14px",
-                borderRadius: 8,
-                border: "1px dashed var(--line-strong)",
-                background: "transparent",
-                color: "var(--fg-muted)",
-                fontSize: 12.5,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Dev: open Observability without signing in
-            </button>
-          )}
 
           {/* Footer link */}
           <div style={footerStyle}>

@@ -9,7 +9,17 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5199/)",
       "Bash(node drive.cjs)",
       "Bash(sed -i '' 's#localhost:5199/\"#localhost:5199/login\"#; s#name: /preview/i#name: /open Observability/i#' drive.cjs)",
-      "Bash(perl -0pi -e 's#\\(click\\\\\\(\\\\\\);\\\\n\\)\\(  await page.waitForSelector\\\\\\(\"\\\\.ip-canvas\"\\\\\\);\\)#$1  await page.waitForURL\\(/dashboard|observability/\\);\\\\n  errors.length = 0; // ignore pre-login noise\\\\n  await page.goto\\(\"http://localhost:5199/observability\"\\);\\\\n$2#' drive.cjs)"
+      "Bash(perl -0pi -e 's#\\(click\\\\\\(\\\\\\);\\\\n\\)\\(  await page.waitForSelector\\\\\\(\"\\\\.ip-canvas\"\\\\\\);\\)#$1  await page.waitForURL\\(/dashboard|observability/\\);\\\\n  errors.length = 0; // ignore pre-login noise\\\\n  await page.goto\\(\"http://localhost:5199/observability\"\\);\\\\n$2#' drive.cjs)",
+      "Bash(lsof -iTCP:5432 -sTCP:LISTEN)",
+      "Bash(pg_isready -h localhost)",
+      "Bash(node -e \"console.log\\(require\\('eslint-plugin-react-hooks/package.json'\\).version\\)\")",
+      "Bash(git rm *)",
+      "Bash(node -e 'const r=JSON.parse\\(require\\(\"fs\"\\).readFileSync\\(0\\)\\);for\\(const f of r\\)for\\(const m of f.messages\\)console.log\\(f.filePath.split\\(\"agentdna-dashboard/\"\\)[1]+\":\"+m.line, m.ruleId\\)')",
+      "Bash(echo \"exit $?\")",
+      "Bash(node /private/tmp/claude-501/-Users-rubix-dashboard-agentDNA-1-agentdna-dashboard/14c96afb-48b9-4f6f-926d-ddd54ac3337c/scratchpad/fakeapi.cjs)",
+      "Bash(VITE_API_BASE_URL=http://localhost:9911/dashboard/v1/ npx vite --port 5199 --strictPort)",
+      "Bash(node drive3.cjs)",
+      "Bash(xargs kill)"
     ]
   }
 }

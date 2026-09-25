@@ -1,5 +1,3 @@
-import { dummyRespond, isDummyMode, isDevPreview } from "../data/dummyRouter";
-
 // No localhost fallback here on purpose — a deployed build with a missing/misconfigured
 // VITE_API_BASE_URL should fail loudly (see the guard in apiRequest/apiUpload below),
 // not silently start firing requests at whoever's machine happens to be running it.
@@ -60,19 +58,6 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, query, auth = true, skipLogoutOn401 = false } = opts;
-
-  if (isDummyMode()) {
-    const out = dummyRespond(path, query, method);
-    if (out !== undefined) {
-      console.log(`[DUMMY ${method} ${path}]`, query || {}, "→", out);
-      return out as T;
-    }
-    // Offline preview: never touch the network. Status 0 keeps this clear of the
-    // 401 handler, which would otherwise wipe the session and bounce to login.
-    if (isDevPreview()) {
-      throw new ApiError(`dev preview: no mock for ${method} ${path}`, 0);
-    }
-  }
 
   if (!BASE) {
     throw new ApiError(
@@ -155,17 +140,6 @@ export async function apiUpload<T>(
   opts: { method?: string; auth?: boolean } = {},
 ): Promise<T> {
   const { method = "POST", auth = true } = opts;
-
-  if (isDummyMode()) {
-    const out = dummyRespond(path, undefined, method);
-    if (out !== undefined) {
-      console.log(`[DUMMY ${method} ${path}] (multipart)`, "→", out);
-      return out as T;
-    }
-    if (isDevPreview()) {
-      throw new ApiError(`dev preview: no mock for ${method} ${path}`, 0);
-    }
-  }
 
   if (!BASE) {
     throw new ApiError(

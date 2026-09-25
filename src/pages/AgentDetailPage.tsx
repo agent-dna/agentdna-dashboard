@@ -16,7 +16,6 @@ import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
 import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
-import { isDummyMode } from "../data/dummyRouter";
 import { initials, timeAgo, timeAgoLong, capitalizeFirst } from "../lib/format";
 import { LedgerTable } from "../components/LedgerTable";
 import { AppIcon } from "../components/AppIcon";
@@ -235,7 +234,7 @@ export function AgentDetailPage() {
         </button>
         <span style={{ color: "var(--fg-faint)" }}>/</span>
         <span style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600 }}>
-          {isDummyMode() ? agent.name : agent.id}
+          {agent.id}
         </span>
       </div>
 
@@ -279,11 +278,9 @@ export function AgentDetailPage() {
                 agent
               </span>
             </div>
-            {!isDummyMode() && (
-              <div style={{ color: "var(--fg-muted)", fontSize: 13, fontFamily: "var(--font-mono)", marginBottom: 16 }}>
-                {agent.id}
-              </div>
-            )}
+            <div style={{ color: "var(--fg-muted)", fontSize: 13, fontFamily: "var(--font-mono)", marginBottom: 16 }}>
+              {agent.id}
+            </div>
 
             <div
               style={{

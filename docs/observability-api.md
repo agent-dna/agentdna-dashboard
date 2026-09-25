@@ -1,6 +1,6 @@
 # Observability · Interaction plane — backend API spec
 
-Status: **proposed — updated 2026-09-25 with backend review findings** · Frontend: `src/pages/observability/InteractionPlane.tsx` (currently on mock data in `interactionPlaneData.ts`)
+Status: **implemented (Phase 1) — middleware `handler/observability.go`** · Frontend: `src/pages/observability/InteractionPlane.tsx`, fetchers in `src/api/observability.ts`, graph model in `planeModel.ts`
 
 This document describes the six read-only endpoints the Observability "Interaction plane" needs to run on real data, how each one should derive its numbers from the data the backend already stores, and the order the frontend calls them in.
 
@@ -371,7 +371,7 @@ Esc ─► clear selection (no call)
 
 Suggested caching: key `user-flow` and `intents` responses by `(userDID, agentDID, range, status)` and keep them for the session, so back-and-forth clicking doesn't refetch. Cache `graph` and `summary` per `(range, status)`.
 
-Frontend work once these exist: replace `interactionPlaneData.ts` with fetchers in `src/data/api.ts` (same mapper style as `fetchThreatsList`), build `NODES`/`EDGES` from `graph` + loaded `users` pages, and lay users out by list index (as the mock already does). Add dummy-mode responses to `src/data/dummyRouter.ts` so the dev preview keeps working offline.
+Frontend implementation: the canvas loads `summary`, `graph` and `users` with `status=all` and filters client-side, so a filter dims nodes instead of removing them. Only `/observability-paths` (the trace table) is called with the active `status=`. Responses are cached per key for the life of the page.
 
 ---
 

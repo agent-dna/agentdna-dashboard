@@ -44,7 +44,7 @@ export function IntentReviewProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Falls back to a zero count if no provider is mounted (e.g. dummy mode pages that don't wrap it). */
+/** Falls back to a zero count if no provider is mounted (e.g. pages that don't wrap it). */
 export function useIntentReview(): IntentReviewContextValue {
   return (
     useContext(Ctx) ?? { unacknowledgedCount: 0, loading: false, refetch: () => {} }

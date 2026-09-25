@@ -2,7 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { login as apiLogin, adminLogin as apiAdminLogin, adminRegister as apiAdminRegister, registerAdminMiddleware, registerUser as apiRegisterUser, type LoginResponse } from "../api/auth";
 import { getToken, setToken, setUnauthorizedHandler } from "../api/client";
 import { fetchUserProfile, fetchAdminProfile } from "../api/profile";
-import { dummyCurrentUser, isDummyMode, setDevPreview } from "../data/dummyRouter";
 
 const USER_KEY = "agentdna.user";
 const SESSION_START_KEY = "agentdna.sessionStart";
@@ -70,11 +69,6 @@ interface AuthContextValue {
   registerUser: (username: string, email: string, password: string, orgId: string, otp?: string) => Promise<void>;
   logout: () => void;
   patchUser: (patch: Partial<AuthUser>) => void;
-  /**
-   * Dev-only: drop into the app as the dummy user without hitting the login API.
-   * Guarded by import.meta.env.DEV, so it is a no-op in a production build.
-   */
-  devPreview: () => void;
 }
 
 const Ctx = createContext<AuthContextValue | null>(null);
@@ -138,22 +132,8 @@ function writeStoredUser(user: AuthUser | null) {
   }
 }
 
-function dummyUser(): AuthUser {
-  const u = dummyCurrentUser();
-  return {
-    did: u.did,
-    email: u.email,
-    org_id: u.org_id,
-    api_key: u.api_key,
-    userCardId: u.nft_id,
-    is_admin: u.is_admin,
-  };
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const dummy = isDummyMode();
   const [user, setUser] = useState<AuthUser | null>(() => {
-    if (dummy) return dummyUser();
     // A token that is past its exp, or a session older than 7 days, is dead — don't
     // restore a logged-in shell the backend will only answer with 401s.
     if (!userFromToken(getToken()) || isSessionExpired()) {
@@ -164,11 +144,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     return readStoredUser() || userFromToken(getToken());
   });
-  const [token, setTokenState] = useState<string | null>(() => (dummy ? "dummy.jwt.token" : getToken()));
+  const [token, setTokenState] = useState<string | null>(() => getToken());
   const [loading, setLoading] = useState(false);
 
   const logout = useCallback(() => {
-    setDevPreview(false);
     setToken(null);
     writeStoredUser(null);
     clearSessionStart();
@@ -189,7 +168,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Proactively sign out when the JWT expires or the 7-day session cap is hit —
   // both while the tab stays open and when it wakes back up after being away.
   useEffect(() => {
-    if (dummy) return;
     const check = () => {
       const tok = getToken();
       if (!tok) return;
@@ -208,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("focus", check);
       document.removeEventListener("visibilitychange", check);
     };
-  }, [dummy]);
+  }, []);
 
   const applyAuthResponse = useCallback((res: LoginResponse) => {
     const u: AuthUser = {
@@ -246,20 +224,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, []);
 
-  const login = useCallback(async (email: string, _password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     try {
-      if (isDummyMode()) {
-        const u = dummyUser();
-        u.email = email || u.email;
-        setToken("dummy.jwt.token");
-        markSessionStart();
-        writeStoredUser(u);
-        setUser(u);
-        setTokenState("dummy.jwt.token");
-        return;
-      }
-      applyAuthResponse(await apiLogin(email, _password));
+      applyAuthResponse(await apiLogin(email, password));
       fetchAndPatchName(false);
     } finally {
       setLoading(false);
@@ -280,17 +248,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginAdmin = useCallback(async (username: string, password: string) => {
     setLoading(true);
     try {
-      if (isDummyMode()) {
-        const u = dummyUser();
-        u.email = username || u.email;
-        u.is_admin = true;
-        setToken("dummy.jwt.token");
-        markSessionStart();
-        writeStoredUser(u);
-        setUser(u);
-        setTokenState("dummy.jwt.token");
-        return;
-      }
       applyJwt(await apiAdminLogin(username, password));
       fetchAndPatchName(true);
     } finally {
@@ -301,18 +258,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const registerAdmin = useCallback(async (username: string, email: string, password: string, org: string, otp = "") => {
     setLoading(true);
     try {
-      if (isDummyMode()) {
-        const u = dummyUser();
-        u.email = email || username || u.email;
-        u.org_id = org || u.org_id;
-        u.is_admin = true;
-        setToken("dummy.jwt.token");
-        markSessionStart();
-        writeStoredUser(u);
-        setUser(u);
-        setTokenState("dummy.jwt.token");
-        return;
-      }
       const { did } = await apiAdminRegister({ username, email, orgID: org, password, otp });
       await registerAdminMiddleware(did, org);
       applyJwt(await apiAdminLogin(username, password));
@@ -325,18 +270,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const registerUser = useCallback(async (name: string, email: string, password: string, orgId: string, otp = "") => {
     setLoading(true);
     try {
-      if (isDummyMode()) {
-        const u = dummyUser();
-        u.email = email || name || u.email;
-        u.org_id = orgId || u.org_id;
-        u.is_admin = false;
-        setToken("dummy.jwt.token");
-        markSessionStart();
-        writeStoredUser(u);
-        setUser(u);
-        setTokenState("dummy.jwt.token");
-        return;
-      }
       await apiRegisterUser({ name: name || undefined, email, password, orgID: orgId, otp });
       applyAuthResponse(await apiLogin(email, password));
       fetchAndPatchName(false);
@@ -354,20 +287,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const devPreview = useCallback(() => {
-    if (!import.meta.env.DEV) return;
-    // Turn on offline mock mode before the user lands, so no page can fire a
-    // real request and 401 the session away.
-    setDevPreview(true);
-    const u = dummyUser();
-    setUser(u);
-    setTokenState("dummy.jwt.token");
-    writeStoredUser(u);
-  }, []);
-
   const value = useMemo<AuthContextValue>(
-    () => ({ user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser, devPreview }),
-    [user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser, devPreview],
+    () => ({ user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser }),
+    [user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
