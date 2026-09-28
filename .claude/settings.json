@@ -20,7 +20,8 @@
       "Bash(VITE_API_BASE_URL=http://localhost:9911/dashboard/v1/ npx vite --port 5199 --strictPort)",
       "Bash(node drive3.cjs)",
       "Bash(xargs kill)",
-      "Bash(grep -rnE \">\\\\s*View\\\\s*<|\\\\\"View\\\\\"|'View'|^\\\\s*View\\\\s*$\" src)"
+      "Bash(grep -rnE \">\\\\s*View\\\\s*<|\\\\\"View\\\\\"|'View'|^\\\\s*View\\\\s*$\" src)",
+      "Bash(grep -n \"onViewFlow\\\\s*=\\\\|const onViewFlow\\\\|navigate\\(\\\\`/flow\" -A3 src/components/drawer/IntentDetail.tsx)"
     ]
   }
 }

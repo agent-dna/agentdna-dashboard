@@ -100,11 +100,54 @@ export interface ObsIntentsPage extends Paged {
   intentsList: ObsIntent[];
 }
 
+export interface ObsInteraction {
+  interactionID: string;
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  /** "trigger" | "delegate" | "response" | … */
+  type: string;
+  direction: string;
+  message: string;
+  signature: string;
+  threat: boolean;
+  threatID: string;
+  time: string;
+  provenanceRecordID?: string;
+  provenanceReqID?: string;
+}
+
+/** The intent on a path row. The detail fields come back when the paths call is filtered by `intentID`. */
+export interface ObsPathIntent {
+  id: string;
+  /** First few words; `titleFull` is the whole first message. */
+  title: string;
+  titleFull?: string;
+  initiatorDID?: string;
+  initiatorName?: string;
+  executor?: string;
+  flowType?: string;
+  chainDepth?: number;
+  agentsCount?: number;
+  toolsCount?: number;
+  interactionsCount?: number;
+  startedAt?: string;
+  firstInteractionAt?: string;
+  lastInteractionAt?: string;
+  runtimeSeconds?: number;
+  status?: string;
+  reviewStatus?: string;
+  threatDetected?: boolean;
+  provenanceRecordID?: string;
+  interactions?: ObsInteraction[];
+}
+
 export interface ObsPath {
   user: { did: string; name: string };
   agent: { did: string; name: string };
   app: { did: string; name: string } | null;
-  intent: { id: string; title: string } | null;
+  intent: ObsPathIntent | null;
   gate1: { result: "pass" | "fail"; count: number };
   gate2: {
     coca: { result: ObsWallResult; count: number };

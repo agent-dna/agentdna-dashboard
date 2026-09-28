@@ -13,7 +13,6 @@ import {
   type ObsUser,
   type ObsUsersPage,
   type ObsWallResult,
-  type ObsWallStats,
 } from "../../api/observability";
 import {
   COLUMNS,
@@ -34,6 +33,7 @@ import {
   type PlaneNode,
   type PlaneStatus,
 } from "./planeModel";
+import { IntentDetailPanel } from "./IntentDetailPanel";
 
 /**
  * Observability · Interaction plane.
@@ -466,6 +466,13 @@ export function InteractionPlane() {
       : Object.fromEntries(ORDER.filter((c) => chain[c]).map((c) => [PATH_PARAM[c], refOf(chain[c]!)]));
   const pathsKey = pathFilter && `paths:${filter}:${JSON.stringify(pathFilter)}`;
   const paths = useObsQuery(pathsKey, () => fetchObsPaths({ ...REST, status: filter }, pathFilter!));
+
+  // The picked intent's detail has its own call, so it stays put while the filter or a hover preview changes the table.
+  const pickedIntent = chain.i ? refOf(chain.i) : null;
+  const intentDetail = useObsQuery(pickedIntent && `intent-detail:${pickedIntent}`, () =>
+    fetchObsPaths(REST, { intentID: pickedIntent! }, 1),
+  );
+  const nameOf = (did: string) => (["u", "a", "p"] as const).map((t) => NODES[nodeId(t, did)]?.name).find(Boolean);
   const rows = paths.data?.pathsList ?? [];
 
   const flaggedCount = rows.filter((r) => r.outcome === "flagged").length;
@@ -544,9 +551,6 @@ export function InteractionPlane() {
 
   /* ---------- Gate numbers ---------- */
 
-  const gates = summary.data?.gates;
-  const rate = (w: ObsWallStats | null | undefined) => (w ? `${w.passRate}%` : "—");
-  const fails = (w: ObsWallStats | null | undefined) => (w ? `${w.fail.toLocaleString()} flagged` : "");
   const headline = summary.data
     ? `${plural(summary.data.identities, "identity").replace("identitys", "identities")} · ${plural(summary.data.agents, "agent")} · ` +
       `${plural(summary.data.apps, "app")} · ${summary.data.toolInteractions.toLocaleString()} tool interactions · ${RANGE_LABEL}`
@@ -608,9 +612,6 @@ export function InteractionPlane() {
               icon="shield"
               verb="VERIFY"
               desc="Identity & integrity"
-              value={rate(gates?.gate1Coca)}
-              unit="verified"
-              fail={fails(gates?.gate1Coca)}
             />
             <GateBand
               left={GATE2_WALLS[0].left}
@@ -621,9 +622,6 @@ export function InteractionPlane() {
               icon="shield"
               verb="VERIFY"
               desc="Agent identity & integrity"
-              value={rate(gates?.gate2Coca)}
-              unit="verified"
-              fail={fails(gates?.gate2Coca)}
             />
             <GateBand
               left={GATE2_WALLS[1].left}
@@ -634,9 +632,6 @@ export function InteractionPlane() {
               icon="key"
               verb="AUTHORIZE"
               desc="Policy & authorization"
-              value={gates && !gates.gate2Cbac ? null : rate(gates?.gate2Cbac)}
-              unit="allowed"
-              fail={fails(gates?.gate2Cbac)}
             />
             <GateBand
               left={GATE2_WALLS[2].left}
@@ -647,9 +642,6 @@ export function InteractionPlane() {
               icon="check"
               verb="APPROVED"
               desc="Agent approved, not revoked"
-              value={rate(gates?.gate2Whitelist)}
-              unit="approved"
-              fail={fails(gates?.gate2Whitelist)}
             />
 
             <ColumnLabel left={0} width={168} n="01 · USER" hint={`Who initiated · ${usersTotal}`} />
@@ -870,6 +862,24 @@ export function InteractionPlane() {
           </div>
         </div>
 
+        {pickedIntent && (
+          <IntentDetailPanel
+            intentId={pickedIntent}
+            intent={intentDetail.data?.pathsList[0]?.intent ?? null}
+            loading={intentDetail.loading}
+            error={intentDetail.error}
+            onRetry={intentDetail.retry}
+            onClose={() =>
+              setChain((cur) => {
+                const next = { ...cur };
+                delete next.i;
+                return next;
+              })
+            }
+            nameOf={nameOf}
+          />
+        )}
+
         {/* ================= Trace table ================= */}
         <div className="ip-trace">
           <div className="ip-trace-head">
@@ -977,13 +987,9 @@ interface GateBandProps {
   icon: "shield" | "key" | "check";
   verb: string;
   desc: string;
-  /** null → the wall isn't recorded yet; the band says so instead of showing numbers. */
-  value: string | null;
-  unit: string;
-  fail: string;
 }
 
-function GateBand({ left, height, lit, tone, name, icon, verb, desc, value, unit, fail }: GateBandProps) {
+function GateBand({ left, height, lit, tone, name, icon, verb, desc }: GateBandProps) {
   return (
     <div className={`ip-gate ip-gate-${tone}${lit ? " lit" : ""}`} style={{ left, height }}>
       <div className="ip-gate-card">
@@ -994,15 +1000,6 @@ function GateBand({ left, height, lit, tone, name, icon, verb, desc, value, unit
         </div>
         <div className="ip-gate-verb">{verb}</div>
         <div className="ip-gate-desc">{desc}</div>
-        {value == null ? (
-          <div className="ip-gate-untracked">Not tracked yet</div>
-        ) : (
-          <>
-            <div className="ip-gate-value">{value}</div>
-            <div className="ip-mono ip-gate-unit">{unit}</div>
-            <div className="ip-mono ip-gate-fail">{fail}</div>
-          </>
-        )}
       </div>
     </div>
   );
@@ -1040,8 +1037,8 @@ function PathRow({ row }: { row: ObsPath }) {
       <WallBadge wall={row.gate2?.whitelist} />
       <span className="ip-ellipsis" style={{ color: "var(--fg-dim)" }}>{row.app ? row.app.name || row.app.did : "—"}</span>
       <span className="ip-intent-cell">
-        <span className="ip-ellipsis" style={{ color: row.intent ? undefined : "var(--fg-faint)" }} title={row.intent?.title}>
-          {row.intent ? row.intent.title || row.intent.id : row.gate1.result === "fail" ? "Identity check flagged" : "Pick a user + agent"}
+        <span className="ip-ellipsis" style={{ color: row.intent ? undefined : "var(--fg-faint)" }} title={row.intent?.titleFull ?? row.intent?.title}>
+          {row.intent ? row.intent.titleFull || row.intent.title || row.intent.id : row.gate1.result === "fail" ? "Identity check flagged" : "Pick a user + agent"}
         </span>
         <span className="ip-mono ip-faint">{fmt(row.interactionsCount)} ixns</span>
       </span>
