@@ -44,7 +44,8 @@ import { IntentDetailPanel } from "./IntentDetailPanel";
  *
  * Selection drills left to right: pick a user and the agents they used light up; pick
  * one of those agents and the apps it called in that user's loop light up, with the
- * intents. The table below lists every path matching the current selection.
+ * intents. The box below shows every path matching the selection as its hops, or the
+ * picked intent's detail.
  * Data: middleware `/observability-*` endpoints (src/api/observability.ts).
  */
 
@@ -86,7 +87,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 /**
  * The canvas always loads everything in the window and filters client-side (so a filter
- * dims rather than removes); only the trace table asks the server with `status=`.
+ * dims rather than removes); only the trace box asks the server with `status=`.
  */
 const REST: ObsScope = { range: "all", status: "all" };
 const RANGE_LABEL = "All time";
@@ -480,11 +481,31 @@ export function InteractionPlane() {
   const agentCount = new Set(rows.map((r) => r.agent.did)).size;
   const appCount = new Set(rows.map((r) => r.app?.did).filter(Boolean)).size;
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  const traceSub = paths.data
-    ? `${plural(paths.data.total, "path")} · ${plural(agentCount, "agent")} · ${plural(appCount, "app")}` +
-      (flaggedCount ? ` · ${flaggedCount} flagged` : "") +
-      (elevatedCount ? ` · ${elevatedCount} elevated` : "")
-    : "";
+  const gateFailCount = rows.filter(
+    (r) => r.gate1.result === "fail" || (r.gate2 && GATE2_WALLS.some((w) => r.gate2![w.key].result === "fail")),
+  ).length;
+  const traceStats: [string, string, PlaneStatus?][] = paths.data
+    ? [
+        ["Paths", paths.data.total.toLocaleString()],
+        ["Interactions", rows.reduce((s, r) => s + r.interactionsCount, 0).toLocaleString()],
+        ["Agents", String(agentCount)],
+        ["Apps", String(appCount)],
+        ["Gate failures", String(gateFailCount), "flagged"],
+        ["Flagged", String(flaggedCount), "flagged"],
+        ["Needs review", String(elevatedCount), "elevated"],
+      ]
+    : [];
+  /** Open a path's intent in the detail box, keeping the canvas on the same user → agent → app. */
+  const openPath = (r: ObsPath) => {
+    if (!r.intent) return;
+    setChain({
+      u: nodeId("u", r.user.did),
+      a: nodeId("a", r.agent.did),
+      ...(r.app ? { p: nodeId("p", r.app.did) } : {}),
+      i: nodeId("i", r.intent.id),
+    });
+    setHovered(null);
+  };
   const traceKicker = preview
     ? `TRACE PREVIEW · ${COLUMN_TYPE[NODES[preview].t].toUpperCase()}`
     : hasChain
@@ -862,7 +883,8 @@ export function InteractionPlane() {
           </div>
         </div>
 
-        {pickedIntent && (
+        {/* ================= Detail box: the picked intent's hops, or every path in the trace ================= */}
+        {pickedIntent ? (
           <IntentDetailPanel
             intentId={pickedIntent}
             intent={intentDetail.data?.pathsList[0]?.intent ?? null}
@@ -878,14 +900,11 @@ export function InteractionPlane() {
             }
             nameOf={nameOf}
           />
-        )}
-
-        {/* ================= Trace table ================= */}
+        ) : (
         <div className="ip-trace">
           <div className="ip-trace-head">
             <span className="ip-kicker">{traceKicker}</span>
             <span className="ip-trace-title">{traceTitle}</span>
-            {hasRows && traceSub && <span className="ip-trace-sub">{traceSub}</span>}
             {nextHint && <span className="ip-trace-next">{nextHint}</span>}
             {hasChain && (
               <button
@@ -901,35 +920,43 @@ export function InteractionPlane() {
             )}
           </div>
           {hasRows ? (
-            <div className="ip-table-scroll">
-              <div className="ip-table">
-                <div className="ip-row ip-row-head">
-                  <span>USER</span><span>COCA</span><span>AGENT</span><span>COCA</span><span>CBAC</span><span>WHITELIST</span><span>APP</span><span>INTENT</span><span>OUTCOME</span>
+            <>
+              {paths.data && rows.length > 0 && (
+                <div className="ip-trace-stats">
+                  {traceStats.map(([k, v, st]) => (
+                    <div key={k} className="ip-trace-stat">
+                      <div className="k">{k}</div>
+                      <div className="v" style={st && v !== "0" ? { color: STATUS_COLOR[st] } : undefined}>{v}</div>
+                    </div>
+                  ))}
                 </div>
-                {paths.loading && <div className="ip-empty">Loading paths…</div>}
-                {paths.error && (
-                  <div className="ip-empty">
-                    Couldn't load paths: {paths.error}{" "}
-                    <button type="button" className="btn ghost" onClick={paths.retry}>Retry</button>
-                  </div>
-                )}
-                {paths.data && rows.length === 0 && <div className="ip-empty">No paths match this selection and filter.</div>}
+              )}
+              {paths.loading && <div className="ip-empty">Loading paths…</div>}
+              {paths.error && (
+                <div className="ip-empty">
+                  Couldn't load paths: {paths.error}{" "}
+                  <button type="button" className="btn ghost" onClick={paths.retry}>Retry</button>
+                </div>
+              )}
+              {paths.data && rows.length === 0 && <div className="ip-empty">No paths match this selection and filter.</div>}
+              <div className="ip-hops-list">
                 {rows.map((r, k) => (
-                  <PathRow key={k} row={r} />
+                  <PathHops key={k} row={r} onOpen={r.intent ? () => openPath(r) : undefined} />
                 ))}
-                {paths.data && paths.data.total > rows.length && (
-                  <div className="ip-empty">
-                    Showing the {rows.length} most recent of {paths.data.total.toLocaleString()} paths. Narrow the selection to see the rest.
-                  </div>
-                )}
               </div>
-            </div>
+              {paths.data && paths.data.total > rows.length && (
+                <div className="ip-empty" style={{ marginTop: 10 }}>
+                  Showing the {rows.length} most recent of {paths.data.total.toLocaleString()} paths. Narrow the selection to see the rest.
+                </div>
+              )}
+            </>
           ) : (
             <div className="ip-empty">
               Start with a user: the agents they used light up. Then pick an agent to see the apps it called and the intents it ran for that user. Turn on Trace interaction to preview whole paths on hover.
             </div>
           )}
         </div>
+        )}
       </section>
     </div>
   );
@@ -1025,32 +1052,74 @@ function WallBadge({ wall }: { wall?: { result: ObsWallResult; count: number } |
   );
 }
 
-function PathRow({ row }: { row: ObsPath }) {
-  const code = row.policy?.split(" ")[0];
+/** One party on a path card: its layer and name, full DID on hover. */
+function HopNode({ kind, did, name }: { kind: string; did?: string; name?: string }) {
   return (
-    <div className="ip-row">
-      <span className="ip-ellipsis" style={{ fontWeight: 600 }} title={row.user.did}>{row.user.name || row.user.did}</span>
-      <WallBadge wall={row.gate1} />
-      <span className="ip-ellipsis" style={{ color: "var(--fg-dim)" }} title={row.agent.did}>{row.agent.name || row.agent.did}</span>
-      <WallBadge wall={row.gate2?.coca} />
-      <WallBadge wall={row.gate2?.cbac} />
-      <WallBadge wall={row.gate2?.whitelist} />
-      <span className="ip-ellipsis" style={{ color: "var(--fg-dim)" }}>{row.app ? row.app.name || row.app.did : "—"}</span>
-      <span className="ip-intent-cell">
-        <span className="ip-ellipsis" style={{ color: row.intent ? undefined : "var(--fg-faint)" }} title={row.intent?.titleFull ?? row.intent?.title}>
-          {row.intent ? row.intent.titleFull || row.intent.title || row.intent.id : row.gate1.result === "fail" ? "Identity check flagged" : "Pick a user + agent"}
+    <span className="ip-hop-node" title={did}>
+      <span className="k">{kind}</span>
+      <span className="v">{did ? name || did : "—"}</span>
+    </span>
+  );
+}
+
+/** A gate between two parties: each wall it runs, with its result. */
+function HopGate({ walls }: { walls: [string, { result: ObsWallResult; count: number } | null | undefined][] }) {
+  return (
+    <span className="ip-hop-gate">
+      <span className="ip-hop-line" />
+      {walls.map(([label, wall]) => (
+        <span key={label} className="ip-hop-wall">
+          <span className="k">{label}</span>
+          <WallBadge wall={wall} />
         </span>
-        <span className="ip-mono ip-faint">{fmt(row.interactionsCount)} ixns</span>
-      </span>
-      <span className="ip-outcome-cell">
+      ))}
+      <span className="ip-hop-line arrow" />
+    </span>
+  );
+}
+
+/**
+ * A path in the trace as its hops — user → COCA → agent → COCA · CBAC · Whitelist → app —
+ * with the intent it ran and how it ended. Clicking opens that intent's detail.
+ */
+function PathHops({ row, onOpen }: { row: ObsPath; onOpen?: () => void }) {
+  const code = row.policy?.split(" ")[0];
+  const title = row.intent
+    ? row.intent.titleFull || row.intent.title || row.intent.id
+    : row.gate1.result === "fail"
+      ? "Identity check flagged"
+      : "No intent recorded";
+  return (
+    <div
+      className={`ip-hops ip-hops-${row.outcome}${onOpen ? " clickable" : ""}`}
+      onClick={onOpen}
+      onKeyDown={onOpen && ((ev) => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), onOpen()))}
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+    >
+      <div className="ip-hops-top">
         <span
           className="ip-outcome"
           style={{ color: STATUS_COLOR[row.outcome], background: tint(row.outcome, ".07"), borderColor: tint(row.outcome, ".22") }}
         >
           {row.outcome.toUpperCase()}
         </span>
+        <span className="ip-hops-title" style={{ color: row.intent ? undefined : "var(--fg-faint)" }} title={row.intent?.titleFull ?? row.intent?.title}>
+          {title}
+        </span>
         {code && row.outcome !== "allowed" && <span className="ip-mono ip-faint" title={row.policy ?? "Threat code"}>{code}</span>}
-      </span>
+        <span className="ip-hops-meta">
+          <span className="ip-mono">{fmt(row.interactionsCount)} interactions</span>
+          {onOpen && <span className="ip-hops-open">Details →</span>}
+        </span>
+      </div>
+      <div className="ip-hops-chain">
+        <HopNode kind="User" did={row.user.did} name={row.user.name} />
+        <HopGate walls={[["COCA", row.gate1]]} />
+        <HopNode kind="Agent" did={row.agent.did} name={row.agent.name} />
+        <HopGate walls={GATE2_WALLS.map((w) => [w.key === "whitelist" ? "Whitelist" : w.key.toUpperCase(), row.gate2?.[w.key]])} />
+        <HopNode kind="App" did={row.app?.did} name={row.app?.name} />
+      </div>
     </div>
   );
 }

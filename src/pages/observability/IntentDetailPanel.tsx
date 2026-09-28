@@ -52,7 +52,7 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
         <div className="ip-idet-title">{intent ? intent.titleFull || intent.title || intent.id : loading ? "Loading intent…" : "Intent"}</div>
         {intent && (
           <div className="ip-idet-chips">
-            {intent.threatDetected ? <span className="chip threat">Incident detected</span> : <span className="chip safe">No incidents</span>}
+            {intent.threatDetected || intent.interactions?.some((ix) => ix.threat) ? <span className="chip threat">Incident detected</span> : <span className="chip safe">No incidents</span>}
             {intent.status && <span className="chip info">{titleCase(intent.status)}</span>}
             {intent.reviewStatus && (
               <span className={`chip ${intent.reviewStatus === "Flagged" ? "threat" : intent.reviewStatus === "Acknowledged" ? "safe" : "warn"}`}>
