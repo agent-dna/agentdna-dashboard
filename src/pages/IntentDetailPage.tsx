@@ -178,7 +178,7 @@ export function IntentDetailPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       align: "right",
       render: (r) =>
         r.threats > 0 ? (

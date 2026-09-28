@@ -123,7 +123,7 @@ export function IntentsPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       sortFn: (a, b) => a.threats - b.threats,
       render: (r) => <ThreatPill threat={r.threats > 0} />,
     },
@@ -171,7 +171,7 @@ export function IntentsPage() {
               navigate(`/intents/${r.id}`);
             }}
           >
-            View
+            Inspect
           </button>
         </div>
       ),

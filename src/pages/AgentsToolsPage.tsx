@@ -176,7 +176,7 @@ export function AgentsToolsPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       align: "right",
       sortFn: (a, b) => a.threats - b.threats,
       render: (r) =>

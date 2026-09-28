@@ -81,7 +81,7 @@ export function exportAgentPdf({ agent, interactions, intents, history }: Export
   if (interactions.length > 0) {
     section("Interactions");
     table(
-      ["ID", "Initiator", "Target", "Threat", "Time"],
+      ["ID", "Initiator", "Target", "Incident", "Time"],
       [110, 130, 130, 60, 100],
       interactions.slice(0, 50).map((i) => [
         shortId(i.id),
@@ -103,7 +103,7 @@ export function exportAgentPdf({ agent, interactions, intents, history }: Export
   if (intents.length > 0) {
     section("Intents");
     table(
-      ["Intent ID", "Threats", "Started", "Score"],
+      ["Intent ID", "Incidents", "Started", "Score"],
       [220, 60, 100, 60],
       intents.slice(0, 50).map((i) => [
         shortId(i.id),

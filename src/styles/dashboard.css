@@ -2256,16 +2256,17 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ip-col-hint { font-size: 12px; color: var(--fg-dim); margin-top: 3px; }
 
 /* Scrollable user layer — fades at the edges to show there is more. */
-.ip-user-list {
-  position: absolute; left: 0; overflow-y: auto; overflow-x: hidden; z-index: 4;
+/* Users, agents and intents: three matching scroll lists. The edge fade only shows once a list scrolls. */
+.ip-list {
+  position: absolute; overflow-y: auto; overflow-x: hidden; z-index: 4;
   scrollbar-width: thin; scrollbar-color: rgba(15,32,70,.25) transparent;
+}
+.ip-list.scrolls {
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 18px), transparent 100%);
   mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 18px), transparent 100%);
 }
-.ip-user-list::-webkit-scrollbar { width: 6px; }
-.ip-user-list::-webkit-scrollbar-thumb { background: rgba(15,32,70,.25); border-radius: 99px; }
-/* Agent list reuses the user list's scroll box; the edge fade only matters once it scrolls. */
-.ip-agent-list:not(.scrolls) { -webkit-mask-image: none; mask-image: none; }
+.ip-list::-webkit-scrollbar { width: 6px; }
+.ip-list::-webkit-scrollbar-thumb { background: rgba(15,32,70,.25); border-radius: 99px; }
 
 .ip-gate {
   position: absolute; top: 0; width: 112px; height: 760px; box-sizing: border-box; border-radius: 12px; border: 1px solid;

@@ -145,7 +145,7 @@ export function AgentDetailPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       render: (r) => <ThreatPill threat={r.threats > 0} />,
     },
     {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type UIEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { Icon } from "../../components/Icon";
 import {
   fetchObsGraph,
@@ -21,10 +21,11 @@ import {
   GATE2_WALLS,
   PLANE_W,
   ROW_H,
-  AGENTS_VISIBLE,
   USER_LIST_TOP,
   USER_PITCH,
   ago,
+  listHeight,
+  listY,
   buildPlaneModel,
   nodeId,
   type PlaneColumn,
@@ -91,8 +92,16 @@ const REST: ObsScope = { range: "all", status: "all" };
 const RANGE_LABEL = "All time";
 const USERS_PAGE = 50;
 
-/** Room either side of agent cards inside their scroll box, so the pick ring isn't clipped. */
-const AGENT_GUTTER = 8;
+/** Room either side of cards inside a scroll list, so the pick ring isn't clipped. */
+const LIST_GUTTER = 8;
+
+/** Position of a card inside its scroll list (its column's width, offset by the gutter). */
+const listRowBox = (n: PlaneNode): CSSProperties => ({
+  left: LIST_GUTTER,
+  top: n.y - ROW_H[n.t] / 2,
+  width: COLUMNS[n.t][1] - COLUMNS[n.t][0],
+  height: ROW_H[n.t],
+});
 /** Edges below this volume collapse to a small dot instead of a count pill. */
 const PILL_THRESHOLD = 10;
 const ORDER: PlaneColumn[] = ["u", "a", "p", "i"];
@@ -167,10 +176,13 @@ export function InteractionPlane() {
   const [scale, setScale] = useState(1);
   const [userScroll, setUserScroll] = useState(0);
   const [agentScroll, setAgentScroll] = useState(0);
+  /** Intent-list scroll, tied to the selection it was scrolled under (a new selection starts at the top). */
+  const [intentScrollState, setIntentScrollState] = useState({ key: "", top: 0 });
   const [searchMiss, setSearchMiss] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const userListRef = useRef<HTMLDivElement>(null);
   const agentListRef = useRef<HTMLDivElement>(null);
+  const intentListRef = useRef<HTMLDivElement>(null);
 
   /* ---------- Data ---------- */
 
@@ -230,7 +242,6 @@ export function InteractionPlane() {
   const NODES = model?.nodes ?? {};
   const planeH = model?.height ?? 760;
   const userListH = planeH - USER_LIST_TOP;
-  const agentSlot = model?.agentSlot ?? userListH;
 
   const booting = graph.loading || summary.loading || (userPages.length === 0 && !usersError);
   const bootError = graph.error || summary.error || (userPages.length === 0 ? usersError : null);
@@ -342,6 +353,9 @@ export function InteractionPlane() {
   const revealAgent = (y: number) => {
     agentListRef.current?.scrollTo({ top: Math.max(0, y - userListH / 2), behavior: "smooth" });
   };
+  const revealIntent = (y: number) => {
+    intentListRef.current?.scrollTo({ top: Math.max(0, y - userListH / 2), behavior: "smooth" });
+  };
 
   const nodeHandlers = (id: string) => ({
     onClick: () => pick(id),
@@ -384,13 +398,22 @@ export function InteractionPlane() {
   const byColumn = (t: PlaneColumn) => Object.values(NODES).filter((n) => n.t === t);
   const userNodes = byColumn("u");
   const agentNodes = byColumn("a");
+  /** Intents showing right now, re-stacked so a narrowed list has no gaps. */
+  const intentNodes = byColumn("i")
+    .filter((n) => visibleIntents.has(n.id))
+    .map((n, k) => ({ ...n, y: listY("i", k) }));
+  const intentById = new Map(intentNodes.map((n) => [n.id, n]));
+  const nodeAt = (id: string): PlaneNode | undefined => intentById.get(id) ?? NODES[id];
+  const intentListKey = `${chain.u}|${chain.a}|${chain.p}|${filter}`;
+  const intentScroll = intentScrollState.key === intentListKey ? intentScrollState.top : 0;
 
   /* ---------- Edges, count pills and tooltip ---------- */
 
-  /** How far a node's scrollable list (users, agents) is scrolled; other columns don't scroll. */
-  const scrollOf = (node: PlaneNode) => (node.t === "u" ? userScroll : node.t === "a" ? agentScroll : null);
+  /** How far a node's list is scrolled; apps don't scroll. */
+  const scrollOf = (node: PlaneNode) =>
+    node.t === "u" ? userScroll : node.t === "a" ? agentScroll : node.t === "i" ? intentScroll : null;
 
-  /** Where a node's centre sits on the canvas; users and agents follow their list's scroll position. */
+  /** Where a node's centre sits on the canvas; list rows follow their list's scroll position. */
   const canvasY = (node: PlaneNode) => {
     const scroll = scrollOf(node);
     if (scroll == null) return node.y;
@@ -408,8 +431,8 @@ export function InteractionPlane() {
   const edgeGeometry = (model?.edges ?? [])
     .filter((e) => NODES[e.from] && NODES[e.to] && (NODES[e.to].t !== "i" || visibleIntents.has(e.to)))
     .map((e) => {
-      const a = NODES[e.from];
-      const b = NODES[e.to];
+      const a = nodeAt(e.from)!;
+      const b = nodeAt(e.to)!;
       const x1 = COLUMNS[a.t][1];
       const x2 = COLUMNS[b.t][0];
       const y1 = canvasY(a);
@@ -500,6 +523,7 @@ export function InteractionPlane() {
       setHovered(null);
       if (hit.t === "u") revealUser(hit.y);
       if (hit.t === "a") revealAgent(hit.y);
+      if (hit.t === "i") revealIntent(intentById.get(hit.id)?.y ?? hit.y);
       return;
     }
     // Not on a loaded page — ask the server, then add the user to the bottom of the list.
@@ -716,67 +740,65 @@ export function InteractionPlane() {
               );
             })}
 
-            <div
-              ref={userListRef}
-              className="ip-user-list"
-              style={{ top: USER_LIST_TOP, height: userListH, width: COLUMNS.u[1] + 10 }}
+            <PlaneList
+              col="u"
+              listRef={userListRef}
+              height={userListH}
+              contentHeight={listHeight("u", userNodes.length) + (hasMoreUsers ? 36 : 0)}
               onScroll={onUserScroll}
             >
-              <div style={{ position: "relative", height: userNodes.length ? userNodes[userNodes.length - 1].y + ROW_H.u / 2 + 12 + (hasMoreUsers ? 40 : 0) : 0 }}>
-                {userNodes.map((n) => {
-                  const [bg, fg] = n.svc ? ["rgba(220,38,38,.08)", "#DC2626"] : AVATARS[n.av ?? 0];
-                  return (
-                    <div
-                      key={n.id}
-                      className="ip-node ip-node-user"
-                      style={{ left: 0, top: n.y - ROW_H.u / 2, width: COLUMNS.u[1], height: ROW_H.u, ...nodeLook(n) }}
-                      title={n.sub}
-                      {...nodeHandlers(n.id)}
-                    >
-                      <div className="ip-av" style={{ background: bg, color: fg }}>{n.ini}</div>
-                      <div className="ip-node-text">
-                        <div className="ip-node-name" style={{ fontFamily: n.svc ? "var(--font-mono)" : undefined }}>{n.name}</div>
-                        <div className="ip-node-sub">{n.sub}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {hasMoreUsers && (
-                  <div className="ip-user-more" style={{ top: userNodes[userNodes.length - 1].y + ROW_H.u / 2 + 12 }}>
-                    {usersError ? (
-                      <button type="button" className="btn ghost" onClick={() => setUsersError(null)}>Retry</button>
-                    ) : (
-                      "Loading more…"
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div
-              ref={agentListRef}
-              className={`ip-user-list ip-agent-list${agentNodes.length > AGENTS_VISIBLE ? " scrolls" : ""}`}
-              style={{ left: COLUMNS.a[0] - AGENT_GUTTER, top: USER_LIST_TOP, height: userListH, width: COLUMNS.a[1] - COLUMNS.a[0] + AGENT_GUTTER * 2 }}
-              onScroll={(ev) => setAgentScroll(ev.currentTarget.scrollTop)}
-            >
-              <div style={{ position: "relative", height: agentNodes.length * agentSlot }}>
-                {agentNodes.map((n) => (
+              {userNodes.map((n) => {
+                const [bg, fg] = n.svc ? ["rgba(220,38,38,.08)", "#DC2626"] : AVATARS[n.av ?? 0];
+                return (
                   <div
                     key={n.id}
-                    className="ip-node ip-node-agent"
-                    style={{ left: AGENT_GUTTER, top: n.y - ROW_H.a / 2, width: COLUMNS.a[1] - COLUMNS.a[0], height: ROW_H.a, ...nodeLook(n) }}
-                    title={n.ref}
+                    className="ip-node ip-node-user"
+                    style={{ ...listRowBox(n), ...nodeLook(n) }}
+                    title={n.sub}
                     {...nodeHandlers(n.id)}
                   >
-                    <div className="ip-glyph ip-glyph-agent"><Icon name="agents" size={16} /></div>
+                    <div className="ip-av" style={{ background: bg, color: fg }}>{n.ini}</div>
                     <div className="ip-node-text">
-                      <div className="ip-node-name ip-display">{n.name}</div>
-                      <div className="ip-node-sub ip-mono">{n.sub}</div>
+                      <div className="ip-node-name" style={{ fontFamily: n.svc ? "var(--font-mono)" : undefined }}>{n.name}</div>
+                      <div className="ip-node-sub">{n.sub}</div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+                );
+              })}
+              {hasMoreUsers && (
+                <div className="ip-user-more" style={{ left: LIST_GUTTER, top: listHeight("u", userNodes.length) }}>
+                  {usersError ? (
+                    <button type="button" className="btn ghost" onClick={() => setUsersError(null)}>Retry</button>
+                  ) : (
+                    "Loading more…"
+                  )}
+                </div>
+              )}
+            </PlaneList>
+
+            <PlaneList
+              col="a"
+              listRef={agentListRef}
+              height={userListH}
+              contentHeight={listHeight("a", agentNodes.length)}
+              onScroll={(ev) => setAgentScroll(ev.currentTarget.scrollTop)}
+            >
+              {agentNodes.map((n) => (
+                <div
+                  key={n.id}
+                  className="ip-node ip-node-agent"
+                  style={{ ...listRowBox(n), ...nodeLook(n) }}
+                  title={n.ref}
+                  {...nodeHandlers(n.id)}
+                >
+                  <div className="ip-glyph ip-glyph-agent"><Icon name="agents" size={16} /></div>
+                  <div className="ip-node-text">
+                    <div className="ip-node-name ip-display">{n.name}</div>
+                    <div className="ip-node-sub ip-mono">{n.sub}</div>
+                  </div>
+                </div>
+              ))}
+            </PlaneList>
 
             {byColumn("p").map((n) => (
               <div key={n.id} className="ip-node ip-node-app" style={nodeBox(n)} title={n.ref} {...nodeHandlers(n.id)}>
@@ -791,7 +813,7 @@ export function InteractionPlane() {
             {!showIntents && !booting && !bootError && !isEmpty && (
               <div
                 className="ip-intent-gate"
-                style={{ left: COLUMNS.i[0], top: USER_LIST_TOP, width: COLUMNS.i[1] - COLUMNS.i[0], height: userListH - 8 }}
+                style={{ left: COLUMNS.i[0], top: USER_LIST_TOP + 8, width: COLUMNS.i[1] - COLUMNS.i[0], height: userListH - 16 }}
               >
                 <Icon name="intents" size={18} />
                 <div className="ip-intent-gate-title">Intents appear here</div>
@@ -801,7 +823,7 @@ export function InteractionPlane() {
               </div>
             )}
             {showIntents && visibleIntents.size === 0 && (
-              <div className="ip-intent-gate" style={{ left: COLUMNS.i[0], top: USER_LIST_TOP, width: COLUMNS.i[1] - COLUMNS.i[0], height: 120 }}>
+              <div className="ip-intent-gate" style={{ left: COLUMNS.i[0], top: USER_LIST_TOP + 8, width: COLUMNS.i[1] - COLUMNS.i[0], height: 120 }}>
                 <div className="ip-intent-gate-body">
                   {intents.loading ? (
                     "Loading intents…"
@@ -816,22 +838,33 @@ export function InteractionPlane() {
                 </div>
               </div>
             )}
-            {byColumn("i").filter((n) => visibleIntents.has(n.id)).map((n) => {
-              const st = n.st ?? "allowed";
-              return (
-                <div key={n.id} className="ip-node ip-node-intent" style={nodeBox(n)} title={n.name} {...nodeHandlers(n.id)}>
-                  <div className="ip-intent-top">
-                    <span className="ip-status-dot" style={{ background: STATUS_COLOR[st], boxShadow: `0 0 0 3px ${STATUS_TINT[st]}` }} />
-                    <span className="ip-node-name">{n.name}</span>
-                  </div>
-                  <div className="ip-intent-meta">
-                    <span style={{ color: STATUS_COLOR[st], fontWeight: 600, letterSpacing: ".08em" }}>{st.toUpperCase()}</span>
-                    <span style={{ color: "var(--fg-faint)" }}>·</span>
-                    <span className="ip-ellipsis" style={{ color: "var(--fg-muted)" }}>{n.meta}</span>
-                  </div>
-                </div>
-              );
-            })}
+            {intentNodes.length > 0 && (
+              <PlaneList
+                key={intentListKey}
+                col="i"
+                listRef={intentListRef}
+                height={userListH}
+                contentHeight={listHeight("i", intentNodes.length)}
+                onScroll={(ev) => setIntentScrollState({ key: intentListKey, top: ev.currentTarget.scrollTop })}
+              >
+                {intentNodes.map((n) => {
+                  const st = n.st ?? "allowed";
+                  return (
+                    <div key={n.id} className="ip-node ip-node-intent" style={{ ...listRowBox(n), ...nodeLook(n) }} title={n.name} {...nodeHandlers(n.id)}>
+                      <div className="ip-intent-top">
+                        <span className="ip-status-dot" style={{ background: STATUS_COLOR[st], boxShadow: `0 0 0 3px ${STATUS_TINT[st]}` }} />
+                        <span className="ip-node-name">{n.name}</span>
+                      </div>
+                      <div className="ip-intent-meta">
+                        <span style={{ color: STATUS_COLOR[st], fontWeight: 600, letterSpacing: ".08em" }}>{st.toUpperCase()}</span>
+                        <span style={{ color: "var(--fg-faint)" }}>·</span>
+                        <span className="ip-ellipsis" style={{ color: "var(--fg-muted)" }}>{n.meta}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </PlaneList>
+            )}
 
             {tooltip && <EdgeTooltip {...tooltip} />}
           </div>
@@ -893,6 +926,38 @@ export function InteractionPlane() {
 }
 
 /* ---------------- Pieces ---------------- */
+
+/**
+ * One of the three matching scroll lists (users, agents, intents): same top and height,
+ * a gutter either side of its column, and the edge fade only once it actually scrolls.
+ */
+function PlaneList({
+  col,
+  listRef,
+  height,
+  contentHeight,
+  onScroll,
+  children,
+}: {
+  col: "u" | "a" | "i";
+  listRef: Ref<HTMLDivElement>;
+  height: number;
+  contentHeight: number;
+  onScroll: (ev: UIEvent<HTMLDivElement>) => void;
+  children: ReactNode;
+}) {
+  const [left, right] = COLUMNS[col];
+  return (
+    <div
+      ref={listRef}
+      className={`ip-list${contentHeight > height ? " scrolls" : ""}`}
+      style={{ left: left - LIST_GUTTER, top: USER_LIST_TOP, height, width: right - left + LIST_GUTTER * 2 }}
+      onScroll={onScroll}
+    >
+      <div style={{ position: "relative", height: contentHeight }}>{children}</div>
+    </div>
+  );
+}
 
 function ColumnLabel({ left, width, n, hint }: { left: number; width: number; n: string; hint: string }) {
   return (

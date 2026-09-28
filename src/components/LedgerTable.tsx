@@ -60,7 +60,7 @@ export function LedgerTable({
             <TH>Initiator</TH>
             <TH>Interacted with</TH>
             {showIntent && <TH>Intent</TH>}
-            <TH>Threat</TH>
+            <TH>Incident</TH>
             <TH right>Time</TH>
             <TH right>{""}</TH>
           </tr>

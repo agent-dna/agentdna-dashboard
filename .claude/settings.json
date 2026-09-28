@@ -19,7 +19,8 @@
       "Bash(node /private/tmp/claude-501/-Users-rubix-dashboard-agentDNA-1-agentdna-dashboard/14c96afb-48b9-4f6f-926d-ddd54ac3337c/scratchpad/fakeapi.cjs)",
       "Bash(VITE_API_BASE_URL=http://localhost:9911/dashboard/v1/ npx vite --port 5199 --strictPort)",
       "Bash(node drive3.cjs)",
-      "Bash(xargs kill)"
+      "Bash(xargs kill)",
+      "Bash(grep -rnE \">\\\\s*View\\\\s*<|\\\\\"View\\\\\"|'View'|^\\\\s*View\\\\s*$\" src)"
     ]
   }
 }

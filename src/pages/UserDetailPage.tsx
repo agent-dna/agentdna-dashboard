@@ -143,7 +143,7 @@ export function UserDetailPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       align: "right",
       render: (r) =>
         r.threats > 0
@@ -210,7 +210,7 @@ export function UserDetailPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       align: "right",
       render: (r) =>
         r.threats > 0

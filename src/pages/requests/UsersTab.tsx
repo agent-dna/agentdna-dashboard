@@ -79,7 +79,7 @@ export function UsersTab() {
     },
     { key: "totalIntents", label: "Intents", align: "right",
       render: (r) => <span style={{ fontFamily: "var(--font-mono)" }}>{r.totalIntents}</span> },
-    { key: "totalThreats", label: "Threats", align: "right",
+    { key: "totalThreats", label: "Incidents", align: "right",
       render: (r) => r.totalThreats > 0
         ? <span className="chip threat">{r.totalThreats}</span>
         : <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)" }}>0</span> },

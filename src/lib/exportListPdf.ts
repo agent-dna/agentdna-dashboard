@@ -70,7 +70,7 @@ export function exportAgentsListPdf(agents: Agent[], total: number) {
     { label: "Agent ID",      w: 130 },
     { label: "Reliability",   w: 80  },
     { label: "Interactions",  w: 90  },
-    { label: "Threats",       w: 70  },
+    { label: "Incidents",     w: 70  },
     { label: "Status",        w: 70  },
     { label: "Created",       w: 100 },
   ];
@@ -153,7 +153,7 @@ export function exportToolsListPdf(tools: Tool[], total: number) {
     { label: "Provider",     w: 100 },
     { label: "Reliability",  w: 80  },
     { label: "Interactions", w: 90  },
-    { label: "Threats",      w: 70  },
+    { label: "Incidents",    w: 70  },
   ];
 
   // Table header

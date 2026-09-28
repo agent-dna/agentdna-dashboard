@@ -18,8 +18,8 @@ export interface PlaneNode {
   ref: string;
   name: string;
   /**
-   * Vertical centre. Users and agents: relative to the top of their scrollable list.
-   * Everything else: relative to the canvas.
+   * Vertical centre. Users, agents and intents: relative to the top of their scrollable
+   * list. Apps: relative to the canvas.
    */
   y: number;
   sub?: string;
@@ -62,8 +62,6 @@ export interface PlaneModel {
   edges: PlaneEdge[];
   flows: PlaneFlow[];
   height: number;
-  /** Row pitch in the agent list; the list shows AGENTS_VISIBLE rows and scrolls past that. */
-  agentSlot: number;
 }
 
 export const PLANE_W = 1452;
@@ -75,13 +73,23 @@ export const COLUMNS: Record<PlaneColumn, [number, number]> = {
   p: [964, 1108],
   i: [1192, 1452],
 };
-export const ROW_H: Record<PlaneColumn, number> = { u: 48, a: 60, p: 48, i: 60 };
+export const ROW_H: Record<PlaneColumn, number> = { u: 48, a: 56, p: 48, i: 56 };
 /** The user layer is a scrollable list below the column title. */
 export const USER_LIST_TOP = 56;
-export const USER_PITCH = 60;
-/** The agent layer is a scrollable list showing this many agents at a time. */
-export const AGENTS_VISIBLE = 10;
-const PITCH: Record<"p" | "i", number> = { p: 60, i: 72 };
+/**
+ * Users, agents and intents are three matching scroll lists: same top, same height, same
+ * top padding and the same gap between cards, rows stacked from the top.
+ */
+const LIST_PAD = 8;
+const LIST_GAP = 12;
+export const LIST_PITCH = { u: ROW_H.u + LIST_GAP, a: ROW_H.a + LIST_GAP, i: ROW_H.i + LIST_GAP } as const;
+/** Centre of row `k` in a list, relative to the list's top. */
+export const listY = (col: keyof typeof LIST_PITCH, k: number) => LIST_PAD + k * LIST_PITCH[col] + ROW_H[col] / 2;
+/** Scroll height of a list holding `count` rows. */
+export const listHeight = (col: keyof typeof LIST_PITCH, count: number) =>
+  count ? LIST_PAD * 2 + count * LIST_PITCH[col] - LIST_GAP : 0;
+export const USER_PITCH = LIST_PITCH.u;
+const APP_PITCH = 60;
 
 export const COLUMN_TYPE: Record<PlaneColumn, string> = { u: "User", a: "Agent", p: "App", i: "Intent" };
 
@@ -178,7 +186,7 @@ export function buildPlaneModel({ graph, users, userFlow, intents }: BuildInput)
       ini: initials(u.userName || u.email || "?"),
       av: i % 5,
       svc: u.kind === "service" || !u.signed,
-      y: 8 + ROW_H.u / 2 + i * USER_PITCH,
+      y: listY("u", i),
     };
   });
 
@@ -201,11 +209,8 @@ export function buildPlaneModel({ graph, users, userFlow, intents }: BuildInput)
 
   const height = Math.max(
     MIN_PLANE_H,
-    USER_LIST_TOP + 24 + Math.max(apps.length * PITCH.p, intentList.length * PITCH.i),
+    USER_LIST_TOP + 24 + apps.length * APP_PITCH,
   );
-
-  // Up to AGENTS_VISIBLE agents share the list's height evenly; past that the list scrolls.
-  const agentSlot = (height - USER_LIST_TOP) / Math.max(1, Math.min(agents.length, AGENTS_VISIBLE));
   agents.forEach((a, k) => {
     const id = nodeId("a", a.agentDID);
     nodes[id] = {
@@ -214,13 +219,13 @@ export function buildPlaneModel({ graph, users, userFlow, intents }: BuildInput)
       ref: a.agentDID,
       name: a.agentName || a.agentDID,
       sub: `${a.usersCount} user${a.usersCount === 1 ? "" : "s"}${a.revoked ? " · revoked" : ""}`,
-      y: agentSlot * (k + 0.5),
+      y: listY("a", k),
     };
   });
 
   const appCalls = new Map<string, number>();
   for (const e of graph.agentAppEdges) appCalls.set(e.to, (appCalls.get(e.to) ?? 0) + e.count);
-  const appY = spread(apps.length, PITCH.p, height);
+  const appY = spread(apps.length, APP_PITCH, height);
   apps.forEach((p, k) => {
     const id = nodeId("p", p.appDID);
     const calls = appCalls.get(p.appDID) ?? 0;
@@ -282,7 +287,6 @@ export function buildPlaneModel({ graph, users, userFlow, intents }: BuildInput)
     const u = nodeId("u", intents.userDID);
     const a = nodeId("a", intents.agentDID);
     const ua = edges.get(`${u}>${a}`) ?? null;
-    const intentY = (k: number) => USER_LIST_TOP + 8 + PITCH.i / 2 + k * PITCH.i;
     intentList.forEach(({ it, apps: appDIDs }, k) => {
       const id = nodeId("i", it.intentID);
       nodes[id] = {
@@ -295,7 +299,8 @@ export function buildPlaneModel({ graph, users, userFlow, intents }: BuildInput)
           it.outcome === "allowed"
             ? `${it.interactionsCount.toLocaleString()} ixns · ${ago(it.lastAt)}${ago(it.lastAt) === "just now" ? "" : " ago"}`
             : `${it.policy ?? "Needs review"} · ${it.flags} flag${it.flags === 1 ? "" : "s"}`,
-        y: intentY(k),
+        // The plane re-stacks whichever intents are showing, so this is only the default.
+        y: listY("i", k),
       };
       if (!appDIDs.length) {
         // Ran through the agent without reaching an app (e.g. flagged before the call).
@@ -328,5 +333,5 @@ export function buildPlaneModel({ graph, users, userFlow, intents }: BuildInput)
     });
   }
 
-  return { nodes, edges: [...edges.values()], flows, height, agentSlot };
+  return { nodes, edges: [...edges.values()], flows, height };
 }
