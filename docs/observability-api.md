@@ -2,6 +2,8 @@
 
 Status: **implemented (Phase 1) — middleware `handler/observability.go`** · Frontend: `src/pages/observability/InteractionPlane.tsx`, fetchers in `src/api/observability.ts`, graph model in `planeModel.ts`
 
+> **v2 flow (2026-09-28):** the plane is moving to User → Agent → Peer agents → App → Intent with gates hidden. See **§9** for the backend changes.
+
 This document describes the six read-only endpoints the Observability "Interaction plane" needs to run on real data, how each one should derive its numbers from the data the backend already stores, and the order the frontend calls them in.
 
 ---
@@ -458,3 +460,144 @@ Frontend review notes on the proposal:
 5. **Denied calls need an interaction row** before the decision row, because of the foreign key. Intent-workflow hops already have one. `/authorize-action` needs a new write path, because today it records neither allows nor denies. That write path is what would make real **"blocked"** counts possible.
 6. **CBAC** is only meaningful once cbac-decisions returns a structured `pass | fail | review` + code for every check (backend finding #4). Otherwise this table recreates the "only failures visible" gap.
 
+
+---
+
+## 9. v2 flow — agent peers (2026-09-28)
+
+**Status: proposed — not implemented.** Changes the plane from `User → Agent → App → Intent` with security gates to the flow below. §1–§8 still hold except where this section overrides them.
+
+### 9.0 Paste-ready prompt for the backend implementer
+
+> The Observability plane gets a new flow: **User → Agent → Peer agents → App → Intent**, and the COCA/CBAC/Whitelist gates are no longer shown. After picking a user and an agent A, the UI shows A's **peer agents**: every agent that took part in the same intents as A (for that user), whether or not A and that agent exchanged a message directly. Picking a peer B narrows the apps to those involved in the intents A and B share; picking an app shows those intents. Stop ignoring `agent_agent` hops (§3.1); they now count towards which agents took part in an intent. Add one endpoint, `GET /observability-agent-flow`, and extend `/observability-graph`, `/observability-user-flow`, `/observability-intents` and `/observability-paths` as described in §9.3. Existing conventions (§2) apply unchanged. Contract details are in §9 of `docs/observability-api.md`.
+
+### 9.1 What the screen shows
+
+```
+ USER ──► AGENT ──► PEER AGENTS ──► APP ──► INTENT
+```
+
+Each agent's line goes to the apps *it* called, and the lines join again at the intent they share:
+
+```
+             ┌─► Finance Agent ──► Postgres ──┐
+ User ──► A ─┤                                ├──► "Pay vendor invoice"
+             └─► Email Agent   ──► Gmail    ──┘
+```
+
+| Step | What the user does | What the UI shows | Endpoint |
+|---|---|---|---|
+| Load | Opens page | All users, agents, apps at rest (agent + app pillars always populated) | `summary`, `graph`, `users` (unchanged) |
+| 1 | Clicks a **user** U | Agents involved in U's intents light up | `/observability-user-flow?userDID=U` |
+| 2 | Clicks an **agent** A | Peer pillar is **repopulated** with A's peers; app pillar highlights apps involved in A's intents | `/observability-agent-flow?userDID=U&agentDID=A` |
+| 3 | Clicks a **peer** B | App pillar narrows to apps involved in intents where A **and** B both took part; lines drawn from whichever agent called each app | `/observability-agent-flow?userDID=U&agentDID=A&peerDID=B` |
+| 4 | Clicks an **app** P | Intents shared by A and B that involved P | `/observability-intents?userDID=U&agentDID=A&peerDID=B&appDID=P` |
+| 5 | Clicks an **intent** | Intent detail panel | `/observability-paths?intentID=` (unchanged) |
+
+Gates are hidden in the UI. `summary.gates`, `GateEdge.walls` and path `gate1`/`gate2` can stay in the responses — no backend change needed to hide them.
+
+### 9.2 Definitions
+
+- **Took part in an intent:** agent X took part in intent I if I has at least one stored hop where `from = X` or `to = X`, of any kind (`user_agent`, `agent_agent`, `agent_app`, response hops).
+- **Peer:** agent B is a peer of A (for user U) if B ≠ A and at least one intent initiated by U had both A and B take part. A direct A↔B message is **not** required.
+- **Shared intents** of A and B: intents initiated by U in which both took part.
+- **Apps involved in an intent:** the `to` of every `agent_app` hop in that intent, **whichever agent made the call** (not only A or B).
+- `agent_agent` hops are now classified and counted (§3.1 previously ignored them). User attribution is via `intent.initiatorDID` as in §3.2.
+
+### 9.3 Endpoint changes
+
+#### New: `GET /observability-agent-flow`
+
+**Query:** `userDID` (required), `agentDID` (required), `peerDID` (optional), `range`, `status`
+
+**Response `data`:**
+```ts
+interface ObservabilityAgentFlow {
+  userDID: string;
+  agentDID: string;
+  peerDID: string | null;
+  /** A's peers. The same list whether or not peerDID is set, so the pillar doesn't reshuffle. */
+  peers: {
+    agentDID: string;
+    agentName: string;
+    handle: string;
+    revoked: boolean;
+    direct: { sent: number; received: number } | null;  // direct A↔peer hops; null = never messaged each other
+    intentsCount: number;                                // shared intents (tooltip only)
+    ...HopRollup;                                        // hops in the shared intents where from or to is A or this peer
+  }[];
+  /**
+   * No peerDID: apps involved in A's intents (for U).
+   * With peerDID: apps involved in A's and B's shared intents.
+   */
+  apps: {
+    appDID: string;
+    appName: string;
+    calledBy: {                  // which agents called this app in those intents → one line per agent
+      agentDID: string;
+      count: number;             // agent_app hops
+      outcome: "allowed" | "elevated" | "flagged";
+    }[];
+    intentsCount: number;        // intents involving this app (tooltip only)
+    ...HopRollup;                // agent_app hops to this app in those intents (= sum of calledBy[].count)
+  }[];
+}
+
+/** Line pills count interactions (hops), like every other edge: "112 ixns · 3 flagged". */
+interface HopRollup {
+  count: number;                 // interactions
+  allowed: number;               // interactions by outcome (§3.4)
+  elevated: number;
+  flagged: number;
+  outcome: "allowed" | "elevated" | "flagged";   // worst hop
+  lastAt: string;
+  policies: string[];
+}
+```
+
+**Derivation:** find U's intents where A took part (§9.2). Peers = every other agent that took part in any of them. Apps = `agent_app` targets in those intents (or in the shared intents with B when `peerDID` is set). `calledBy` groups those `agent_app` hops by `from`. It can include a third agent C that isn't on screen; the UI draws C's calls as "via other agents".
+
+**Errors:** unknown `agentDID` or `peerDID` → `status:false, message:"agent not found"`. Non-admin asking about another user → 403.
+
+#### `GET /observability-graph` — change
+
+- Include every agent with **any** hop in range (including agents that only have `agent_agent` hops, e.g. sub-agents that never talk to a user or an app).
+- `usersCount` = distinct initiators of intents the agent took part in.
+
+#### `GET /observability-user-flow` — add one field
+
+```ts
+involvedAgents: {
+  agentDID: string;
+  count: number;                 // interactions this agent had in U's intents
+  intentsCount: number;          // U's intents this agent took part in
+  outcome: "allowed" | "elevated" | "flagged";
+}[];
+```
+
+Needed because U usually talks to only one entry agent (e.g. an orchestrator). `agentEdges` only lights that agent, so a sub-agent like Finance Agent couldn't be clicked from the user. The UI lights and allows clicking every agent in `involvedAgents`.
+
+#### `GET /observability-intents` — changes
+
+- New optional param `peerDID`: keep only intents in which both `agentDID` and `peerDID` took part.
+- `appDIDs[]` changes meaning: apps involved in the intent via **any** agent (§9.2), not only via `agentDID`. `appDID` filters on this.
+- New fields per row:
+  ```ts
+  agents: { did: string; name: string }[];   // every agent that took part
+  appCalls: { agentDID: string; appDID: string; count: number }[];   // who called what in this intent
+  ```
+  `appCalls` lets the intent card show which agent reached which app.
+
+#### `GET /observability-paths` — changes
+
+- New optional filter `peerDID` (same meaning as on intents).
+- New row field `peer: { did: string; name: string } | null`. With both `agentDID` and `peerDID` set, the grain is one row per **(user, agent, peer, app, intent)**.
+- `gate1`/`gate2` may stay; the table no longer shows them.
+
+### 9.4 Performance
+
+"Which intents did agent X take part in" is the core lookup. Either:
+- index `new_interactions` on `(intent_id, "from")` and `(intent_id, "to")` plus `("from", time)` / `("to", time)`, or
+- maintain a derived `intent_agents(intent_id, agent_did, initiator_did, first_at, last_at)` table (one row per agent per intent), which makes peers a self-join on `intent_id`.
+
+The derived table is recommended if orgs get large.

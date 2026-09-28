@@ -2,7 +2,7 @@ import { apiRequest } from "./client";
 
 /**
  * Observability · Interaction plane endpoints (middleware `/observability-*`).
- * Contract: docs/observability-api.md §4.
+ * Contract: docs/observability-api.md §4, with the v2 agent-peer changes in §9.
  */
 
 export type ObsRange = "24h" | "7d" | "30d" | "all";
@@ -81,6 +81,48 @@ export interface ObsUserFlow {
   userDID: string;
   agentEdges: ObsGateEdge[];
   agentAppEdges: ObsGateEdge[];
+  /** Every agent that took part in this user's intents, not only the ones the user messaged directly. */
+  involvedAgents?: { agentDID: string; count: number; intentsCount: number; outcome: ObsOutcome }[];
+}
+
+/** Interaction (hop) counts behind a line on the plane. */
+export interface ObsHopRollup {
+  count: number;
+  allowed: number;
+  elevated: number;
+  flagged: number;
+  outcome: ObsOutcome;
+  lastAt: string;
+  policies: string[];
+}
+
+/** An agent that took part in the same intents as the picked agent. */
+export interface ObsPeer extends ObsHopRollup {
+  agentDID: string;
+  agentName: string;
+  handle: string;
+  revoked: boolean;
+  /** Hops the two agents sent each other; null when they only shared intents. */
+  direct: { sent: number; received: number } | null;
+  intentsCount: number;
+}
+
+export interface ObsAgentFlowApp extends ObsHopRollup {
+  appDID: string;
+  appName: string;
+  /** Which agents called this app in those intents, in hops. May include agents that aren't the picked pair. */
+  calledBy: { agentDID: string; count: number; outcome: ObsOutcome }[];
+  intentsCount: number;
+}
+
+export interface ObsAgentFlow {
+  userDID: string;
+  agentDID: string;
+  peerDID: string | null;
+  /** The same list whether or not `peerDID` is set. */
+  peers: ObsPeer[];
+  /** Apps involved in the agent's intents, or in the intents it shared with `peerDID`. */
+  apps: ObsAgentFlowApp[];
 }
 
 export interface ObsIntent {
@@ -90,7 +132,11 @@ export interface ObsIntent {
   policy: string | null;
   flags: number;
   interactionsCount: number;
+  /** Apps reached in this intent through any agent. */
   appDIDs: string[];
+  /** Every agent that took part. */
+  agents?: { did: string; name: string }[];
+  appCalls?: { agentDID: string; appDID: string; count: number }[];
   startedAt: string;
   lastAt: string;
   reviewStatus: string;
@@ -146,6 +192,7 @@ export interface ObsPathIntent {
 export interface ObsPath {
   user: { did: string; name: string };
   agent: { did: string; name: string };
+  peer?: { did: string; name: string } | null;
   app: { did: string; name: string } | null;
   intent: ObsPathIntent | null;
   gate1: { result: "pass" | "fail"; count: number };
@@ -171,6 +218,7 @@ export interface ObsScope {
 export interface ObsPathFilter {
   userDID?: string;
   agentDID?: string;
+  peerDID?: string;
   appDID?: string;
   intentID?: string;
 }
@@ -187,8 +235,16 @@ export const fetchObsUsers = (s: ObsScope, page: number, pageSize = 50, search?:
 export const fetchObsUserFlow = (s: ObsScope, userDID: string) =>
   apiRequest<ObsUserFlow>("/observability-user-flow", { query: { ...s, userDID } });
 
-export const fetchObsIntents = (s: ObsScope, userDID: string, agentDID: string, pageSize = 30) =>
-  apiRequest<ObsIntentsPage>("/observability-intents", { query: { ...s, userDID, agentDID, page: 1, pageSize } });
+export const fetchObsAgentFlow = (s: ObsScope, userDID: string, agentDID: string, peerDID?: string) =>
+  apiRequest<ObsAgentFlow>("/observability-agent-flow", { query: { ...s, userDID, agentDID, peerDID } });
+
+export const fetchObsIntents = (
+  s: ObsScope,
+  userDID: string,
+  agentDID: string,
+  f: { peerDID?: string; appDID?: string } = {},
+  pageSize = 30,
+) => apiRequest<ObsIntentsPage>("/observability-intents", { query: { ...s, userDID, agentDID, ...f, page: 1, pageSize } });
 
 export const fetchObsPaths = (s: ObsScope, f: ObsPathFilter, pageSize = 50) =>
   apiRequest<ObsPathsPage>("/observability-paths", { query: { ...s, ...f, page: 1, pageSize } });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { Icon } from "../../components/Icon";
 import {
+  fetchObsAgentFlow,
   fetchObsGraph,
   fetchObsIntents,
   fetchObsPaths,
@@ -12,21 +13,22 @@ import {
   type ObsScope,
   type ObsUser,
   type ObsUsersPage,
-  type ObsWallResult,
 } from "../../api/observability";
 import {
   COLUMNS,
   COLUMN_TYPE,
-  GATE2_WALLS,
+  ORDER,
   PLANE_W,
   ROW_H,
   USER_LIST_TOP,
   USER_PITCH,
   ago,
+  columnOf,
   listHeight,
   listY,
   buildPlaneModel,
   nodeId,
+  type ListColumn,
   type PlaneColumn,
   type PlaneEdge,
   type PlaneFlow,
@@ -38,14 +40,14 @@ import { IntentDetailPanel } from "./IntentDetailPanel";
 /**
  * Observability · Interaction plane.
  *
- * A four-column map (User → Agent → App → Intent) with the gates drawn as bands between
- * columns: gate 1 (user→agent) is a single COCA wall; gate 2 (agent→app) is three walls —
- * COCA, CBAC and Whitelisting.
+ * A five-column map: User → Agent → Peer agents → App → Intent.
  *
- * Selection drills left to right: pick a user and the agents they used light up; pick
- * one of those agents and the apps it called in that user's loop light up, with the
- * intents. The box below shows every path matching the selection as its hops, or the
- * picked intent's detail.
+ * Selection drills left to right: pick a user and the agents in their intents light up;
+ * pick one of those agents and the peer column is repopulated with the agents it worked
+ * with in that user's intents, and the apps those intents involved light up. Pick a peer
+ * to narrow the apps to the intents the two agents shared, then an app to see those
+ * intents. The box below shows every path matching the selection, or the picked intent's
+ * detail.
  * Data: middleware `/observability-*` endpoints (src/api/observability.ts).
  */
 
@@ -59,12 +61,14 @@ const LINE_COLOR: Record<PlaneStatus, string> = { allowed: "#2563EB", elevated: 
 const RING: Record<PlaneColumn, string> = {
   u: "rgba(46,74,127,.75)",
   a: "rgba(37,99,235,.8)",
+  r: "rgba(37,99,235,.8)",
   p: "rgba(27,138,143,.8)",
   i: "rgba(46,74,127,.7)",
 };
 const RING_TINT: Record<PlaneColumn, string> = {
   u: "rgba(46,74,127,.14)",
   a: "rgba(37,99,235,.16)",
+  r: "rgba(37,99,235,.16)",
   p: "rgba(27,138,143,.16)",
   i: "rgba(46,74,127,.12)",
 };
@@ -105,16 +109,17 @@ const listRowBox = (n: PlaneNode): CSSProperties => ({
 });
 /** Edges below this volume collapse to a small dot instead of a count pill. */
 const PILL_THRESHOLD = 10;
-const ORDER: PlaneColumn[] = ["u", "a", "p", "i"];
 const NEXT_HINT: Record<PlaneColumn, string> = {
-  u: "Pick an agent to see its apps and intents for this user.",
-  a: "Pick an app to narrow the intents.",
-  p: "Pick an intent to see the full path.",
+  u: "Pick an agent to see the agents it worked with and the apps involved.",
+  a: "Pick a peer agent to narrow the apps to the intents they shared, or an app to see intents.",
+  r: "Pick an app to see the intents the two agents shared there.",
+  p: "Pick an intent to see its detail.",
   i: "",
 };
 const PATH_PARAM: Record<PlaneColumn, keyof ObsPathFilter> = {
   u: "userDID",
   a: "agentDID",
+  r: "peerDID",
   p: "appDID",
   i: "intentID",
 };
@@ -130,7 +135,7 @@ const refOf = (id: string) => id.slice(2);
 
 const fmt = (n: number) => (n < 1000 ? String(n) : `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`);
 const tint = (st: PlaneStatus, alpha: string) => STATUS_TINT[st].replace(".12", alpha);
-const glyph = (st: PlaneStatus, gated: boolean) => (st === "flagged" ? "×" : st === "elevated" ? "!" : gated ? "✓" : "");
+const glyph = (st: PlaneStatus) => (st === "flagged" ? "×" : st === "elevated" ? "!" : "");
 const errorText = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
 
 type Visibility = "normal" | "lit" | "muted";
@@ -177,12 +182,15 @@ export function InteractionPlane() {
   const [scale, setScale] = useState(1);
   const [userScroll, setUserScroll] = useState(0);
   const [agentScroll, setAgentScroll] = useState(0);
+  /** Peer-list scroll, tied to the agent whose peers it lists (a new agent starts at the top). */
+  const [peerScrollState, setPeerScrollState] = useState({ key: "", top: 0 });
   /** Intent-list scroll, tied to the selection it was scrolled under (a new selection starts at the top). */
   const [intentScrollState, setIntentScrollState] = useState({ key: "", top: 0 });
   const [searchMiss, setSearchMiss] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const userListRef = useRef<HTMLDivElement>(null);
   const agentListRef = useRef<HTMLDivElement>(null);
+  const peerListRef = useRef<HTMLDivElement>(null);
   const intentListRef = useRef<HTMLDivElement>(null);
 
   /* ---------- Data ---------- */
@@ -219,10 +227,21 @@ export function InteractionPlane() {
 
   const pickedUser = chain.u ? refOf(chain.u) : null;
   const pickedAgent = chain.a ? refOf(chain.a) : null;
+  // A peer or app only counts once a user and agent are picked; before that they just highlight.
+  const pickedPeer = pickedUser && pickedAgent && chain.r ? refOf(chain.r) : null;
+  const pickedApp = pickedUser && pickedAgent && chain.p ? refOf(chain.p) : null;
   const userFlow = useObsQuery(pickedUser && `flow:${pickedUser}`, () => fetchObsUserFlow(REST, pickedUser!));
+  const agentFlow = useObsQuery(
+    pickedUser && pickedAgent && `aflow:${pickedUser}:${pickedAgent}`,
+    () => fetchObsAgentFlow(REST, pickedUser!, pickedAgent!),
+  );
+  const peerFlow = useObsQuery(
+    agentFlow.data && pickedPeer && `aflow:${pickedUser}:${pickedAgent}:${pickedPeer}`,
+    () => fetchObsAgentFlow(REST, pickedUser!, pickedAgent!, pickedPeer!),
+  );
   const intents = useObsQuery(
-    pickedUser && pickedAgent && `intents:${pickedUser}:${pickedAgent}`,
-    () => fetchObsIntents(REST, pickedUser!, pickedAgent!),
+    pickedApp && `intents:${pickedUser}:${pickedAgent}:${pickedPeer ?? ""}:${pickedApp}`,
+    () => fetchObsIntents(REST, pickedUser!, pickedAgent!, { peerDID: pickedPeer ?? undefined, appDID: pickedApp! }),
   );
 
   const model = useMemo(
@@ -232,13 +251,20 @@ export function InteractionPlane() {
             graph: graph.data,
             users,
             userFlow: userFlow.data,
+            agentFlow: agentFlow.data ? { base: agentFlow.data, narrowed: pickedPeer ? peerFlow.data : null } : null,
             intents:
-              intents.data && pickedUser && pickedAgent
-                ? { userDID: pickedUser, agentDID: pickedAgent, list: intents.data.intentsList }
+              intents.data && pickedUser && pickedAgent && pickedApp
+                ? {
+                    userDID: pickedUser,
+                    agentDID: pickedAgent,
+                    peerDID: pickedPeer,
+                    appDID: pickedApp,
+                    list: intents.data.intentsList,
+                  }
                 : null,
           })
         : null,
-    [graph.data, users, userFlow.data, intents.data, pickedUser, pickedAgent],
+    [graph.data, users, userFlow.data, agentFlow.data, peerFlow.data, intents.data, pickedUser, pickedAgent, pickedPeer, pickedApp],
   );
   const NODES = model?.nodes ?? {};
   const planeH = model?.height ?? 760;
@@ -299,29 +325,31 @@ export function InteractionPlane() {
   const hasFocus = !!preview || hasChain;
   const emphasis = hasFocus || filter !== "all";
   /**
-   * Intents only appear once both a user and an agent are picked, and only the intents
-   * from that user's runs through that agent (narrowed further by an app, if picked).
+   * Intents only appear once a user, an agent and an app are picked: the intents that user
+   * ran through that agent (and the picked peer, if any) which involved that app.
    */
-  const showIntents = !!chain.u && !!chain.a;
+  const showIntents = !!pickedApp;
   const visibleIntents = useMemo(() => {
     const ids = new Set<string>();
     if (!showIntents) return ids;
-    for (const f of filtered) if (matchesChain(f, chain) && f.n[3]) ids.add(f.n[3]);
+    for (const f of filtered) if (matchesChain(f, chain) && f.n[4]) ids.add(f.n[4]);
     return ids;
   }, [filtered, chain, showIntents]);
 
-  // A hover preview shows whole paths; a chain reveals only one layer past its deepest pick,
-  // except that picking user + agent reveals apps and intents together.
-  const revealTo = preview || !hasChain || showIntents ? ORDER.length - 1 : depth + 1;
+  // A hover preview shows whole paths; a chain reveals one layer past its deepest pick,
+  // except that picking user + agent reveals its peers and apps together.
+  const revealTo = preview || !hasChain ? ORDER.length - 1 : Math.max(depth + 1, pickedUser && pickedAgent ? 3 : 0);
+  const revealed = (id: string) => ORDER.indexOf(columnOf(id)) <= revealTo;
 
   const { litNodes, litEdges } = useMemo(() => {
     const litNodes = new Set<string>();
     const litEdges = new Set<string>();
     for (const f of activeFlows) {
-      f.n.forEach((x, k) => x && k <= revealTo && litNodes.add(x));
-      f.es.forEach((e, k) => e && k + 1 <= revealTo && litEdges.add(e.id));
+      for (const x of [...f.n, ...(f.also ?? [])]) if (x && revealed(x)) litNodes.add(x);
+      for (const e of f.es) if (revealed(e.to)) litEdges.add(e.id);
     }
     return { litNodes, litEdges };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFlows, revealTo]);
 
   const visibility = (lit: boolean): Visibility => (!emphasis ? "normal" : lit ? (hasFocus ? "lit" : "normal") : "muted");
@@ -353,6 +381,9 @@ export function InteractionPlane() {
   };
   const revealAgent = (y: number) => {
     agentListRef.current?.scrollTo({ top: Math.max(0, y - userListH / 2), behavior: "smooth" });
+  };
+  const revealPeer = (y: number) => {
+    peerListRef.current?.scrollTo({ top: Math.max(0, y - userListH / 2), behavior: "smooth" });
   };
   const revealIntent = (y: number) => {
     intentListRef.current?.scrollTo({ top: Math.max(0, y - userListH / 2), behavior: "smooth" });
@@ -399,20 +430,23 @@ export function InteractionPlane() {
   const byColumn = (t: PlaneColumn) => Object.values(NODES).filter((n) => n.t === t);
   const userNodes = byColumn("u");
   const agentNodes = byColumn("a");
+  const peerNodes = byColumn("r");
+  const peerListKey = agentFlow.data ? `${chain.u}|${chain.a}` : "rest";
+  const peerScroll = peerScrollState.key === peerListKey ? peerScrollState.top : 0;
   /** Intents showing right now, re-stacked so a narrowed list has no gaps. */
   const intentNodes = byColumn("i")
     .filter((n) => visibleIntents.has(n.id))
     .map((n, k) => ({ ...n, y: listY("i", k) }));
   const intentById = new Map(intentNodes.map((n) => [n.id, n]));
   const nodeAt = (id: string): PlaneNode | undefined => intentById.get(id) ?? NODES[id];
-  const intentListKey = `${chain.u}|${chain.a}|${chain.p}|${filter}`;
+  const intentListKey = `${chain.u}|${chain.a}|${chain.r}|${chain.p}|${filter}`;
   const intentScroll = intentScrollState.key === intentListKey ? intentScrollState.top : 0;
 
   /* ---------- Edges, count pills and tooltip ---------- */
 
   /** How far a node's list is scrolled; apps don't scroll. */
   const scrollOf = (node: PlaneNode) =>
-    node.t === "u" ? userScroll : node.t === "a" ? agentScroll : node.t === "i" ? intentScroll : null;
+    node.t === "u" ? userScroll : node.t === "a" ? agentScroll : node.t === "r" ? peerScroll : node.t === "i" ? intentScroll : null;
 
   /** Where a node's centre sits on the canvas; list rows follow their list's scroll position. */
   const canvasY = (node: PlaneNode) => {
@@ -439,18 +473,19 @@ export function InteractionPlane() {
       const y1 = canvasY(a);
       const y2 = canvasY(b);
       const cx = (x1 + x2) / 2;
-      const my = (y1 + y2) / 2;
+      // A line that skips a column (agent → app, past the peers) carries its pill in the last
+      // gap, so it doesn't sit on a card. Agent → peer lines all leave one card, so their
+      // pills sit nearer the peers, where the lines have fanned out.
+      const t = ORDER.indexOf(b.t) - ORDER.indexOf(a.t) > 1 ? 0.85 : a.t === "a" && b.t === "r" ? 0.62 : 0.5;
+      const bez = (p0: number, p1: number, p2: number, p3: number) =>
+        (1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t ** 2 * p2 + t ** 3 * p3;
       const vis = visibility(litEdges.has(e.id));
       const offscreen = !inView(a) || !inView(b);
-      return { e, a, d: `M${x1} ${y1} C${cx} ${y1} ${cx} ${y2} ${x2} ${y2}`, cx, my, vis, offscreen };
+      return { e, a, d: `M${x1} ${y1} C${cx} ${y1} ${cx} ${y2} ${x2} ${y2}`, cx: bez(x1, cx, cx, x2), my: bez(y1, y1, y2, y2), vis, offscreen };
     });
 
-  // A gate band lights up when a highlighted hop passes through it.
-  const cocaLit = edgeGeometry.some((g) => g.vis === "lit" && g.a.t === "u");
-  const gate2Lit = edgeGeometry.some((g) => g.vis === "lit" && g.a.t === "a");
-
   const hoveredEdge = edgeGeometry.find((g) => g.e.id === hoverEdge);
-  const tooltip = hoveredEdge ? { x: hoveredEdge.cx, y: hoveredEdge.my, edge: hoveredEdge.e, from: hoveredEdge.a } : null;
+  const tooltip = hoveredEdge ? { x: hoveredEdge.cx, y: hoveredEdge.my, edge: hoveredEdge.e } : null;
 
   const edgeHover = (id: string) => ({
     onMouseEnter: () => setHoverEdge(id),
@@ -481,26 +516,23 @@ export function InteractionPlane() {
   const agentCount = new Set(rows.map((r) => r.agent.did)).size;
   const appCount = new Set(rows.map((r) => r.app?.did).filter(Boolean)).size;
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  const gateFailCount = rows.filter(
-    (r) => r.gate1.result === "fail" || (r.gate2 && GATE2_WALLS.some((w) => r.gate2![w.key].result === "fail")),
-  ).length;
   const traceStats: [string, string, PlaneStatus?][] = paths.data
     ? [
         ["Paths", paths.data.total.toLocaleString()],
         ["Interactions", rows.reduce((s, r) => s + r.interactionsCount, 0).toLocaleString()],
         ["Agents", String(agentCount)],
         ["Apps", String(appCount)],
-        ["Gate failures", String(gateFailCount), "flagged"],
         ["Flagged", String(flaggedCount), "flagged"],
         ["Needs review", String(elevatedCount), "elevated"],
       ]
     : [];
-  /** Open a path's intent in the detail box, keeping the canvas on the same user → agent → app. */
+  /** Open a path's intent in the detail box, keeping the canvas on the same user → agent → peer → app. */
   const openPath = (r: ObsPath) => {
     if (!r.intent) return;
     setChain({
       u: nodeId("u", r.user.did),
       a: nodeId("a", r.agent.did),
+      ...(r.peer ? { r: nodeId("r", r.peer.did) } : {}),
       ...(r.app ? { p: nodeId("p", r.app.did) } : {}),
       i: nodeId("i", r.intent.id),
     });
@@ -551,6 +583,7 @@ export function InteractionPlane() {
       setHovered(null);
       if (hit.t === "u") revealUser(hit.y);
       if (hit.t === "a") revealAgent(hit.y);
+      if (hit.t === "r") revealPeer(hit.y);
       if (hit.t === "i") revealIntent(intentById.get(hit.id)?.y ?? hit.y);
       return;
     }
@@ -570,7 +603,7 @@ export function InteractionPlane() {
       .catch(() => setSearchMiss(true));
   };
 
-  /* ---------- Gate numbers ---------- */
+  /* ---------- Header ---------- */
 
   const headline = summary.data
     ? `${plural(summary.data.identities, "identity").replace("identitys", "identities")} · ${plural(summary.data.agents, "agent")} · ` +
@@ -624,51 +657,15 @@ export function InteractionPlane() {
 
         <div ref={wrapRef} className="ip-canvas-wrap" style={{ height: Math.round(planeH * scale + 40) }}>
           <div className="ip-canvas" style={{ width: PLANE_W, height: planeH, transform: `scale(${scale})` }}>
-            <GateBand
-              left={204}
-              height={planeH}
-              lit={cocaLit}
-              tone="coca"
-              name="COCA"
-              icon="shield"
-              verb="VERIFY"
-              desc="Identity & integrity"
+            <ColumnLabel col="u" n="01 · USER" hint={`Who initiated · ${usersTotal}`} />
+            <ColumnLabel col="a" n="02 · AGENT" hint="Which agent acted" />
+            <ColumnLabel
+              col="r"
+              n="03 · PEER AGENTS"
+              hint={agentFlow.data && chain.a ? `Worked with ${NODES[chain.a]?.name ?? "this agent"}` : "Agents it worked with"}
             />
-            <GateBand
-              left={GATE2_WALLS[0].left}
-              height={planeH}
-              lit={gate2Lit}
-              tone="coca"
-              name="COCA"
-              icon="shield"
-              verb="VERIFY"
-              desc="Agent identity & integrity"
-            />
-            <GateBand
-              left={GATE2_WALLS[1].left}
-              height={planeH}
-              lit={gate2Lit}
-              tone="cbac"
-              name="CBAC"
-              icon="key"
-              verb="AUTHORIZE"
-              desc="Policy & authorization"
-            />
-            <GateBand
-              left={GATE2_WALLS[2].left}
-              height={planeH}
-              lit={gate2Lit}
-              tone="whitelist"
-              name="Whitelist"
-              icon="check"
-              verb="APPROVED"
-              desc="Agent approved, not revoked"
-            />
-
-            <ColumnLabel left={0} width={168} n="01 · USER" hint={`Who initiated · ${usersTotal}`} />
-            <ColumnLabel left={352} width={180} n="03 · AGENT" hint="Which agent acted" />
-            <ColumnLabel left={964} width={144} n="05 · APP" hint="What was accessed" />
-            <ColumnLabel left={1192} width={260} n="06 · INTENT" hint="Shown for the picked user + agent" />
+            <ColumnLabel col="p" n="04 · APP" hint="What was accessed" />
+            <ColumnLabel col="i" n="05 · INTENT" hint="Shown for the picked app" />
 
             {(booting || bootError || isEmpty) && (
               <div className="ip-state" style={{ top: USER_LIST_TOP, height: userListH - 8 }}>
@@ -717,7 +714,8 @@ export function InteractionPlane() {
             </svg>
 
             {edgeGeometry.map(({ e, a, cx, my, vis, offscreen }) => {
-              const gated = a.t !== "p";
+              // The agent → peer gap is too narrow for the FLAGGED tag; the red × carries it.
+              const tagged = e.st === "flagged" && a.t !== "a";
               const muted = vis === "muted";
               if (offscreen) return null;
               if (e.st === "allowed" && e.n < PILL_THRESHOLD && vis !== "lit") {
@@ -746,9 +744,9 @@ export function InteractionPlane() {
                   }}
                   {...edgeHover(e.id)}
                 >
-                  <span style={{ color: STATUS_COLOR[e.st] }}>{glyph(e.st, gated)}</span>
+                  {e.st !== "allowed" && <span style={{ color: STATUS_COLOR[e.st] }}>{glyph(e.st)}</span>}
                   <span>{fmt(e.n)}</span>
-                  {e.st === "flagged" && gated && <span className="ip-pill-tag">FLAGGED</span>}
+                  {tagged && <span className="ip-pill-tag">FLAGGED</span>}
                 </div>
               );
             })}
@@ -813,6 +811,47 @@ export function InteractionPlane() {
               ))}
             </PlaneList>
 
+            <PlaneList
+              key={peerListKey}
+              col="r"
+              listRef={peerListRef}
+              height={userListH}
+              contentHeight={listHeight("r", peerNodes.length)}
+              onScroll={(ev) => setPeerScrollState({ key: peerListKey, top: ev.currentTarget.scrollTop })}
+            >
+              {peerNodes.map((n) => (
+                <div
+                  key={n.id}
+                  className="ip-node ip-node-agent"
+                  style={{ ...listRowBox(n), ...nodeLook(n) }}
+                  title={n.ref}
+                  {...nodeHandlers(n.id)}
+                >
+                  <div className="ip-glyph ip-glyph-agent"><Icon name="agents" size={16} /></div>
+                  <div className="ip-node-text">
+                    <div className="ip-node-name ip-display">{n.name}</div>
+                    <div className="ip-node-sub ip-mono">{n.sub}</div>
+                  </div>
+                </div>
+              ))}
+            </PlaneList>
+            {pickedUser && pickedAgent && (agentFlow.loading || agentFlow.error || agentFlow.data?.peers.length === 0) && (
+              <div className="ip-intent-gate" style={{ left: COLUMNS.r[0], top: USER_LIST_TOP + 8, width: COLUMNS.r[1] - COLUMNS.r[0], height: 120 }}>
+                <div className="ip-intent-gate-body">
+                  {agentFlow.loading ? (
+                    "Loading peer agents…"
+                  ) : agentFlow.error ? (
+                    <>
+                      Couldn't load peer agents: {agentFlow.error}{" "}
+                      <button type="button" className="btn ghost" onClick={agentFlow.retry}>Retry</button>
+                    </>
+                  ) : (
+                    "No other agent took part in this user's intents with this agent."
+                  )}
+                </div>
+              </div>
+            )}
+
             {byColumn("p").map((n) => (
               <div key={n.id} className="ip-node ip-node-app" style={nodeBox(n)} title={n.ref} {...nodeHandlers(n.id)}>
                 <div className="ip-glyph ip-glyph-app"><Icon name="box" size={14} /></div>
@@ -831,7 +870,11 @@ export function InteractionPlane() {
                 <Icon name="intents" size={18} />
                 <div className="ip-intent-gate-title">Intents appear here</div>
                 <div className="ip-intent-gate-body">
-                  {chain.u ? "Now pick one of the highlighted agents." : "Pick a user, then one of their agents."}
+                  {!chain.u
+                    ? "Pick a user, then an agent, then an app."
+                    : !chain.a
+                      ? "Now pick one of the highlighted agents."
+                      : "Pick an app to see the intents that involved it."}
                 </div>
               </div>
             )}
@@ -952,7 +995,7 @@ export function InteractionPlane() {
             </>
           ) : (
             <div className="ip-empty">
-              Start with a user: the agents they used light up. Then pick an agent to see the apps it called and the intents it ran for that user. Turn on Trace interaction to preview whole paths on hover.
+              Start with a user: the agents in their intents light up. Pick an agent to see the agents it worked with and the apps involved, pick a peer to narrow to the intents the two shared, then an app to see those intents. Turn on Trace interaction to preview whole paths on hover.
             </div>
           )}
         </div>
@@ -965,7 +1008,7 @@ export function InteractionPlane() {
 /* ---------------- Pieces ---------------- */
 
 /**
- * One of the three matching scroll lists (users, agents, intents): same top and height,
+ * One of the matching scroll lists (users, agents, peers, intents): same top and height,
  * a gutter either side of its column, and the edge fade only once it actually scrolls.
  */
 function PlaneList({
@@ -976,7 +1019,7 @@ function PlaneList({
   onScroll,
   children,
 }: {
-  col: "u" | "a" | "i";
+  col: ListColumn;
   listRef: Ref<HTMLDivElement>;
   height: number;
   contentHeight: number;
@@ -996,59 +1039,13 @@ function PlaneList({
   );
 }
 
-function ColumnLabel({ left, width, n, hint }: { left: number; width: number; n: string; hint: string }) {
+function ColumnLabel({ col, n, hint }: { col: PlaneColumn; n: string; hint: string }) {
+  const [left, right] = COLUMNS[col];
   return (
-    <div className="ip-col-label" style={{ left, width }}>
+    <div className="ip-col-label" style={{ left, width: right - left }}>
       <div className="ip-col-title">{n}</div>
       <div className="ip-col-hint">{hint}</div>
     </div>
-  );
-}
-
-interface GateBandProps {
-  left: number;
-  height: number;
-  lit: boolean;
-  tone: "coca" | "cbac" | "whitelist";
-  name: string;
-  icon: "shield" | "key" | "check";
-  verb: string;
-  desc: string;
-}
-
-function GateBand({ left, height, lit, tone, name, icon, verb, desc }: GateBandProps) {
-  return (
-    <div className={`ip-gate ip-gate-${tone}${lit ? " lit" : ""}`} style={{ left, height }}>
-      <div className="ip-gate-card">
-        <div className="ip-gate-head">
-          <Icon name={icon} size={14} />
-          <span className="ip-gate-name">{name}</span>
-          <span className="ip-gate-live" />
-        </div>
-        <div className="ip-gate-verb">{verb}</div>
-        <div className="ip-gate-desc">{desc}</div>
-      </div>
-    </div>
-  );
-}
-
-const WALL_STATUS: Record<Exclude<ObsWallResult, "not_tracked">, PlaneStatus> = {
-  pass: "allowed",
-  review: "elevated",
-  fail: "flagged",
-};
-
-/** A wall's result on a trace row: ✓ / ! / × with the hop count, or "not tracked". */
-function WallBadge({ wall }: { wall?: { result: ObsWallResult; count: number } | null }) {
-  if (!wall) return <span className="ip-gate-badge" style={{ color: "var(--fg-faint)" }}>—</span>;
-  if (wall.result === "not_tracked") {
-    return <span className="ip-gate-badge ip-untracked" title="CBAC decisions aren't recorded yet">not tracked</span>;
-  }
-  const st = WALL_STATUS[wall.result];
-  return (
-    <span className="ip-gate-badge" style={{ color: STATUS_COLOR[st], background: tint(st, ".08") }}>
-      {glyph(st, true)} {fmt(wall.count)}
-    </span>
   );
 }
 
@@ -1062,33 +1059,24 @@ function HopNode({ kind, did, name }: { kind: string; did?: string; name?: strin
   );
 }
 
-/** A gate between two parties: each wall it runs, with its result. */
-function HopGate({ walls }: { walls: [string, { result: ObsWallResult; count: number } | null | undefined][] }) {
+function HopArrow() {
   return (
     <span className="ip-hop-gate">
       <span className="ip-hop-line" />
-      {walls.map(([label, wall]) => (
-        <span key={label} className="ip-hop-wall">
-          <span className="k">{label}</span>
-          <WallBadge wall={wall} />
-        </span>
-      ))}
       <span className="ip-hop-line arrow" />
     </span>
   );
 }
 
 /**
- * A path in the trace as its hops — user → COCA → agent → COCA · CBAC · Whitelist → app —
- * with the intent it ran and how it ended. Clicking opens that intent's detail.
+ * A path in the trace as its hops — user → agent → peer → app — with the intent it ran and
+ * how it ended. Clicking opens that intent's detail.
  */
 function PathHops({ row, onOpen }: { row: ObsPath; onOpen?: () => void }) {
   const code = row.policy?.split(" ")[0];
   const title = row.intent
     ? row.intent.titleFull || row.intent.title || row.intent.id
-    : row.gate1.result === "fail"
-      ? "Identity check flagged"
-      : "No intent recorded";
+    : "No intent recorded";
   return (
     <div
       className={`ip-hops ip-hops-${row.outcome}${onOpen ? " clickable" : ""}`}
@@ -1115,28 +1103,39 @@ function PathHops({ row, onOpen }: { row: ObsPath; onOpen?: () => void }) {
       </div>
       <div className="ip-hops-chain">
         <HopNode kind="User" did={row.user.did} name={row.user.name} />
-        <HopGate walls={[["COCA", row.gate1]]} />
+        <HopArrow />
         <HopNode kind="Agent" did={row.agent.did} name={row.agent.name} />
-        <HopGate walls={GATE2_WALLS.map((w) => [w.key === "whitelist" ? "Whitelist" : w.key.toUpperCase(), row.gate2?.[w.key]])} />
+        {row.peer && (
+          <>
+            <HopArrow />
+            <HopNode kind="Peer agent" did={row.peer.did} name={row.peer.name} />
+          </>
+        )}
+        <HopArrow />
         <HopNode kind="App" did={row.app?.did} name={row.app?.name} />
       </div>
     </div>
   );
 }
 
-function EdgeTooltip({ x, y, edge, from }: { x: number; y: number; edge: PlaneEdge; from: PlaneNode }) {
-  const gate =
-    edge.pol ?? (from.t === "u" ? "COCA · identity verified" : from.t === "a" ? "COCA · Whitelist passed · CBAC not tracked" : "Executed");
-  const last = ago(edge.lastAt);
+function EdgeTooltip({ x, y, edge }: { x: number; y: number; edge: PlaneEdge }) {
+  const last = edge.lastAt ? ago(edge.lastAt) : null;
   return (
     <div className="ip-tooltip" style={{ left: x, top: y }}>
       <div className="ip-tooltip-title">{edge.n.toLocaleString()} interactions</div>
-      <div className="ip-tooltip-line">Last interaction: {last === "just now" ? last : `${last} ago`}</div>
-      <div className="ip-mono ip-tooltip-split">
-        Allowed {edge.allowed.toLocaleString()} · Flagged {edge.flagged.toLocaleString()}
-        {edge.elevated ? ` · Review ${edge.elevated.toLocaleString()}` : ""}
+      {last && <div className="ip-tooltip-line">Last interaction: {last === "just now" ? last : `${last} ago`}</div>}
+      {edge.tips?.map((t) => (
+        <div key={t} className="ip-tooltip-line">{t}</div>
+      ))}
+      {edge.split && (
+        <div className="ip-mono ip-tooltip-split">
+          Allowed {edge.split.allowed.toLocaleString()} · Flagged {edge.split.flagged.toLocaleString()}
+          {edge.split.elevated ? ` · Review ${edge.split.elevated.toLocaleString()}` : ""}
+        </div>
+      )}
+      <div className="ip-mono ip-tooltip-split" style={{ color: STATUS_COLOR[edge.st] }}>
+        {edge.pol ?? edge.st.charAt(0).toUpperCase() + edge.st.slice(1)}
       </div>
-      <div className="ip-mono ip-tooltip-split" style={{ color: STATUS_COLOR[edge.st] }}>{gate}</div>
     </div>
   );
 }
