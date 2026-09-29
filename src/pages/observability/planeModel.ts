@@ -447,7 +447,9 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
       );
       // Light the picked agent's and peer's lines into the intent's other apps too.
       const callers = appIds.flatMap((p) => [edges.get(`${a}>${p}`), r ? edges.get(`${r}>${p}`) : undefined]);
-      addFlow([u, a, r, picked, id], [...es, ...callers], it.outcome, appIds.filter((p) => p !== picked));
+      // Keep the path the intent was picked through (user → agent → peer) lit as well.
+      const path = [edges.get(`${u}>${a}`), r ? edges.get(`${a}>${r}`) : undefined];
+      addFlow([u, a, r, picked, id], [...path, ...es, ...callers], it.outcome, appIds.filter((p) => p !== picked));
     });
   }
 
@@ -565,7 +567,8 @@ export function buildAppPlaneModel({ graph, users, appFlow, intents }: AppBuildI
         lastAt: it.lastAt,
         pol: it.policy ?? undefined,
       });
-      addFlow([p, a, r, u, id], [e], it.outcome);
+      // Keep the path the intent was picked through (app → agent → peer → user) lit as well.
+      addFlow([p, a, r, u, id], [edges.get(`${p}>${a}`), edges.get(`${a}>${r}`), edges.get(`${r}>${u}`), e], it.outcome);
     });
   }
 

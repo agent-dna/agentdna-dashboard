@@ -35,7 +35,7 @@ export function ToolDetailPage() {
   const [intentsPage, setIntentsPage] = useState(1);
 
   const { data: result, loading } = useToolInfo(toolId, interactionsPage, intentsPage);
-  const { data: agentScores } = useToolAgentScores(result?.tool.id || toolId);
+  const { data: agentScores } = useToolAgentScores(result?.tool.id);
 
   if (loading) {
     return (

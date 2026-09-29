@@ -2,8 +2,7 @@ import { Fragment, memo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppWindow, Bot, ExternalLink, FileText, UserRound, X, type LucideIcon } from "lucide-react";
 import { fetchObsPaths, type ObsPath, type ObsPathFilter, type ObsScope } from "../../api/observability";
-import { AppDetailPanel } from "./EntityDetailPanel";
-import { AgentInfoPanel, UserInfoPanel } from "./ProfilePanels";
+import { AgentInfoPanel, AppInfoPanel, UserInfoPanel } from "./ProfilePanels";
 import { IntentDetailPanel } from "./IntentDetailPanel";
 import { loadIntentDetail } from "./intentDetail";
 import { COLUMN_TYPE, STATUS_COLOR, STATUS_TINT, nodeId, refOf, type PlaneColumn, type PlaneMode, type PlaneNode, type PlaneStatus } from "./planeModel";
@@ -220,7 +219,7 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, preview, 
           <AgentInfoPanel key={shownAgent} did={refOf(shownAgent)} name={panelName(shownAgent)} nameOf={nameOf} />
         </>
       ) : activeTab === "app" && chain.p ? (
-        <AppDetailPanel key={chain.p} did={refOf(chain.p)} name={panelName(chain.p)} kind="APP" hint={nextHint} />
+        <AppInfoPanel key={chain.p} did={refOf(chain.p)} name={panelName(chain.p)} />
       ) : (
         <div className="ip-trace">
           <div className="ip-trace-head">

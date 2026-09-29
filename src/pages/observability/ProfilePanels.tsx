@@ -20,15 +20,17 @@ import {
 } from "lucide-react";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useDrawer } from "../../context/DrawerContext";
-import { useAgent, useAgentInteractions, useUserInfo } from "../../data/hooks";
+import { useAgent, useAgentInteractions, useToolAgentScores, useToolInfo, useUserInfo } from "../../data/hooks";
+import { AppIcon } from "../../components/AppIcon";
 import { timeAgo } from "../../lib/format";
 import type { Interaction } from "../../types";
 
 /**
- * User Info and Agents Info tabs of the observability detail box: a profile header, stat
- * tiles, a details card, recent intents (user) and the latest interactions. Clicking an
- * interaction opens it in the interaction drawer.
- * Data: `/user-info` for the user; `/agent-info` and `/agent-interactions` for the agent.
+ * User, Agents and Application Info tabs of the observability detail box: a profile header,
+ * stat tiles, then details, recent intents (user), the latest interactions or the app's
+ * agents with their LHI scores. Clicking an interaction opens it in the interaction drawer.
+ * Data: `/user-info` for the user; `/agent-info` and `/agent-interactions` for the agent;
+ * `/tool-info` and `/tool-agent-scores` for the app (the same calls as the app page).
  */
 
 const shortId = (id: string) => (id.length > 18 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id);
@@ -75,7 +77,7 @@ export function UserInfoPanel({ did, name }: { did: string; name: string }) {
         title={title}
         chip={u && (u.isActive ? <StatusChip tone="safe">Active</StatusChip> : <StatusChip>Inactive</StatusChip>)}
         email={email}
-        sub="User details and activity overview"
+        // sub="User details and activity overview"
         action={
           <button type="button" className="btn primary ip-pf-open" onClick={() => navigate(openPath)}>
             Open user <ExternalLink size={14} />
@@ -103,10 +105,10 @@ export function UserInfoPanel({ did, name }: { did: string; name: string }) {
                 <Did did={did} />
               </Field>
             </div>
-            <div className="ip-pf-basic ip-pf-basic-2">
+            {/* <div className="ip-pf-basic ip-pf-basic-2">
               <Field k="Email">{u.userName || "—"}</Field>
               <Field k="Display name">{u.displayName || "—"}</Field>
-            </div>
+            </div> */}
           </div>
 
           <RecentActivity title="Recent activity" rows={activity} onViewAll={() => navigate(openPath)} />
@@ -210,6 +212,93 @@ export function AgentInfoPanel({ did, name, nameOf }: { did: string; name: strin
   );
 }
 
+/* ---------------- Application ---------------- */
+
+const LHI_SCORES = [
+  ["trustScore", "Trust"],
+  ["intentScore", "Intent"],
+  ["hallucinationScore", "Hallucination"],
+  ["policyScore", "Policy"],
+] as const;
+const scoreTone = (n: number) => (n >= 80 ? "safe" : n >= 50 ? "warn" : "threat");
+
+export function AppInfoPanel({ did, name }: { did: string; name: string }) {
+  const navigate = useNavigate();
+  const { data, loading } = useToolInfo(did);
+  const t = data?.tool;
+  const { data: agents, loading: agentsLoading } = useToolAgentScores(t?.id);
+  const title = t?.name || name;
+  const openPath = `/tools/${encodeURIComponent(did)}`;
+
+  return (
+    <div className="ip-pf">
+      <Hero
+        avatar={<AppIcon name={title} size={72} />}
+        bare
+        title={title}
+        chip={t && t.totalThreats > 0 && <StatusChip tone="threat">{count(t.totalThreats)} threats</StatusChip>}
+        sub="Application details and the agents that use it"
+        action={
+          <button type="button" className="btn primary ip-pf-open" onClick={() => navigate(openPath)}>
+            Open app <ExternalLink size={14} />
+          </button>
+        }
+      />
+      {!t ? (
+        <div className="ip-empty">{loading ? "Loading app…" : "Couldn't load this app's details."}</div>
+      ) : (
+        <>
+          <div className="ip-pf-stats ip-pf-stats-3">
+            <Stat icon={Bot} value={count(t.totalAgents)} label="Agents interacted" />
+            <Stat icon={TrendingUp} value={count(t.totalInteractions)} label="Interactions" />
+            <Stat icon={Activity} value={count(t.totalIntents)} label="Intents" />
+          </div>
+
+          <div className="ip-pf-section ip-pf-section-row">
+            <span>
+              Agents · latest LHI scores
+              {agents.length > 0 && <span className="ip-pf-count">{count(agents.length)}</span>}
+            </span>
+            <button type="button" className="ip-pf-link" onClick={() => navigate(openPath)}>
+              View all <ArrowRight size={14} />
+            </button>
+          </div>
+          <div className="ip-pf-box ip-pf-activity">
+            {agents.length === 0 ? (
+              <div className="ip-pf-activity-empty">{agentsLoading ? "Loading agents…" : "No agents have used this app yet."}</div>
+            ) : (
+              agents.map((a) => (
+                <button
+                  key={a.agentDID}
+                  type="button"
+                  className="ip-pf-agent-row ip-pf-act-btn"
+                  onClick={() => navigate(`/agents/${encodeURIComponent(a.agentDID)}`)}
+                  title="Open agent"
+                >
+                  <span className="ip-pf-act-icon">
+                    <Bot size={16} strokeWidth={1.8} />
+                  </span>
+                  <span className="ip-pf-act-text">
+                    <b>{a.agentName || shortId(a.agentDID)}</b>
+                  </span>
+                  <span className="ip-pf-scores">
+                    {LHI_SCORES.map(([key, label]) => (
+                      <span key={key} className={`ip-pf-score ${scoreTone(a[key])}`}>
+                        <span className="k">{label}</span>
+                        <span className="v">{a[key]}</span>
+                      </span>
+                    ))}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- Pieces ---------------- */
 
 /**
@@ -294,6 +383,7 @@ function PolicyText({ text }: { text: string }) {
 
 function Hero({
   avatar,
+  bare,
   title,
   chip,
   email,
@@ -301,6 +391,8 @@ function Hero({
   action,
 }: {
   avatar: ReactNode;
+  /** The avatar brings its own tile (an app logo). */
+  bare?: boolean;
   title: string;
   chip?: ReactNode;
   email?: string;
@@ -309,7 +401,7 @@ function Hero({
 }) {
   return (
     <div className="ip-pf-hero">
-      <div className="ip-pf-avatar">{avatar}</div>
+      {bare ? avatar : <div className="ip-pf-avatar">{avatar}</div>}
       <div className="ip-pf-hero-text">
         <div className="ip-pf-title-row">
           <span className="ip-pf-title">{title}</span>

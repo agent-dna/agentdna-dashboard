@@ -29,7 +29,6 @@ export function UserDetailPage() {
   const [agentsPage, setAgentsPage] = useState(1);
 
   const [revoking, setRevoking] = useState(false);
-  const [granting, setGranting] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
 
   const { data: result, loading } = useUserInfo(
@@ -285,28 +284,15 @@ export function UserDetailPage() {
             </div>
 
             {/* Info grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
               <InfoStat label="Email" value={user.userName} />
               <InfoStat label="Joined" value={timeAgo(user.createdMinsAgo)} />
-              <InfoStat label="Agents Access" value={user.accessAgentCount} mono />
               <InfoStat label="Agents Deployed" value={user.totalAgentsDeployed} mono />
             </div>
           </div>
 
           {/* Action buttons */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button
-              className="btn primary"
-              disabled={granting}
-              onClick={async () => {
-                setGranting(true);
-                // TODO: call grantAgentAccess or a user-level grant API
-                setGranting(false);
-              }}
-            >
-              <Icon name="plus" size={14} />
-              {granting ? "Granting…" : "Grant access"}
-            </button>
             <button
               className="btn"
               disabled={revoking}

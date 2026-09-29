@@ -170,5 +170,10 @@ export const useToolInfo = (nameOrDid: string, interactionsPage = 1, intentsPage
     [nameOrDid, interactionsPage, intentsPage],
   );
 
-export const useToolAgentScores = (toolDID: string) =>
-  useAsync<api.ToolAgentScore[]>(() => api.fetchToolAgentScores(toolDID), [], [toolDID]);
+// Waits for a resolved toolDID; the backend only matches on the DID, not the tool name.
+export const useToolAgentScores = (toolDID: string | undefined) =>
+  useAsync<api.ToolAgentScore[]>(
+    () => (toolDID ? api.fetchToolAgentScores(toolDID) : Promise.resolve([])),
+    [],
+    [toolDID],
+  );
