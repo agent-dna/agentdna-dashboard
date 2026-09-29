@@ -43,7 +43,7 @@ const NEXT_HINT: Record<PlaneMode, Record<PlaneColumn, string>> = {
   },
   app: {
     p: "Pick one of the agents that called this app.",
-    a: "Pick a peer agent to see who started the intents they shared on this app.",
+    a: "Pick a user to see their intents, or a peer agent to narrow to the intents they shared on this app.",
     r: "Pick a user to see their intents.",
     u: "Pick an intent to see its detail.",
     i: "",

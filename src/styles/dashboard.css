@@ -2494,8 +2494,23 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ip-pf-act-text { font-size: 13.5px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ip-pf-act-text b { font-weight: 500; }
 .ip-pf-act-pill { font-family: var(--font-mono); font-size: 11px; }
-.ip-pf-act-btn { width: 100%; background: none; border: 0; border-radius: 0; font: inherit; text-align: left; cursor: pointer; }
+.ip-pf-act-btn { width: 100%; background: none; border: 0; border-radius: 0; font: inherit; text-align: left; cursor: pointer; transition: background 0.12s; }
 .ip-pf-act-btn:hover { background: var(--bg-2); }
+/* Recent interactions: sender → receiver over the intent ID, status and time on the right. */
+.ip-pf-ix { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 11px 16px; }
+.ip-pf-ix + .ip-pf-ix { border-top: 1px solid var(--line); }
+.ip-pf-ix-main { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.ip-pf-ix-flow { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13.5px; color: var(--fg); }
+.ip-pf-ix-party { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.ip-pf-ix-party svg { flex: none; color: var(--accent); }
+.ip-pf-ix-party b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ip-pf-ix-arrow { flex: none; color: var(--fg-muted); }
+.ip-pf-ix-meta { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--fg-muted); }
+.ip-pf-ix-meta-k { text-transform: uppercase; letter-spacing: 0.04em; font-size: 10.5px; font-weight: 500; }
+.ip-pf-ix-intent { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg); background: var(--bg-2); padding: 1px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ip-pf-ix:hover .ip-pf-ix-intent { background: var(--bg); }
+.ip-pf-ix-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.ip-pf-ix-time { font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
 .ip-pf-count { margin-left: 8px; font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--fg-muted); background: var(--bg-2); padding: 1px 7px; border-radius: 999px; vertical-align: 2px; }
 .ip-pf-activity-empty { padding: 12px 14px; font-size: 13px; color: var(--fg-muted); }
 

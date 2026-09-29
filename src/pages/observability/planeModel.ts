@@ -7,11 +7,13 @@
  *   agent at rest; once a user and an agent are picked it is repopulated with the agents
  *   that took part in the same intents as that agent.
  * - app-first: App → Agent → Peer agents → User → Intent. Picking an app and an agent
- *   repopulates the peers; picking a peer repopulates the users.
+ *   repopulates the peers and the users behind that pair's intents; picking a peer (optional)
+ *   narrows the users to the intents the three shared.
  */
 
 import type {
   ObsAgentFlow,
+  ObsPath,
   ObsAppFlow,
   ObsAppFlowUser,
   ObsAgentFlowApp,
@@ -469,12 +471,61 @@ interface AppBuildInput {
    * picked peer, which adds the users behind the intents the three share.
    */
   appFlow: { base: ObsAppFlow; narrowed: ObsAppFlow | null } | null;
-  /** Intents for the picked app + agent + peer + user, once loaded. */
-  intents: { userDID: string; agentDID: string; peerDID: string; appDID: string; list: ObsIntent[] } | null;
+  /** Users behind the picked app + agent's intents (no peer needed), once loaded. */
+  agentUsers: ObsAppFlowUser[] | null;
+  /** Intents for the picked app + agent (+ peer) + user, once loaded. */
+  intents: { userDID: string; agentDID: string; peerDID: string | null; appDID: string; list: ObsIntent[] } | null;
+}
+
+/**
+ * The users behind an app + agent's paths, one card each, with their paths' hops rolled up.
+ * `/observability-app-flow` only lists users once a peer is picked, and an agent that worked
+ * on the app alone has no peers, so the paths call fills the user column instead.
+ */
+export function usersFromPaths(paths: ObsPath[], known: ObsUser[]): ObsAppFlowUser[] {
+  const byDid = new Map(known.map((u) => [u.userDID, u]));
+  const out = new Map<string, ObsAppFlowUser & { intents: Set<string> }>();
+  for (const row of paths) {
+    const did = row.user?.did;
+    if (!did) continue;
+    let u = out.get(did);
+    if (!u) {
+      const k = byDid.get(did);
+      u = {
+        userDID: did,
+        userName: k?.userName || row.user.name || "",
+        email: k?.email ?? "",
+        subtitle: k?.subtitle ?? "",
+        kind: k?.kind ?? "human",
+        signed: k?.signed ?? true,
+        count: 0,
+        allowed: 0,
+        elevated: 0,
+        flagged: 0,
+        outcome: "allowed",
+        lastAt: "",
+        policies: [],
+        intentsCount: 0,
+        intents: new Set(),
+      };
+      out.set(did, u);
+    }
+    const n = row.interactionsCount || 0;
+    u.count += n;
+    u[row.outcome] += n;
+    u.outcome = worst([u.outcome, row.outcome]);
+    if (row.policy && !u.policies.includes(row.policy)) u.policies.push(row.policy);
+    const at = row.intent?.lastInteractionAt || row.intent?.startedAt || "";
+    if (at > u.lastAt) u.lastAt = at;
+    if (row.intent?.id) u.intents.add(row.intent.id);
+  }
+  return [...out.values()]
+    .map(({ intents, ...u }) => ({ ...u, intentsCount: intents.size }))
+    .sort((x, y) => y.count - x.count);
 }
 
 /** App-first plane: App → Agent → Peer agents → User → Intent. Flow `n` follows that order. */
-export function buildAppPlaneModel({ graph, users, appFlow, intents }: AppBuildInput): PlaneModel {
+export function buildAppPlaneModel({ graph, users, appFlow, agentUsers, intents }: AppBuildInput): PlaneModel {
   const { nodes, edges, flows, addNode, addEdge, addFlow } = modelParts();
   const narrowed = appFlow?.narrowed ?? null;
 
@@ -503,8 +554,9 @@ export function buildAppPlaneModel({ graph, users, appFlow, intents }: AppBuildI
       addNode({ id: nodeId("r", a.agentDID), t: "r", ref: a.agentDID, name: a.agentName || a.agentDID, sub: agentSub(a), y: listY("r", k) }),
     );
 
-  /* ---------- Users: the paged list, or the picked trio's users once loaded ---------- */
+  /* ---------- Users: the paged list, or the picked pair's (or trio's) users once loaded ---------- */
   if (narrowed) narrowed.users.forEach((u, k) => addNode(userNode(u, k)));
+  else if (appFlow && agentUsers) agentUsers.forEach((u, k) => addNode(userNode(u, k)));
   else users.forEach((u, k) => addNode(userNode(u, k)));
 
   /* ---------- App → agent (agents drawn to the right of the apps they called) ---------- */
@@ -540,6 +592,14 @@ export function buildAppPlaneModel({ graph, users, appFlow, intents }: AppBuildI
       peerEdge.set(r, e);
       addFlow([p, a, r], [pa, e]);
     }
+    if (!narrowed?.peerDID && agentUsers) {
+      // No peer picked: the agent's own intents on this app, straight to the users behind them.
+      for (const u of agentUsers) {
+        const id = nodeId("u", u.userDID);
+        const e = addEdge(rollupEdge(a, id, u, [plural(u.intentsCount, "intent")]));
+        addFlow([p, a, "", id], [pa, e]);
+      }
+    }
     if (narrowed?.peerDID) {
       const r = nodeId("r", narrowed.peerDID);
       for (const u of narrowed.users) {
@@ -554,7 +614,7 @@ export function buildAppPlaneModel({ graph, users, appFlow, intents }: AppBuildI
   if (intents) {
     const p = nodeId("p", intents.appDID);
     const a = nodeId("a", intents.agentDID);
-    const r = nodeId("r", intents.peerDID);
+    const r = intents.peerDID ? nodeId("r", intents.peerDID) : "";
     const u = nodeId("u", intents.userDID);
     intents.list.forEach((it, k) => {
       const { id } = addNode(intentNode(it, k));
@@ -567,8 +627,9 @@ export function buildAppPlaneModel({ graph, users, appFlow, intents }: AppBuildI
         lastAt: it.lastAt,
         pol: it.policy ?? undefined,
       });
-      // Keep the path the intent was picked through (app → agent → peer → user) lit as well.
-      addFlow([p, a, r, u, id], [edges.get(`${p}>${a}`), edges.get(`${a}>${r}`), edges.get(`${r}>${u}`), e], it.outcome);
+      // Keep the path the intent was picked through (app → agent (→ peer) → user) lit as well.
+      const path = r ? [edges.get(`${a}>${r}`), edges.get(`${r}>${u}`)] : [edges.get(`${a}>${u}`)];
+      addFlow([p, a, r, u, id], [edges.get(`${p}>${a}`), ...path, e], it.outcome);
     });
   }
 

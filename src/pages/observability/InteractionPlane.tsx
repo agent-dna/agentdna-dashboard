@@ -9,6 +9,7 @@ import {
   fetchObsAppFlow,
   fetchObsGraph,
   fetchObsIntents,
+  fetchObsPaths,
   fetchObsSummary,
   fetchObsUserFlow,
   fetchObsUsers,
@@ -32,6 +33,7 @@ import {
   buildAppPlaneModel,
   buildPlaneModel,
   nodeId,
+  usersFromPaths,
   refOf,
   type ListColumn,
   type PlaneColumn,
@@ -49,8 +51,9 @@ import {
  * - user-first: User → Agent → Peer agents → App → Intent.
  * - app-first: App → Agent → Peer agents → User → Intent. Pick an app and the agents that
  *   called it light up; pick one and the peer column is repopulated with the agents it
- *   worked with in intents that reached the app; pick a peer and the user column is
- *   repopulated with who started those intents; pick a user to see them.
+ *   worked with in intents that reached the app, and the user column with who started the
+ *   agent's intents there. Picking a peer is optional and narrows the users to the intents
+ *   the two shared; pick a user to see the intents.
  *
  * In user-first mode:
  * Selection drills left to right: pick a user and the agents in their intents light up;
@@ -219,7 +222,7 @@ export function InteractionPlane() {
   // A pick only counts once the columns it depends on are picked; before that it just highlights.
   // User-first: user → agent, then an optional peer, then an app. App-first: app → agent → peer → user.
   const ref = (c: PlaneColumn) => (chain[c] ? refOf(chain[c]!) : null);
-  const pickedUser = userMode ? ref("u") : ref("p") && ref("a") && ref("r") ? ref("u") : null;
+  const pickedUser = userMode ? ref("u") : ref("p") && ref("a") ? ref("u") : null;
   const pickedAgent = userMode || ref("p") ? ref("a") : null;
   const pickedPeer = (userMode ? ref("u") : ref("p")) && ref("a") ? ref("r") : null;
   const pickedApp = userMode ? (ref("u") && ref("a") ? ref("p") : null) : ref("p");
@@ -243,10 +246,23 @@ export function InteractionPlane() {
     !userMode && appFlow.data && pickedPeer && `pflow:${pickedApp}:${pickedAgent}:${pickedPeer}`,
     () => fetchObsAppFlow(REST, pickedApp!, pickedAgent!, pickedPeer!),
   );
+  // App-first without a peer: the app-flow call only lists users for a peer, so the pair's paths name them.
+  const appAgentPaths = useObsQuery(
+    !userMode && appFlow.data && !pickedPeer && `ppaths:${pickedApp}:${pickedAgent}`,
+    () => fetchObsPaths(REST, { appDID: pickedApp!, agentDID: pickedAgent! }, 200),
+  );
+  const appAgentUsers = useMemo(
+    () => (appAgentPaths.data ? usersFromPaths(appAgentPaths.data.pathsList, users) : null),
+    [appAgentPaths.data, users],
+  );
   /** The call that fills the peer column in the current mode. */
   const peersQuery = userMode ? agentFlow : appFlow;
-  /** App-first, once a peer is picked: the user column holds that selection's users. */
-  const flowUsers = !userMode && pickedPeer ? appPeerFlow.data : null;
+  /** App-first, once an agent is picked: the user column holds that selection's users (narrowed by a peer if picked). */
+  const flowUsers = userMode
+    ? null
+    : pickedPeer
+      ? appPeerFlow.data && { list: appPeerFlow.data.users, total: appPeerFlow.data.usersTotal }
+      : pickedAgent && appFlow.data && appAgentUsers && { list: appAgentUsers, total: appAgentUsers.length };
 
   /**
    * Intents appear once the last column before them is picked: the app (user-first) or the
@@ -266,7 +282,8 @@ export function InteractionPlane() {
         graph: graph.data,
         users,
         appFlow: appFlow.data ? { base: appFlow.data, narrowed: pickedPeer ? appPeerFlow.data : null } : null,
-        intents: picks && pickedPeer ? { ...picks, peerDID: pickedPeer, list: intents.data!.intentsList } : null,
+        agentUsers: pickedPeer ? null : appAgentUsers,
+        intents: picks ? { ...picks, peerDID: pickedPeer, list: intents.data!.intentsList } : null,
       });
     }
     return buildPlaneModel({
@@ -285,6 +302,7 @@ export function InteractionPlane() {
     peerFlow.data,
     appFlow.data,
     appPeerFlow.data,
+    appAgentUsers,
     intents.data,
     showIntents,
     pickedUser,
@@ -366,9 +384,11 @@ export function InteractionPlane() {
   }, [filtered, chain, showIntents, ORDER]);
 
   // A hover preview shows whole paths; a chain reveals one layer past its deepest pick,
-  // except that user-first picking user + agent reveals its peers and apps together.
+  // except that picking the first column + agent reveals the peers and the column after them together.
   const revealTo =
-    preview || !hasChain ? ORDER.length - 1 : Math.max(depth + 1, userMode && pickedUser && pickedAgent ? 3 : 0);
+    preview || !hasChain
+      ? ORDER.length - 1
+      : Math.max(depth + 1, (userMode ? pickedUser : pickedApp) && pickedAgent ? 3 : 0);
   const revealed = (id: string) => ORDER.indexOf(columnOf(id)) <= revealTo;
 
   const { litNodes, litEdges } = useMemo(() => {
@@ -600,7 +620,7 @@ export function InteractionPlane() {
   const columnHint = (c: PlaneColumn) => {
     switch (c) {
       case "u":
-        return flowUsers ? `Started these intents · ${flowUsers.usersTotal}` : `Who initiated · ${usersTotal}`;
+        return flowUsers ? `Started these intents · ${flowUsers.total}` : `Who initiated · ${usersTotal}`;
       case "a":
         return userMode ? "Which agent acted" : "Agents that called it";
       case "r":
@@ -874,6 +894,14 @@ export function InteractionPlane() {
                 empty={appPeerFlow.data?.users.length === 0 && "No user started an intent these agents shared on this app."}
               />
             )}
+            {!userMode && pickedAgent && appFlow.data && !pickedPeer && (
+              <ColumnNote
+                span={COLUMNS.u}
+                query={appAgentPaths}
+                what="users"
+                empty={appAgentUsers?.length === 0 && "No user started an intent with this agent on this app."}
+              />
+            )}
 
             <PlaneList
               key={mode}
@@ -916,12 +944,10 @@ export function InteractionPlane() {
                         ? "Now pick one of the highlighted agents."
                         : "Pick an app to see the intents that involved it."
                     : !chain.p
-                      ? "Pick an app, then an agent, a peer agent and a user."
+                      ? "Pick an app, then an agent and a user (a peer agent is optional)."
                       : !chain.a
                         ? "Now pick one of the agents that called this app."
-                        : !pickedPeer
-                          ? "Pick a peer agent to see who started the intents they shared."
-                          : "Pick a user to see their intents."}
+                        : "Pick a user to see their intents, or a peer agent first to narrow them."}
                 </div>
               </div>
             )}

@@ -205,7 +205,7 @@ export function AgentInfoPanel({ did, name, nameOf }: { did: string; name: strin
             </>
           )}
 
-          <RecentInteractions interactions={interactions} selfDid={did} onViewAll={() => navigate(openPath)} />
+          <RecentInteractions interactions={interactions} onViewAll={() => navigate(openPath)} />
         </>
       )}
     </div>
@@ -302,19 +302,17 @@ export function AppInfoPanel({ did, name }: { did: string; name: string }) {
 /* ---------------- Pieces ---------------- */
 
 /**
- * The latest interactions as "from → to" rows. Names the payload left blank (it often does
- * for apps) come from the org directory, which also says whether a party is an agent or an app.
+ * The latest interactions as "from → to" rows, each with the intent it ran. Names the payload
+ * left blank (it often does for apps) come from the org directory, which also says whether a
+ * party is an agent, a user or an app.
  */
 function RecentInteractions({
   interactions,
   total,
-  selfDid,
   onViewAll,
 }: {
   interactions: Interaction[];
   total?: number;
-  /** The agent the list belongs to, shown as "this agent" when it's a party. */
-  selfDid?: string;
   onViewAll: () => void;
 }) {
   const resolve = useResolveName();
@@ -342,24 +340,41 @@ function RecentInteractions({
           rows.map((ix) => {
             const from = party(ix.initiator.id, ix.initiator.name);
             const to = party(ix.target.id, ix.target.name);
-            const I = to.kind === "tool" ? LayoutGrid : to.kind === "user" ? UserRound : Bot;
+            const intentId = ix.intent?.id;
             return (
-              <button key={ix.id} type="button" className="ip-pf-act ip-pf-act-btn" onClick={() => openDrawer("interaction", ix)} title="Open interaction">
+              <button key={ix.id} type="button" className="ip-pf-ix ip-pf-act-btn" onClick={() => openDrawer("interaction", ix)} title="Open interaction">
                 <span className={`ip-pf-dot ${ix.threat ? "threat" : "safe"}`} />
-                <span className="ip-pf-act-time">{ago(ix.created)}</span>
-                <span className="ip-pf-act-icon">
-                  <I size={15} strokeWidth={1.8} />
+                <span className="ip-pf-ix-main">
+                  <span className="ip-pf-ix-flow">
+                    <PartyName name={from.name} kind={from.kind} />
+                    <ArrowRight size={13} className="ip-pf-ix-arrow" aria-label="to" />
+                    <PartyName name={to.name} kind={to.kind} />
+                  </span>
+                  <span className="ip-pf-ix-meta">
+                    <span className="ip-pf-ix-meta-k">Intent</span>
+                    <span className="ip-pf-ix-intent" title={intentId || undefined}>{intentId ? shortId(intentId) : "—"}</span>
+                  </span>
                 </span>
-                <span className="ip-pf-act-text">
-                  <b>{ix.initiator.id === selfDid ? "This agent" : from.name}</b> → <b>{ix.target.id === selfDid ? "this agent" : to.name}</b>
+                <span className="ip-pf-ix-side">
+                  <span className={`chip ${ix.threat ? "threat" : "safe"} ip-pf-act-pill`}>{ix.threat ? "Threat" : "Allowed"}</span>
+                  <span className="ip-pf-ix-time">{ago(ix.created)}</span>
                 </span>
-                <span className={`chip ${ix.threat ? "threat" : "safe"} ip-pf-act-pill`}>{ix.threat ? "Threat" : "Allowed"}</span>
               </button>
             );
           })
         )}
       </div>
     </>
+  );
+}
+
+function PartyName({ name, kind }: { name: string; kind?: string }) {
+  const I = kind === "tool" ? LayoutGrid : kind === "user" ? UserRound : Bot;
+  return (
+    <span className="ip-pf-ix-party" title={name}>
+      <I size={14} strokeWidth={1.8} />
+      <b>{name}</b>
+    </span>
   );
 }
 
