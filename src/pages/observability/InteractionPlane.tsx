@@ -90,7 +90,7 @@ const NODE_BORDER = "rgba(15,32,70,.24)";
 /** Card border while nothing is selected or hovered. */
 const NODE_BORDER_IDLE = "rgba(15,32,70,.6)";
 /** Allowed-line colour while nothing is selected or hovered. */
-const LINE_IDLE = "#93C5FD";
+const LINE_IDLE = "#BFDBFE";
 const AVATARS: [string, string][] = [
   ["rgba(37,99,235,.10)", "#2563EB"],
   ["rgba(14,165,233,.12)", "#0B7FB5"],
@@ -841,7 +841,7 @@ export function InteractionPlane() {
                 const lit = vis === "lit";
                 const sw = 1.1 + Math.min(1.7, Math.log10(e.n + 1) * 0.55) + (lit ? 0.4 : 0);
                 const idle = !hasFocus && e.st === "allowed";
-                const base = vis === "muted" ? 0.08 : lit ? 0.9 : idle ? 0.95 : e.st === "allowed" ? 0.42 : 0.65;
+                const base = vis === "muted" ? 0.08 : lit ? 0.9 : idle ? 0.6 : e.st === "allowed" ? 0.42 : 0.65;
                 const op = offscreen ? base * 0.35 : base;
                 return (
                   <g key={e.id}>

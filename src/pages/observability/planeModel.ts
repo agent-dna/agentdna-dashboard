@@ -99,11 +99,11 @@ const layout = (order: PlaneColumn[], left: number[]): PlaneLayout => ({
   columns: Object.fromEntries(order.map((c, k) => [c, [left[k], left[k] + WIDTH[c]]])) as PlaneLayout["columns"],
 });
 export const LAYOUTS: Record<PlaneMode, PlaneLayout> = {
-  // User-first gaps hold 60px gates with 18px between every gate and its neighbours:
-  // 96px for one COCA, 252px for COCA + CBAC + Whitelisting.
-  user: layout(["u", "a", "r", "p", "i"], [0, 272, 548, 980, 1244]),
-  // App-first has no gates: four equal 137px gaps.
-  app: layout(["p", "a", "r", "u", "i"], [0, 297, 614, 931, 1244]),
+  // User-first gaps hold 60px gates, centred: 115px for one COCA, 270px for
+  // COCA + CBAC + Whitelisting. The last gap, into the intents, is a tight 48px.
+  user: layout(["u", "a", "r", "p", "i"], [0, 291, 586, 1036, 1244]),
+  // App-first has no gates: three ~167px gaps, then a tight 48px into the intents.
+  app: layout(["p", "a", "r", "u", "i"], [0, 327, 674, 1020, 1244]),
 };
 /** Every card is the same height, so the lists line up row for row and show the same number of cards. */
 export const ROW_H: Record<PlaneColumn, number> = { u: 56, a: 56, r: 56, p: 56, i: 56 };
