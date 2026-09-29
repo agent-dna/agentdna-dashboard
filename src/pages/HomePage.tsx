@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { Modal } from "../components/Modal";
 
-import { Chart } from "../components/Chart";
+import { InteractionsChart } from "../components/InteractionsChart";
 import { useHomeMetrics, useIntentsPaged, useThreatsListPaged, useTopThreats, useSeries, useAgentsAppsMetrics } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { AppIcon } from "../components/AppIcon";
@@ -1221,7 +1221,7 @@ export function HomePage() {
               <div>
                 <h3>{chartTab === "graph" ? "Interactions over time" : "Security events"}</h3>
                 <div className="sub">
-                  {chartTab === "graph" ? "Safe vs incident-classified runs · Last 7 days" : "Top incidents requiring attention"}
+                  {chartTab === "graph" ? "Daily runs, safe vs incident-flagged · Last 7 days" : "Top incidents requiring attention"}
                 </div>
               </div>
             </div>
@@ -1278,28 +1278,7 @@ export function HomePage() {
           </div>
 
           {chartTab === "graph" ? (
-            <>
-              <div className="chart-legend">
-                <span className="it">
-                  <span className="sw" style={{ background: "#2563EB" }} /> Interactions
-                </span>
-                <span className="it">
-                  <span className="sw" style={{ background: INCIDENT_COLOR }} /> Incidents
-                </span>
-              </div>
-              <div className="chart-wrap">
-                <Chart
-                  labels={labels}
-                  style="bar"
-                  height={272}
-                  formatY={(v) => (typeof v === "number" && v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)}
-                  series={[
-                    { key: "interactions", label: "Interactions", color: "#2563EB", data: data.total },
-                    { key: "threats", label: "Incidents", color: INCIDENT_COLOR, data: data.threats },
-                  ]}
-                />
-              </div>
-            </>
+            <InteractionsChart labels={labels} safe={data.safe} threats={data.threats} loading={seriesState.loading} />
           ) : (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "26px 1fr 80px 90px 24px", padding: "10px 20px 5px", borderBottom: "1px solid rgba(220,38,38,0.18)", marginTop: 8 }}>

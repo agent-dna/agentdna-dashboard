@@ -111,8 +111,8 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, preview, 
   const paths = useObsQuery(pathsKey, () => fetchObsPaths({ ...scope, status: filter }, pathFilter!));
 
   // The picked intent's detail has its own call, so it stays put while the filter or a hover preview changes the table.
-  const intentDetail = useObsQuery(pickedIntent && `intent-detail:${JSON.stringify(chainFilter)}`, () =>
-    loadIntentDetail(scope, { ...chainFilter, intentID: pickedIntent! }, NODES[chain.i!]?.name ?? pickedIntent!),
+  const intentDetail = useObsQuery(pickedIntent && `intent-detail:${pickedIntent}`, () =>
+    loadIntentDetail(pickedIntent!, NODES[chain.i!]?.name ?? pickedIntent!),
   );
   const nameOf = (did: string) => (["u", "a", "p"] as const).map((t) => NODES[nodeId(t, did)]?.name).find(Boolean);
   const rows = paths.data?.pathsList ?? [];
