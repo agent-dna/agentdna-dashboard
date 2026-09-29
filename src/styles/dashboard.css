@@ -2320,7 +2320,6 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 }
 .ip-glyph { display: grid; place-items: center; flex-shrink: 0; }
 .ip-glyph-agent { width: 32px; height: 32px; border-radius: 8px; background: rgba(37,99,235,.08); color: #2563EB; }
-.ip-glyph-app { width: 26px; height: 26px; border-radius: 7px; background: rgba(27,138,143,.10); color: #1B8A8F; }
 .ip-intent-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ip-intent-meta { display: flex; align-items: center; gap: 6px; padding-left: 15px; font-family: var(--font-mono); font-size: 10px; white-space: nowrap; overflow: hidden; }
 .ip-intent-gate {

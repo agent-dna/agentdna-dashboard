@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { Icon } from "../../components/Icon";
+import { AppIcon } from "../../components/AppIcon";
 import {
   fetchObsAgentFlow,
   fetchObsAppFlow,
@@ -1020,7 +1021,7 @@ export function InteractionPlane() {
                   title={n.ref}
                   {...nodeHandlers(n.id)}
                 >
-                  <div className="ip-glyph ip-glyph-app"><Icon name="box" size={14} /></div>
+                  <AppIcon name={n.name} size={30} />
                   <div className="ip-node-text">
                     <div className="ip-node-name">{n.name}</div>
                     <div className="ip-node-sub ip-mono">{n.sub}</div>
