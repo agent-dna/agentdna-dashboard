@@ -37,8 +37,7 @@ export interface PlaneNode {
   ref: string;
   name: string;
   /**
-   * Vertical centre. Users, agents, peers and intents: relative to the top of their
-   * scrollable list. Apps: relative to the canvas.
+   * Vertical centre, relative to the top of the node's scrollable list.
    */
   y: number;
   sub?: string;
@@ -106,21 +105,22 @@ export const LAYOUTS: Record<PlaneMode, PlaneLayout> = {
   // App-first has no gates: four equal 137px gaps.
   app: layout(["p", "a", "r", "u", "i"], [0, 297, 614, 931, 1244]),
 };
-/** User, agent, peer and intent cards share one height, so every list shows the same number of cards. */
-export const ROW_H: Record<PlaneColumn, number> = { u: 56, a: 56, r: 56, p: 48, i: 56 };
+/** Every card is the same height, so the lists line up row for row and show the same number of cards. */
+export const ROW_H: Record<PlaneColumn, number> = { u: 56, a: 56, r: 56, p: 56, i: 56 };
 /** The scroll lists start below the column titles. */
 export const USER_LIST_TOP = 56;
 /**
- * Users, agents, peers and intents are matching scroll lists: same top, same height, same
+ * Every column is a matching scroll list: same top, same height, same
  * top padding and the same gap between cards, rows stacked from the top.
  */
 const LIST_PAD = 8;
 const LIST_GAP = 12;
-export type ListColumn = Exclude<PlaneColumn, "p">;
+export type ListColumn = PlaneColumn;
 export const LIST_PITCH: Record<ListColumn, number> = {
   u: ROW_H.u + LIST_GAP,
   a: ROW_H.a + LIST_GAP,
   r: ROW_H.r + LIST_GAP,
+  p: ROW_H.p + LIST_GAP,
   i: ROW_H.i + LIST_GAP,
 };
 /** Centre of row `k` in a list, relative to the list's top. */
@@ -132,8 +132,7 @@ export const USER_PITCH = LIST_PITCH.u;
 const LIST_VISIBLE = 9;
 /** Viewport height of every scroll list. */
 export const LIST_VIEW_H = listHeight("a", LIST_VISIBLE);
-const MIN_PLANE_H = USER_LIST_TOP + LIST_VIEW_H + 8;
-const APP_PITCH = 60;
+const PLANE_H = USER_LIST_TOP + LIST_VIEW_H + 8;
 const COLUMN_COUNT = 5;
 
 export const COLUMN_TYPE: Record<PlaneColumn, string> = { u: "User", a: "Agent", r: "Peer agent", p: "App", i: "Intent" };
@@ -208,13 +207,6 @@ function byBarycenter<T>(items: T[], key: (x: T) => string, links: { from: strin
   }
   return [...items].sort((a, b) => score.get(key(a))! - score.get(key(b))!);
 }
-
-/** Spread `count` rows evenly down the canvas, at least `pitch` apart. */
-const spread = (count: number, pitch: number, height: number) => {
-  const top = USER_LIST_TOP + 8;
-  const slot = Math.max(pitch, (height - top - 16) / Math.max(1, count));
-  return (k: number) => top + slot * (k + 0.5);
-};
 
 type UserCard = Pick<ObsUser | ObsAppFlowUser, "userDID" | "userName" | "email" | "subtitle" | "kind" | "signed">;
 
@@ -340,12 +332,9 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
     // Apps the agent flow reached that the org-wide graph left out.
     ...flowApps.filter((p) => !known.has(p.appDID)).map((p) => ({ appDID: p.appDID, appName: p.appName, operation: "" })),
   ];
-  const height = Math.max(MIN_PLANE_H, USER_LIST_TOP + 24 + apps.length * APP_PITCH);
-
   const appCalls = new Map<string, number>();
   for (const e of graph.agentAppEdges) appCalls.set(e.to, (appCalls.get(e.to) ?? 0) + e.count);
   const flowApp = new Map(flowApps.map((p) => [p.appDID, p]));
-  const appY = spread(apps.length, APP_PITCH, height);
   apps.forEach((p, k) => {
     const id = nodeId("p", p.appDID);
     const fa = flowApp.get(p.appDID);
@@ -356,7 +345,7 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
       ref: p.appDID,
       name: p.appName || p.appDID,
       sub: fa ? `${fmtCount(calls)} interactions` : plural(calls, "call"),
-      y: appY(k),
+      y: listY("p", k),
     };
   });
 
@@ -460,7 +449,7 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
     });
   }
 
-  return { nodes, edges: [...edges.values()], flows, height };
+  return { nodes, edges: [...edges.values()], flows, height: PLANE_H };
 }
 
 function fmtCount(n: number) {
@@ -489,13 +478,11 @@ export function buildAppPlaneModel({ graph, users, appFlow, intents }: AppBuildI
   const appCalls = new Map<string, number>();
   for (const e of graph.agentAppEdges) appCalls.set(e.to, (appCalls.get(e.to) ?? 0) + e.count);
   const apps = [...graph.apps].sort((x, y) => (appCalls.get(y.appDID) ?? 0) - (appCalls.get(x.appDID) ?? 0));
-  const height = Math.max(MIN_PLANE_H, USER_LIST_TOP + 24 + apps.length * APP_PITCH);
-  const appY = spread(apps.length, APP_PITCH, height);
   const appPos = new Map<string, number>();
   apps.forEach((p, k) => {
     const calls = appCalls.get(p.appDID) ?? 0;
     appPos.set(nodeId("p", p.appDID), k);
-    addNode({ id: nodeId("p", p.appDID), t: "p", ref: p.appDID, name: p.appName || p.appDID, sub: plural(calls, "call"), y: appY(k) });
+    addNode({ id: nodeId("p", p.appDID), t: "p", ref: p.appDID, name: p.appName || p.appDID, sub: plural(calls, "call"), y: listY("p", k) });
   });
 
   /* ---------- Agents, ordered to follow the apps they call ---------- */
@@ -580,5 +567,5 @@ export function buildAppPlaneModel({ graph, users, appFlow, intents }: AppBuildI
     });
   }
 
-  return { nodes, edges: [...edges.values()], flows, height };
+  return { nodes, edges: [...edges.values()], flows, height: PLANE_H };
 }

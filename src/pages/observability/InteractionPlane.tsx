@@ -234,6 +234,7 @@ export function InteractionPlane() {
   /** User-list scroll, tied to what the list holds (the paged users, or an app-first selection's users). */
   const [userScrollState, setUserScrollState] = useState({ key: "", top: 0 });
   const [agentScroll, setAgentScroll] = useState(0);
+  const [appScroll, setAppScroll] = useState(0);
   /** Peer-list scroll, tied to the agent whose peers it lists (a new agent starts at the top). */
   const [peerScrollState, setPeerScrollState] = useState({ key: "", top: 0 });
   /** Intent-list scroll, tied to the selection it was scrolled under (a new selection starts at the top). */
@@ -243,6 +244,7 @@ export function InteractionPlane() {
   const userListRef = useRef<HTMLDivElement>(null);
   const agentListRef = useRef<HTMLDivElement>(null);
   const peerListRef = useRef<HTMLDivElement>(null);
+  const appListRef = useRef<HTMLDivElement>(null);
   const intentListRef = useRef<HTMLDivElement>(null);
 
   /* ---------- Data ---------- */
@@ -467,6 +469,9 @@ export function InteractionPlane() {
   const revealAgent = (y: number) => {
     agentListRef.current?.scrollTo({ top: Math.max(0, y - userListH / 2), behavior: "smooth" });
   };
+  const revealApp = (y: number) => {
+    appListRef.current?.scrollTo({ top: Math.max(0, y - userListH / 2), behavior: "smooth" });
+  };
   const revealPeer = (y: number) => {
     peerListRef.current?.scrollTo({ top: Math.max(0, y - userListH / 2), behavior: "smooth" });
   };
@@ -506,15 +511,10 @@ export function InteractionPlane() {
     };
   };
 
-  const nodeBox = (node: PlaneNode): CSSProperties => {
-    const [left, right] = COLUMNS[node.t];
-    const h = ROW_H[node.t];
-    return { left, top: node.y - h / 2, width: right - left, height: h, ...nodeLook(node) };
-  };
-
   const byColumn = (t: PlaneColumn) => Object.values(NODES).filter((n) => n.t === t);
   const userNodes = byColumn("u");
   const agentNodes = byColumn("a");
+  const appNodes = byColumn("p");
   const peerNodes = byColumn("r");
   const peerListKey = peersQuery.data ? `${mode}|${chain.u}|${chain.p}|${chain.a}` : `${mode}|rest`;
   const userListKey = flowUsers ? `${chain.p}|${chain.a}|${chain.r}` : "all";
@@ -533,22 +533,19 @@ export function InteractionPlane() {
 
   /* ---------- Edges, count pills and tooltip ---------- */
 
-  /** How far a node's list is scrolled; apps don't scroll. */
+  /** How far a node's list is scrolled. */
   const scrollOf = (node: PlaneNode) =>
-    node.t === "u" ? userScroll : node.t === "a" ? agentScroll : node.t === "r" ? peerScroll : node.t === "i" ? intentScroll : null;
+    ({ u: userScroll, a: agentScroll, r: peerScroll, p: appScroll, i: intentScroll })[node.t];
 
   /** Where a node's centre sits on the canvas; list rows follow their list's scroll position. */
   const canvasY = (node: PlaneNode) => {
     const scroll = scrollOf(node);
-    if (scroll == null) return node.y;
     const y = USER_LIST_TOP + node.y - scroll;
     // Rows scrolled out of view anchor their lines to the list's top/bottom edge.
     return Math.max(USER_LIST_TOP + 10, Math.min(USER_LIST_TOP + userListH - 10, y));
   };
   const inView = (node: PlaneNode) => {
-    const scroll = scrollOf(node);
-    if (scroll == null) return true;
-    const y = node.y - scroll;
+    const y = node.y - scrollOf(node);
     return y > 0 && y < userListH;
   };
 
@@ -698,6 +695,7 @@ export function InteractionPlane() {
       if (hit.t === "u") revealUser(hit.y);
       if (hit.t === "a") revealAgent(hit.y);
       if (hit.t === "r") revealPeer(hit.y);
+      if (hit.t === "p") revealApp(hit.y);
       if (hit.t === "i") revealIntent(intentById.get(hit.id)?.y ?? hit.y);
       return;
     }
@@ -770,6 +768,7 @@ export function InteractionPlane() {
                   onClick={() => {
                     if (m.key === mode) return;
                     setMode(m.key);
+                    setAppScroll(0);
                     setChain({});
                     setHovered(null);
                   }}
@@ -1004,15 +1003,31 @@ export function InteractionPlane() {
               />
             )}
 
-            {byColumn("p").map((n) => (
-              <div key={n.id} className="ip-node ip-node-app" style={nodeBox(n)} title={n.ref} {...nodeHandlers(n.id)}>
-                <div className="ip-glyph ip-glyph-app"><Icon name="box" size={14} /></div>
-                <div className="ip-node-text">
-                  <div className="ip-node-name">{n.name}</div>
-                  <div className="ip-node-sub ip-mono">{n.sub}</div>
+            <PlaneList
+              key={mode}
+              col="p"
+              span={COLUMNS.p}
+              listRef={appListRef}
+              height={userListH}
+              contentHeight={listHeight("p", appNodes.length)}
+              onScroll={(ev) => setAppScroll(ev.currentTarget.scrollTop)}
+            >
+              {appNodes.map((n) => (
+                <div
+                  key={n.id}
+                  className="ip-node ip-node-app"
+                  style={{ ...listRowBox(n), ...nodeLook(n) }}
+                  title={n.ref}
+                  {...nodeHandlers(n.id)}
+                >
+                  <div className="ip-glyph ip-glyph-app"><Icon name="box" size={14} /></div>
+                  <div className="ip-node-text">
+                    <div className="ip-node-name">{n.name}</div>
+                    <div className="ip-node-sub ip-mono">{n.sub}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </PlaneList>
 
             {!showIntents && !booting && !bootError && !isEmpty && (
               <div
