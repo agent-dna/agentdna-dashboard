@@ -2271,15 +2271,20 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 
 /* Security gates between columns (user-first plane) */
 .ip-gate {
-  position: absolute; top: 0; box-sizing: border-box; border-radius: 10px; border: 1px solid;
-  display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 10px; color: var(--gate);
+  position: absolute; top: 0; box-sizing: border-box; border-radius: 12px; border: 1px solid;
   transition: background 240ms ease, border-color 240ms ease, box-shadow 240ms ease;
 }
 .ip-gate-coca { background: rgba(37,99,235,.035); border-color: rgba(37,99,235,.28); --gate: var(--accent); }
 .ip-gate-coca.lit { background: rgba(37,99,235,.08); border-color: rgba(37,99,235,.55); box-shadow: 0 0 0 3px rgba(37,99,235,.07); }
 .ip-gate-cbac { background: rgba(10,34,64,.03); border-color: rgba(10,34,64,.26); --gate: var(--accent-2); }
 .ip-gate-cbac.lit { background: rgba(10,34,64,.07); border-color: rgba(10,34,64,.5); box-shadow: 0 0 0 3px rgba(10,34,64,.06); }
-.ip-gate-name { writing-mode: vertical-rl; font: 700 9.5px var(--font-mono); letter-spacing: .16em; }
+.ip-gate-card {
+  margin: 3px; padding: 6px 2px 7px; background: #fff; border: 1px solid rgba(15,32,70,.2);
+  border-radius: 8px; box-shadow: 0 1px 2px rgba(15,32,70,.04); text-align: center;
+}
+.ip-gate-head { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--gate); }
+.ip-gate-name { font-family: var(--font-display); font-size: 11.5px; font-weight: 700; color: var(--fg); }
+.ip-gate-verb { font: 600 8.5px var(--font-mono); letter-spacing: .02em; white-space: nowrap; color: var(--gate); margin-top: 3px; }
 
 
 .ip-dot {

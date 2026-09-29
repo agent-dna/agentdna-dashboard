@@ -86,7 +86,7 @@ export interface PlaneModel {
   height: number;
 }
 
-export const PLANE_W = 1452;
+export const PLANE_W = 1600;
 const MIN_PLANE_H = 760;
 
 export interface PlaneLayout {
@@ -95,14 +95,15 @@ export interface PlaneLayout {
   /** [left, right] of each column on the canvas. */
   columns: Record<PlaneColumn, [number, number]>;
 }
-const WIDTH: Record<PlaneColumn, number> = { u: 176, a: 180, r: 180, p: 160, i: 320 };
+const WIDTH: Record<PlaneColumn, number> = { u: 176, a: 180, r: 180, p: 160, i: 420 };
 const layout = (order: PlaneColumn[], left: number[]): PlaneLayout => ({
   order,
   columns: Object.fromEntries(order.map((c, k) => [c, [left[k], left[k] + WIDTH[c]]])) as PlaneLayout["columns"],
 });
 export const LAYOUTS: Record<PlaneMode, PlaneLayout> = {
-  user: layout(["u", "a", "r", "p", "i"], [0, 280, 564, 868, 1132]),
-  app: layout(["p", "a", "r", "u", "i"], [0, 264, 548, 832, 1132]),
+  // User-first gaps hold the gates with 22px either side: 104px for one gate, 172px for COCA + CBAC.
+  user: layout(["u", "a", "r", "p", "i"], [0, 280, 564, 916, 1180]),
+  app: layout(["p", "a", "r", "u", "i"], [0, 264, 548, 832, 1180]),
 };
 export const ROW_H: Record<PlaneColumn, number> = { u: 48, a: 56, r: 56, p: 48, i: 56 };
 /** The scroll lists start below the column titles. */

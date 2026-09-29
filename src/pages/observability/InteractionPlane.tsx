@@ -149,7 +149,9 @@ const USER_GATES: { kind: GateKind; from: PlaneColumn; to: PlaneColumn; title: s
   { kind: "coca", from: "r", to: "p", title: "COCA · verifies identity & integrity on agent → app hops" },
   { kind: "cbac", from: "r", to: "p", title: "CBAC · policy authorization on agent → app calls" },
 ];
-const GATE_W = 28;
+const GATE_VERB: Record<GateKind, string> = { coca: "VERIFY", cbac: "AUTHORIZE" };
+const GATE_W = 60;
+/** Space between gates that share a gap (COCA + CBAC between peers and apps). */
 const GATE_GAP = 8;
 
 const COLUMN_LABEL: Record<PlaneColumn, string> = { u: "USER", a: "AGENT", r: "PEER AGENTS", p: "APP", i: "INTENT" };
@@ -1197,12 +1199,17 @@ function ColumnLabel({ span, n, hint }: { span: [number, number]; n: string; hin
   );
 }
 
-/** A narrow gate band between two columns: icon and name at the top, full canvas height. */
+/** A gate band between two columns: name and what it does at the top, full canvas height. */
 function GateBand({ left, height, kind, lit, title }: { left: number; height: number; kind: GateKind; lit: boolean; title: string }) {
   return (
     <div className={`ip-gate ip-gate-${kind}${lit ? " lit" : ""}`} style={{ left, width: GATE_W, height }} title={title}>
-      <Icon name={kind === "coca" ? "shield" : "key"} size={12} />
-      <span className="ip-gate-name">{kind.toUpperCase()}</span>
+      <div className="ip-gate-card">
+        <div className="ip-gate-head">
+          <Icon name={kind === "coca" ? "shield" : "key"} size={12} />
+          <span className="ip-gate-name">{kind.toUpperCase()}</span>
+        </div>
+        <div className="ip-gate-verb">{GATE_VERB[kind]}</div>
+      </div>
     </div>
   );
 }
