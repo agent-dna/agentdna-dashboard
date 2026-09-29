@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../../components/Icon";
-import { useAgent, useToolInfo, useUserInfo } from "../../data/hooks";
+import { useDirectoryUsers } from "../../context/DirectoryContext";
+import { useAgent, useToolInfo } from "../../data/hooks";
 import { timeAgo } from "../../lib/format";
 
 /**
  * Detail of the user, agent or app picked on the interaction plane, shown in the detail box
- * under the canvas. Data comes from the same endpoints as the User, Agent and Tool pages
- * (`/user-info`, `/agent-info`, `/tool-info`).
+ * under the canvas. Users come from the org's `/users-list` (already loaded by the
+ * directory); agents and apps from the Agent and Tool pages' `/agent-info` and `/tool-info`.
  */
 
 type Fact = [label: string, value: string, hover?: string];
@@ -73,38 +74,29 @@ export function AgentDetailPanel({ did, name, kind, hint, onClose, nameOf }: Com
   );
 }
 
+const joinedDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+/** The user's /users-list row: name, DID, join date, intents and threats. */
 export function UserDetailPanel({ did, name, kind, hint, onClose }: Common) {
-  const { data, loading, error, refetch } = useUserInfo(did);
-  const u = data?.user;
+  const { users, loading } = useDirectoryUsers();
+  const u = users.find((x) => x.userID === did);
   const facts: Fact[] = u
     ? [
-        ["Status", u.isActive ? "Active" : "Inactive"],
-        ["Last active", u.lastActiveMinsAgo ? timeAgo(u.lastActiveMinsAgo) : "—"],
-        ["Joined", timeAgo(u.createdMinsAgo)],
-        ["Intents", count(u.totalIntents)],
-        ["Interactions", count(u.totalInteractions)],
-        ["Threats", count(u.totalThreats)],
-        ["Agents accessed", count(u.accessAgentCount)],
-        ["Agents deployed", count(u.totalAgentsDeployed)],
+        ["Joined", joinedDate(u.createdAt), u.createdAt],
+        ["Total intents", count(u.totalIntents)],
+        ["Total threats", count(u.totalThreats)],
       ]
     : [];
   return (
     <DetailShell
       kind={kind}
       hint={hint}
-      title={u?.displayName || u?.userName || name}
+      title={u?.userName || name}
       did={did}
-      chips={
-        u && (
-          <>
-            {u.isActive ? <span className="chip safe">Active</span> : <span className="chip">Inactive</span>}
-            {u.totalThreats > 0 && <span className="chip warn">{count(u.totalThreats)} threats</span>}
-          </>
-        )
-      }
+      chips={null}
       facts={facts}
-      state={loading ? "loading" : error || !u ? "error" : "ready"}
-      onRetry={refetch}
+      state={u ? "ready" : loading ? "loading" : "missing"}
       openLabel="Open user"
       openPath={`/users/${encodeURIComponent(did)}`}
       onClose={onClose}
@@ -162,8 +154,9 @@ function DetailShell({
   chips: ReactNode;
   facts: Fact[];
   extra?: ReactNode;
-  state: "loading" | "error" | "ready";
-  onRetry: () => void;
+  /** "missing": loaded, but the record isn't there (nothing to retry). */
+  state: "loading" | "error" | "missing" | "ready";
+  onRetry?: () => void;
   openLabel: string;
   openPath: string;
   onClose: () => void;
@@ -207,6 +200,8 @@ function DetailShell({
         <div className="ip-empty">
           {state === "loading" ? (
             "Loading details…"
+          ) : state === "missing" ? (
+            "No details found for this DID."
           ) : (
             <>
               Couldn't load details.{" "}

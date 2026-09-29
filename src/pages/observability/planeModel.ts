@@ -114,7 +114,7 @@ export const USER_LIST_TOP = 56;
  * top padding and the same gap between cards, rows stacked from the top.
  */
 const LIST_PAD = 8;
-const LIST_GAP = 12;
+const LIST_GAP = 16;
 export type ListColumn = PlaneColumn;
 export const LIST_PITCH: Record<ListColumn, number> = {
   u: ROW_H.u + LIST_GAP,
@@ -129,7 +129,7 @@ export const listY = (col: ListColumn, k: number) => LIST_PAD + k * LIST_PITCH[c
 export const listHeight = (col: ListColumn, count: number) => (count ? LIST_PAD * 2 + count * LIST_PITCH[col] - LIST_GAP : 0);
 export const USER_PITCH = LIST_PITCH.u;
 /** Cards a list shows before it scrolls. */
-const LIST_VISIBLE = 9;
+const LIST_VISIBLE = 10;
 /** Viewport height of every scroll list. */
 export const LIST_VIEW_H = listHeight("a", LIST_VISIBLE);
 const PLANE_H = USER_LIST_TOP + LIST_VIEW_H + 8;
