@@ -86,8 +86,7 @@ export interface PlaneModel {
   height: number;
 }
 
-export const PLANE_W = 1600;
-const MIN_PLANE_H = 760;
+export const PLANE_W = 1547;
 
 export interface PlaneLayout {
   /** Columns left to right. */
@@ -95,17 +94,20 @@ export interface PlaneLayout {
   /** [left, right] of each column on the canvas. */
   columns: Record<PlaneColumn, [number, number]>;
 }
-const WIDTH: Record<PlaneColumn, number> = { u: 176, a: 180, r: 180, p: 160, i: 420 };
+const WIDTH: Record<PlaneColumn, number> = { u: 176, a: 180, r: 180, p: 160, i: 303 };
 const layout = (order: PlaneColumn[], left: number[]): PlaneLayout => ({
   order,
   columns: Object.fromEntries(order.map((c, k) => [c, [left[k], left[k] + WIDTH[c]]])) as PlaneLayout["columns"],
 });
 export const LAYOUTS: Record<PlaneMode, PlaneLayout> = {
-  // User-first gaps hold the gates with 22px either side: 104px for one gate, 172px for COCA + CBAC.
-  user: layout(["u", "a", "r", "p", "i"], [0, 280, 564, 916, 1180]),
-  app: layout(["p", "a", "r", "u", "i"], [0, 264, 548, 832, 1180]),
+  // User-first gaps hold 60px gates with 18px between every gate and its neighbours:
+  // 96px for one COCA, 252px for COCA + CBAC + Whitelisting.
+  user: layout(["u", "a", "r", "p", "i"], [0, 272, 548, 980, 1244]),
+  // App-first has no gates: four equal 137px gaps.
+  app: layout(["p", "a", "r", "u", "i"], [0, 297, 614, 931, 1244]),
 };
-export const ROW_H: Record<PlaneColumn, number> = { u: 48, a: 56, r: 56, p: 48, i: 56 };
+/** User, agent, peer and intent cards share one height, so every list shows the same number of cards. */
+export const ROW_H: Record<PlaneColumn, number> = { u: 56, a: 56, r: 56, p: 48, i: 56 };
 /** The scroll lists start below the column titles. */
 export const USER_LIST_TOP = 56;
 /**
@@ -126,6 +128,11 @@ export const listY = (col: ListColumn, k: number) => LIST_PAD + k * LIST_PITCH[c
 /** Scroll height of a list holding `count` rows. */
 export const listHeight = (col: ListColumn, count: number) => (count ? LIST_PAD * 2 + count * LIST_PITCH[col] - LIST_GAP : 0);
 export const USER_PITCH = LIST_PITCH.u;
+/** Cards a list shows before it scrolls. */
+const LIST_VISIBLE = 9;
+/** Viewport height of every scroll list. */
+export const LIST_VIEW_H = listHeight("a", LIST_VISIBLE);
+const MIN_PLANE_H = USER_LIST_TOP + LIST_VIEW_H + 8;
 const APP_PITCH = 60;
 const COLUMN_COUNT = 5;
 

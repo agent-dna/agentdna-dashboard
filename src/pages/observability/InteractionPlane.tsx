@@ -18,6 +18,7 @@ import {
 import {
   COLUMN_TYPE,
   LAYOUTS,
+  LIST_VIEW_H,
   PLANE_W,
   ROW_H,
   USER_LIST_TOP,
@@ -37,7 +38,9 @@ import {
   type PlaneNode,
   type PlaneStatus,
 } from "./planeModel";
+import { AgentDetailPanel, UserDetailPanel } from "./EntityDetailPanel";
 import { IntentDetailPanel } from "./IntentDetailPanel";
+import { loadIntentDetail } from "./intentDetail";
 
 /**
  * Observability · Interaction plane.
@@ -138,21 +141,25 @@ const NEXT_HINT: Record<PlaneMode, Record<PlaneColumn, string>> = {
   },
 };
 /**
- * Security gates on the user-first plane, each a narrow band in the gap between two
- * columns: COCA (identity & integrity) on every hop, and CBAC (policy authorization) on
- * agent → app calls. Gates that share a gap sit side by side, in the order listed.
+ * Security gates on the user-first plane, each a band in the gap between two columns: COCA
+ * (identity & integrity) on every hop; CBAC (policy authorization) and Whitelisting (agent
+ * approved, not revoked) on agent → app calls. Gates that share a gap sit side by side, in
+ * the order they're evaluated.
  */
-type GateKind = "coca" | "cbac";
+type GateKind = "coca" | "cbac" | "whitelist";
 const USER_GATES: { kind: GateKind; from: PlaneColumn; to: PlaneColumn; title: string }[] = [
   { kind: "coca", from: "u", to: "a", title: "COCA · verifies identity & integrity on user → agent hops" },
   { kind: "coca", from: "a", to: "r", title: "COCA · verifies identity & integrity on agent → agent hops" },
   { kind: "coca", from: "r", to: "p", title: "COCA · verifies identity & integrity on agent → app hops" },
   { kind: "cbac", from: "r", to: "p", title: "CBAC · policy authorization on agent → app calls" },
+  { kind: "whitelist", from: "r", to: "p", title: "Whitelisting · the calling agent is approved and not revoked" },
 ];
-const GATE_VERB: Record<GateKind, string> = { coca: "VERIFY", cbac: "AUTHORIZE" };
+const GATE_NAME: Record<GateKind, string> = { coca: "COCA", cbac: "CBAC", whitelist: "Whitelist" };
+const GATE_VERB: Record<GateKind, string> = { coca: "VERIFY", cbac: "AUTHORIZE", whitelist: "APPROVED" };
+const GATE_ICON: Record<GateKind, "shield" | "key" | "check"> = { coca: "shield", cbac: "key", whitelist: "check" };
 const GATE_W = 60;
-/** Space between gates that share a gap (COCA + CBAC between peers and apps). */
-const GATE_GAP = 8;
+/** Space between gates that share a gap — the same as between a gate and a column (see LAYOUTS). */
+const GATE_GAP = 18;
 
 const COLUMN_LABEL: Record<PlaneColumn, string> = { u: "USER", a: "AGENT", r: "PEER AGENTS", p: "APP", i: "INTENT" };
 const PATH_PARAM: Record<PlaneColumn, keyof ObsPathFilter> = {
@@ -348,7 +355,8 @@ export function InteractionPlane() {
   ]);
   const NODES = model?.nodes ?? {};
   const planeH = model?.height ?? 760;
-  const userListH = planeH - USER_LIST_TOP;
+  /** Every scroll list has the same viewport: 11 cards, then it scrolls. */
+  const userListH = LIST_VIEW_H;
 
   const booting = graph.loading || summary.loading || (userPages.length === 0 && !usersError);
   const bootError = graph.error || summary.error || (userPages.length === 0 ? usersError : null);
@@ -588,21 +596,31 @@ export function InteractionPlane() {
     onMouseLeave: () => setHoverEdge(null),
   });
 
-  /* ---------- Trace table ---------- */
+  /* ---------- Detail box: intent detail, user / agent detail, or the trace ---------- */
 
-  const hasRows = emphasis && !!model;
-  const pathFilter: ObsPathFilter | null = !hasRows
-    ? null
-    : preview
-      ? { [PATH_PARAM[NODES[preview].t]]: refOf(preview) }
-      : Object.fromEntries(ORDER.filter((c) => chain[c]).map((c) => [PATH_PARAM[c], refOf(chain[c]!)]));
+  const pickedIntent = chain.i ? refOf(chain.i) : null;
+  /** The deepest pick, when it's a user or an agent: the box shows that entity instead of the trace. */
+  const deepest = depth >= 0 ? ORDER[depth] : null;
+  const entityCol = !preview && !pickedIntent && deepest && (["u", "a", "r"] as PlaneColumn[]).includes(deepest) ? deepest : null;
+  const entityId = entityCol ? chain[entityCol]! : null;
+  const unpick = (col: PlaneColumn) =>
+    setChain((cur) => {
+      const next = { ...cur };
+      delete next[col];
+      return next;
+    });
+
+  /** The current selection as path filters. */
+  const chainFilter: ObsPathFilter = Object.fromEntries(ORDER.filter((c) => chain[c]).map((c) => [PATH_PARAM[c], refOf(chain[c]!)]));
+  /** The trace only shows when no intent, user or agent detail takes the box. */
+  const hasRows = emphasis && !!model && !entityId && !pickedIntent;
+  const pathFilter: ObsPathFilter | null = !hasRows ? null : preview ? { [PATH_PARAM[NODES[preview].t]]: refOf(preview) } : chainFilter;
   const pathsKey = pathFilter && `paths:${filter}:${JSON.stringify(pathFilter)}`;
   const paths = useObsQuery(pathsKey, () => fetchObsPaths({ ...REST, status: filter }, pathFilter!));
 
   // The picked intent's detail has its own call, so it stays put while the filter or a hover preview changes the table.
-  const pickedIntent = chain.i ? refOf(chain.i) : null;
-  const intentDetail = useObsQuery(pickedIntent && `intent-detail:${pickedIntent}`, () =>
-    fetchObsPaths(REST, { intentID: pickedIntent! }, 1),
+  const intentDetail = useObsQuery(pickedIntent && `intent-detail:${JSON.stringify(chainFilter)}`, () =>
+    loadIntentDetail(REST, { ...chainFilter, intentID: pickedIntent! }, NODES[chain.i!]?.name ?? pickedIntent!),
   );
   const nameOf = (did: string) => (["u", "a", "p"] as const).map((t) => NODES[nodeId(t, did)]?.name).find(Boolean);
   const rows = paths.data?.pathsList ?? [];
@@ -1073,17 +1091,31 @@ export function InteractionPlane() {
         {pickedIntent ? (
           <IntentDetailPanel
             intentId={pickedIntent}
-            intent={intentDetail.data?.pathsList[0]?.intent ?? null}
+            intent={intentDetail.data ?? null}
             loading={intentDetail.loading}
             error={intentDetail.error}
             onRetry={intentDetail.retry}
-            onClose={() =>
-              setChain((cur) => {
-                const next = { ...cur };
-                delete next.i;
-                return next;
-              })
-            }
+            onClose={() => unpick("i")}
+            nameOf={nameOf}
+          />
+        ) : entityId && entityCol === "u" ? (
+          <UserDetailPanel
+            key={entityId}
+            did={refOf(entityId)}
+            name={NODES[entityId]?.name ?? refOf(entityId)}
+            kind="USER"
+            hint={nextHint}
+            onClose={() => unpick("u")}
+            nameOf={nameOf}
+          />
+        ) : entityId && entityCol ? (
+          <AgentDetailPanel
+            key={entityId}
+            did={refOf(entityId)}
+            name={NODES[entityId]?.name ?? refOf(entityId)}
+            kind={COLUMN_TYPE[entityCol].toUpperCase()}
+            hint={nextHint}
+            onClose={() => unpick(entityCol)}
             nameOf={nameOf}
           />
         ) : (
@@ -1205,8 +1237,8 @@ function GateBand({ left, height, kind, lit, title }: { left: number; height: nu
     <div className={`ip-gate ip-gate-${kind}${lit ? " lit" : ""}`} style={{ left, width: GATE_W, height }} title={title}>
       <div className="ip-gate-card">
         <div className="ip-gate-head">
-          <Icon name={kind === "coca" ? "shield" : "key"} size={12} />
-          <span className="ip-gate-name">{kind.toUpperCase()}</span>
+          <Icon name={GATE_ICON[kind]} size={12} />
+          <span className="ip-gate-name">{GATE_NAME[kind]}</span>
         </div>
         <div className="ip-gate-verb">{GATE_VERB[kind]}</div>
       </div>

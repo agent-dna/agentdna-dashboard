@@ -5,8 +5,7 @@ import { ago } from "./planeModel";
 
 /**
  * Detail of the intent picked on the interaction plane, shown under the canvas: what it
- * was, who ran it, and every interaction in its chain. Data comes from the paths endpoint
- * filtered by `intentID`, which returns the full intent on each row.
+ * was, who ran it, and every interaction in its chain. Data: `loadIntentDetail`.
  */
 
 interface Props {

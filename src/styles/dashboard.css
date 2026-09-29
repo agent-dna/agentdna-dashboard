@@ -2274,16 +2274,18 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   position: absolute; top: 0; box-sizing: border-box; border-radius: 12px; border: 1px solid;
   transition: background 240ms ease, border-color 240ms ease, box-shadow 240ms ease;
 }
-.ip-gate-coca { background: rgba(37,99,235,.035); border-color: rgba(37,99,235,.28); --gate: var(--accent); }
-.ip-gate-coca.lit { background: rgba(37,99,235,.08); border-color: rgba(37,99,235,.55); box-shadow: 0 0 0 3px rgba(37,99,235,.07); }
-.ip-gate-cbac { background: rgba(10,34,64,.03); border-color: rgba(10,34,64,.26); --gate: var(--accent-2); }
-.ip-gate-cbac.lit { background: rgba(10,34,64,.07); border-color: rgba(10,34,64,.5); box-shadow: 0 0 0 3px rgba(10,34,64,.06); }
+.ip-gate-coca { background: rgba(37,99,235,.08); border-color: rgba(37,99,235,.5); --gate: var(--accent); }
+.ip-gate-coca.lit { background: rgba(37,99,235,.15); border-color: rgba(37,99,235,.8); box-shadow: 0 0 0 3px rgba(37,99,235,.10); }
+.ip-gate-cbac { background: rgba(5,150,105,.08); border-color: rgba(5,150,105,.5); --gate: #047857; }
+.ip-gate-cbac.lit { background: rgba(5,150,105,.15); border-color: rgba(5,150,105,.8); box-shadow: 0 0 0 3px rgba(5,150,105,.10); }
+.ip-gate-whitelist { background: rgba(124,58,237,.07); border-color: rgba(124,58,237,.45); --gate: #6D28D9; }
+.ip-gate-whitelist.lit { background: rgba(124,58,237,.14); border-color: rgba(124,58,237,.75); box-shadow: 0 0 0 3px rgba(124,58,237,.10); }
 .ip-gate-card {
   margin: 3px; padding: 6px 2px 7px; background: #fff; border: 1px solid rgba(15,32,70,.2);
   border-radius: 8px; box-shadow: 0 1px 2px rgba(15,32,70,.04); text-align: center;
 }
 .ip-gate-head { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--gate); }
-.ip-gate-name { font-family: var(--font-display); font-size: 11.5px; font-weight: 700; color: var(--fg); }
+.ip-gate-name { font-family: var(--font-display); font-size: 10.5px; font-weight: 700; color: var(--fg); white-space: nowrap; letter-spacing: -.01em; }
 .ip-gate-verb { font: 600 8.5px var(--font-mono); letter-spacing: .02em; white-space: nowrap; color: var(--gate); margin-top: 3px; }
 
 
@@ -2358,6 +2360,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 /* Picked intent's detail, between the canvas and the trace table */
 .ip-idet { border-top: 1px solid rgba(15,32,70,.16); padding: 18px 20px 20px; background: #fff; }
 .ip-idet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.ip-idet-hint { margin-left: 10px; letter-spacing: 0; text-transform: none; font-family: var(--font-body); }
 .ip-idet-title { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--fg); margin-top: 4px; line-height: 1.35; }
 .ip-idet-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .ip-idet-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }

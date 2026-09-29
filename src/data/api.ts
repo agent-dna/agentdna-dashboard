@@ -67,7 +67,7 @@ function classifyParticipant(id: string): "agent" | "tool" {
   return isAgentId(id) ? "agent" : "tool";
 }
 
-interface ApiInteraction {
+export interface ApiInteraction {
   interactionID: string;
   from: string;
   to: string;
@@ -764,7 +764,7 @@ export async function fetchAgent(id: string): Promise<Agent | null> {
   }
 }
 
-interface ApiIntentInfo {
+export interface ApiIntentInfo {
   intentID: string;
   initiatorDID: string;
   initiatorName?: string;
@@ -777,7 +777,7 @@ interface ApiIntentInfo {
   interactions?: ApiInteraction[];
 }
 
-async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null> {
+export async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null> {
   try {
     const res = await apiRequest<ApiIntentInfo>("/intent-info", { query: { intentID: id } });
     return res;
