@@ -137,6 +137,21 @@ const NEXT_HINT: Record<PlaneMode, Record<PlaneColumn, string>> = {
     i: "",
   },
 };
+/**
+ * Security gates on the user-first plane, each a narrow band in the gap between two
+ * columns: COCA (identity & integrity) on every hop, and CBAC (policy authorization) on
+ * agent → app calls. Gates that share a gap sit side by side, in the order listed.
+ */
+type GateKind = "coca" | "cbac";
+const USER_GATES: { kind: GateKind; from: PlaneColumn; to: PlaneColumn; title: string }[] = [
+  { kind: "coca", from: "u", to: "a", title: "COCA · verifies identity & integrity on user → agent hops" },
+  { kind: "coca", from: "a", to: "r", title: "COCA · verifies identity & integrity on agent → agent hops" },
+  { kind: "coca", from: "r", to: "p", title: "COCA · verifies identity & integrity on agent → app hops" },
+  { kind: "cbac", from: "r", to: "p", title: "CBAC · policy authorization on agent → app calls" },
+];
+const GATE_W = 28;
+const GATE_GAP = 8;
+
 const COLUMN_LABEL: Record<PlaneColumn, string> = { u: "USER", a: "AGENT", r: "PEER AGENTS", p: "APP", i: "INTENT" };
 const PATH_PARAM: Record<PlaneColumn, keyof ObsPathFilter> = {
   u: "userDID",
@@ -548,6 +563,21 @@ export function InteractionPlane() {
       return { e, a, d: `M${x1} ${y1} C${cx} ${y1} ${cx} ${y2} ${x2} ${y2}`, cx: bez(x1, cx, cx, x2), my: bez(y1, y1, y2, y2), vis, offscreen };
     });
 
+  /** User-first gates, centred in their gap; a gate lights up when a highlighted line crosses it. */
+  const gates = userMode
+    ? USER_GATES.map((g) => {
+        const shared = USER_GATES.filter((x) => x.from === g.from && x.to === g.to);
+        const k = shared.indexOf(g);
+        const mid = (COLUMNS[g.from][1] + COLUMNS[g.to][0]) / 2;
+        const span = shared.length * GATE_W + (shared.length - 1) * GATE_GAP;
+        const [i, j] = [ORDER.indexOf(g.from), ORDER.indexOf(g.to)];
+        const lit = edgeGeometry.some(
+          ({ e, vis }) => vis === "lit" && ORDER.indexOf(columnOf(e.from)) <= i && ORDER.indexOf(columnOf(e.to)) >= j,
+        );
+        return { ...g, left: mid - span / 2 + k * (GATE_W + GATE_GAP), lit };
+      })
+    : [];
+
   const hoveredEdge = edgeGeometry.find((g) => g.e.id === hoverEdge);
   const tooltip = hoveredEdge ? { x: hoveredEdge.cx, y: hoveredEdge.my, edge: hoveredEdge.e } : null;
 
@@ -755,6 +785,9 @@ export function InteractionPlane() {
 
         <div ref={wrapRef} className="ip-canvas-wrap" style={{ height: Math.round(planeH * scale + 40) }}>
           <div className="ip-canvas" style={{ width: PLANE_W, height: planeH, transform: `scale(${scale})` }}>
+            {gates.map((g) => (
+              <GateBand key={`${g.kind}:${g.from}${g.to}`} left={g.left} height={planeH} kind={g.kind} lit={g.lit} title={g.title} />
+            ))}
             {ORDER.map((c, k) => (
               <ColumnLabel key={c} span={COLUMNS[c]} n={`0${k + 1} · ${COLUMN_LABEL[c]}`} hint={columnHint(c)} />
             ))}
@@ -1160,6 +1193,16 @@ function ColumnLabel({ span, n, hint }: { span: [number, number]; n: string; hin
     <div className="ip-col-label" style={{ left, width: right - left }}>
       <div className="ip-col-title">{n}</div>
       <div className="ip-col-hint">{hint}</div>
+    </div>
+  );
+}
+
+/** A narrow gate band between two columns: icon and name at the top, full canvas height. */
+function GateBand({ left, height, kind, lit, title }: { left: number; height: number; kind: GateKind; lit: boolean; title: string }) {
+  return (
+    <div className={`ip-gate ip-gate-${kind}${lit ? " lit" : ""}`} style={{ left, width: GATE_W, height }} title={title}>
+      <Icon name={kind === "coca" ? "shield" : "key"} size={12} />
+      <span className="ip-gate-name">{kind.toUpperCase()}</span>
     </div>
   );
 }
