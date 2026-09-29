@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../../components/Icon";
-import { useAgent, useUserInfo } from "../../data/hooks";
+import { useAgent, useToolInfo, useUserInfo } from "../../data/hooks";
 import { timeAgo } from "../../lib/format";
 
 /**
- * Detail of the user or agent picked on the interaction plane, shown under the canvas in
- * place of the trace. Data comes from the same endpoints as the User and Agent pages
- * (`/user-info`, `/agent-info`).
+ * Detail of the user, agent or app picked on the interaction plane, shown in the detail box
+ * under the canvas. Data comes from the same endpoints as the User, Agent and Tool pages
+ * (`/user-info`, `/agent-info`, `/tool-info`).
  */
 
 type Fact = [label: string, value: string, hover?: string];
@@ -16,7 +16,7 @@ interface Common {
   did: string;
   /** Name from the plane, shown while the detail loads. */
   name: string;
-  /** Column title for the kicker: "USER", "AGENT", "PEER AGENT". */
+  /** Column title for the kicker: "USER", "AGENT", "PEER AGENT", "APP". */
   kind: string;
   /** What to pick next on the plane. */
   hint?: string;
@@ -107,6 +107,35 @@ export function UserDetailPanel({ did, name, kind, hint, onClose }: Common) {
       onRetry={refetch}
       openLabel="Open user"
       openPath={`/users/${encodeURIComponent(did)}`}
+      onClose={onClose}
+    />
+  );
+}
+
+export function AppDetailPanel({ did, name, kind, hint, onClose }: Common) {
+  const { data, loading, error, refetch } = useToolInfo(did);
+  const t = data?.tool;
+  const facts: Fact[] = t
+    ? [
+        ["Score", String(t.score)],
+        ["Interactions", count(t.totalInteractions)],
+        ["Intents", count(t.totalIntents)],
+        ["Agents", count(t.totalAgents)],
+        ["Threats", count(t.totalThreats)],
+      ]
+    : [];
+  return (
+    <DetailShell
+      kind={kind}
+      hint={hint}
+      title={t?.name || name}
+      did={did}
+      chips={t && t.totalThreats > 0 && <span className="chip warn">{count(t.totalThreats)} threats</span>}
+      facts={facts}
+      state={loading ? "loading" : error || !t ? "error" : "ready"}
+      onRetry={refetch}
+      openLabel="Open app"
+      openPath={`/tools/${encodeURIComponent(did)}`}
       onClose={onClose}
     />
   );

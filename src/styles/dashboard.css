@@ -2358,7 +2358,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ip-tooltip-split { font-size: 10.5px; color: var(--fg-dim); }
 
 /* Picked intent's detail, between the canvas and the trace table */
-.ip-idet { border-top: 1px solid rgba(15,32,70,.16); padding: 18px 20px 20px; background: #fff; }
+.ip-idet { padding: 18px 20px 20px; background: #fff; border-radius: 14px; }
 .ip-idet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .ip-idet-hint { margin-left: 10px; letter-spacing: 0; text-transform: none; font-family: var(--font-body); }
 .ip-idet-title { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--fg); margin-top: 4px; line-height: 1.35; }
@@ -2382,7 +2382,14 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 @media (max-width: 640px) { .ip-idet-fact.wide { grid-column: auto; } }
 
 /* Trace detail box: key numbers, then each path as its hops */
-.ip-trace { border-top: 1px solid rgba(15,32,70,.16); padding: 16px 20px 18px; }
+/* Detail box: its own card under the plane. A fixed height range so loading or swapping
+   content scrolls inside the box instead of moving the page. */
+.ip-detail { margin-top: 16px; min-height: 280px; max-height: 720px; overflow-y: auto; }
+.ip-trace { padding: 16px 20px 18px; }
+/* Detail box tabs: buttons styled as .tab, pinned to the top while the box scrolls. */
+.ip-detail-tabs { position: sticky; top: 0; z-index: 1; background: var(--bg-1); border-radius: 14px 14px 0 0; }
+.ip-detail-tabs .tab { background: none; border-top: 0; border-left: 0; border-right: 0; font-family: inherit; }
+.ip-detail-tabs .tab:disabled { color: var(--fg-faint); opacity: .55; cursor: not-allowed; }
 .ip-trace-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .ip-trace-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--fg); }
 .ip-trace-next { font-size: 12px; color: var(--accent); font-weight: 500; }

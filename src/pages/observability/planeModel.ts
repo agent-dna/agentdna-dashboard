@@ -145,6 +145,8 @@ export const worst = (sts: PlaneStatus[]): PlaneStatus =>
   sts.reduce<PlaneStatus>((w, s) => (RANK[s] > RANK[w] ? s : w), "allowed");
 
 export const nodeId = (t: PlaneColumn, ref: string) => `${t}:${ref}`;
+/** DID / intentID behind a plane node id (`u:<did>` → `<did>`). */
+export const refOf = (id: string) => id.slice(2);
 
 const initials = (name: string) => {
   const parts = name.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
@@ -569,3 +571,10 @@ export function buildAppPlaneModel({ graph, users, appFlow, intents }: AppBuildI
 
   return { nodes, edges: [...edges.values()], flows, height: PLANE_H };
 }
+
+export const STATUS_COLOR: Record<PlaneStatus, string> = { allowed: "#059669", elevated: "#D97706", flagged: "#DC2626" };
+export const STATUS_TINT: Record<PlaneStatus, string> = {
+  allowed: "rgba(5,150,105,.12)",
+  elevated: "rgba(217,119,6,.12)",
+  flagged: "rgba(220,38,38,.12)",
+};

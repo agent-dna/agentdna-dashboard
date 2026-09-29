@@ -1,27 +1,27 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, type UIEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { Icon } from "../../components/Icon";
 import { AppIcon } from "../../components/AppIcon";
+import { errorText, useObsQuery } from "./useObsQuery";
+import { DetailBox } from "./DetailBox";
 import { Bot, UserRound } from "lucide-react";
 import {
   fetchObsAgentFlow,
   fetchObsAppFlow,
   fetchObsGraph,
   fetchObsIntents,
-  fetchObsPaths,
   fetchObsSummary,
   fetchObsUserFlow,
   fetchObsUsers,
-  type ObsPath,
-  type ObsPathFilter,
   type ObsScope,
   type ObsUser,
   type ObsUsersPage,
 } from "../../api/observability";
 import {
-  COLUMN_TYPE,
   LAYOUTS,
   LIST_VIEW_H,
   PLANE_W,
+  STATUS_COLOR,
+  STATUS_TINT,
   ROW_H,
   USER_LIST_TOP,
   USER_PITCH,
@@ -32,6 +32,7 @@ import {
   buildAppPlaneModel,
   buildPlaneModel,
   nodeId,
+  refOf,
   type ListColumn,
   type PlaneColumn,
   type PlaneMode,
@@ -40,9 +41,6 @@ import {
   type PlaneNode,
   type PlaneStatus,
 } from "./planeModel";
-import { AgentDetailPanel, UserDetailPanel } from "./EntityDetailPanel";
-import { IntentDetailPanel } from "./IntentDetailPanel";
-import { loadIntentDetail } from "./intentDetail";
 
 /**
  * Observability · Interaction plane.
@@ -64,12 +62,6 @@ import { loadIntentDetail } from "./intentDetail";
  * Data: middleware `/observability-*` endpoints (src/api/observability.ts).
  */
 
-const STATUS_COLOR: Record<PlaneStatus, string> = { allowed: "#059669", elevated: "#D97706", flagged: "#DC2626" };
-const STATUS_TINT: Record<PlaneStatus, string> = {
-  allowed: "rgba(5,150,105,.12)",
-  elevated: "rgba(217,119,6,.12)",
-  flagged: "rgba(220,38,38,.12)",
-};
 const LINE_COLOR: Record<PlaneStatus, string> = { allowed: "#2563EB", elevated: "#D97706", flagged: "#DC2626" };
 const RING: Record<PlaneColumn, string> = {
   u: "rgba(46,74,127,.75)",
@@ -99,7 +91,7 @@ const AVATARS: [string, string][] = [
   ["rgba(10,34,64,.08)", "#0A2240"],
 ];
 
-type Filter = "all" | "risk" | "flagged";
+export type Filter = "all" | "risk" | "flagged";
 const MODES: { key: PlaneMode; label: string }[] = [
   { key: "user", label: "User" },
   { key: "app", label: "App" },
@@ -130,22 +122,6 @@ const listRowBox = (n: PlaneNode): CSSProperties => ({
 });
 /** Edges below this volume collapse to a small dot instead of a count pill. */
 const PILL_THRESHOLD = 10;
-const NEXT_HINT: Record<PlaneMode, Record<PlaneColumn, string>> = {
-  user: {
-    u: "Pick an agent to see the agents it worked with and the apps involved.",
-    a: "Pick a peer agent to narrow the apps to the intents they shared, or an app to see intents.",
-    r: "Pick an app to see the intents the two agents shared there.",
-    p: "Pick an intent to see its detail.",
-    i: "",
-  },
-  app: {
-    p: "Pick one of the agents that called this app.",
-    a: "Pick a peer agent to see who started the intents they shared on this app.",
-    r: "Pick a user to see their intents.",
-    u: "Pick an intent to see its detail.",
-    i: "",
-  },
-};
 /**
  * Security gates on the user-first plane, each a band in the gap between two columns: COCA
  * (identity & integrity) on every hop; CBAC (policy authorization) and Whitelisting (agent
@@ -168,64 +144,19 @@ const GATE_W = 60;
 const GATE_GAP = 18;
 
 const COLUMN_LABEL: Record<PlaneColumn, string> = { u: "USER", a: "AGENT", r: "PEER AGENTS", p: "APP", i: "INTENT" };
-const PATH_PARAM: Record<PlaneColumn, keyof ObsPathFilter> = {
-  u: "userDID",
-  a: "agentDID",
-  r: "peerDID",
-  p: "appDID",
-  i: "intentID",
-};
 
 /** One selected node per layer, filled left to right. Values are plane node ids. */
-type Chain = Partial<Record<PlaneColumn, string>>;
+export type Chain = Partial<Record<PlaneColumn, string>>;
 
 /** Whether a flow runs through every picked node. `order` is the layout's column order, which `f.n` follows. */
 const matchesChain = (f: PlaneFlow, chain: Chain, order: PlaneColumn[]) =>
   order.every((col, k) => !chain[col] || f.n[k] === chain[col]);
 
-/** DID / intentID behind a plane node id (`u:<did>` → `<did>`). */
-const refOf = (id: string) => id.slice(2);
 
 const fmt = (n: number) => (n < 1000 ? String(n) : `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`);
-const tint = (st: PlaneStatus, alpha: string) => STATUS_TINT[st].replace(".12", alpha);
 const glyph = (st: PlaneStatus) => (st === "flagged" ? "×" : st === "elevated" ? "!" : "");
-const errorText = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
 
 type Visibility = "normal" | "lit" | "muted";
-
-/**
- * Fetch-once-per-key with a per-component cache: a falsy key fetches nothing, and a key
- * seen before is served from the cache, so clicking back and forth doesn't refetch.
- */
-function useObsQuery<T>(maybeKey: string | false | null | undefined, fetcher: () => Promise<T>) {
-  const key = maybeKey || null;
-  const [store, setStore] = useState<Record<string, { data?: T; error?: string }>>({});
-  const entry = key ? store[key] : undefined;
-  useEffect(() => {
-    if (!key || entry) return;
-    let live = true;
-    fetcher().then(
-      (data) => live && setStore((s) => ({ ...s, [key]: { data } })),
-      (e: unknown) => live && setStore((s) => ({ ...s, [key]: { error: errorText(e) } })),
-    );
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, entry]);
-  return {
-    data: entry?.data ?? null,
-    error: entry?.error ?? null,
-    loading: !!key && !entry,
-    retry: () =>
-      key &&
-      setStore((s) => {
-        const next = { ...s };
-        delete next[key];
-        return next;
-      }),
-  };
-}
 
 export function InteractionPlane() {
   const [mode, setMode] = useState<PlaneMode>("user");
@@ -362,6 +293,12 @@ export function InteractionPlane() {
     pickedApp,
   ]);
   const NODES = model?.nodes ?? {};
+  /** Detail-box callbacks, stable so the box skips re-rendering when only the plane changes. */
+  const onDetailChain = useCallback((next: Chain) => {
+    setChain(next);
+    setHovered(null);
+  }, []);
+  const onClearTrace = useCallback(() => onDetailChain({}), [onDetailChain]);
   const planeH = model?.height ?? 760;
   /** Every scroll list has the same viewport: 11 cards, then it scrolls. */
   const userListH = LIST_VIEW_H;
@@ -599,79 +536,7 @@ export function InteractionPlane() {
     onMouseLeave: () => setHoverEdge(null),
   });
 
-  /* ---------- Detail box: intent detail, user / agent detail, or the trace ---------- */
-
-  const pickedIntent = chain.i ? refOf(chain.i) : null;
-  /** The deepest pick, when it's a user or an agent: the box shows that entity instead of the trace. */
-  const deepest = depth >= 0 ? ORDER[depth] : null;
-  const entityCol = !preview && !pickedIntent && deepest && (["u", "a", "r"] as PlaneColumn[]).includes(deepest) ? deepest : null;
-  const entityId = entityCol ? chain[entityCol]! : null;
-  const unpick = (col: PlaneColumn) =>
-    setChain((cur) => {
-      const next = { ...cur };
-      delete next[col];
-      return next;
-    });
-
-  /** The current selection as path filters. */
-  const chainFilter: ObsPathFilter = Object.fromEntries(ORDER.filter((c) => chain[c]).map((c) => [PATH_PARAM[c], refOf(chain[c]!)]));
-  /** The trace only shows when no intent, user or agent detail takes the box. */
-  const hasRows = emphasis && !!model && !entityId && !pickedIntent;
-  const pathFilter: ObsPathFilter | null = !hasRows ? null : preview ? { [PATH_PARAM[NODES[preview].t]]: refOf(preview) } : chainFilter;
-  const pathsKey = pathFilter && `paths:${filter}:${JSON.stringify(pathFilter)}`;
-  const paths = useObsQuery(pathsKey, () => fetchObsPaths({ ...REST, status: filter }, pathFilter!));
-
-  // The picked intent's detail has its own call, so it stays put while the filter or a hover preview changes the table.
-  const intentDetail = useObsQuery(pickedIntent && `intent-detail:${JSON.stringify(chainFilter)}`, () =>
-    loadIntentDetail(REST, { ...chainFilter, intentID: pickedIntent! }, NODES[chain.i!]?.name ?? pickedIntent!),
-  );
-  const nameOf = (did: string) => (["u", "a", "p"] as const).map((t) => NODES[nodeId(t, did)]?.name).find(Boolean);
-  const rows = paths.data?.pathsList ?? [];
-
-  const flaggedCount = rows.filter((r) => r.outcome === "flagged").length;
-  const elevatedCount = rows.filter((r) => r.outcome === "elevated").length;
-  const agentCount = new Set(rows.map((r) => r.agent.did)).size;
-  const appCount = new Set(rows.map((r) => r.app?.did).filter(Boolean)).size;
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  const traceStats: [string, string, PlaneStatus?][] = paths.data
-    ? [
-        ["Paths", paths.data.total.toLocaleString()],
-        ["Interactions", rows.reduce((s, r) => s + r.interactionsCount, 0).toLocaleString()],
-        ["Agents", String(agentCount)],
-        ["Apps", String(appCount)],
-        ["Flagged", String(flaggedCount), "flagged"],
-        ["Needs review", String(elevatedCount), "elevated"],
-      ]
-    : [];
-  /** Open a path's intent in the detail box, keeping the canvas on the same user → agent → peer → app. */
-  const openPath = (r: ObsPath) => {
-    if (!r.intent) return;
-    setChain({
-      u: nodeId("u", r.user.did),
-      a: nodeId("a", r.agent.did),
-      ...(r.peer ? { r: nodeId("r", r.peer.did) } : {}),
-      ...(r.app ? { p: nodeId("p", r.app.did) } : {}),
-      i: nodeId("i", r.intent.id),
-    });
-    setHovered(null);
-  };
-  const traceKicker = preview
-    ? `TRACE PREVIEW · ${COLUMN_TYPE[NODES[preview].t].toUpperCase()}`
-    : hasChain
-      ? `TRACE · ${ORDER.filter((c) => chain[c]).map((c) => COLUMN_TYPE[c].toUpperCase()).join(" → ")}`
-      : filter !== "all"
-        ? "FILTER"
-        : "TRACE";
-  const traceTitle = preview
-    ? NODES[preview].name
-    : hasChain
-      ? chainIds.map((id) => NODES[id]?.name ?? "…").join(" → ")
-      : filter === "risk"
-        ? "High-risk interactions"
-        : filter === "flagged"
-          ? "Flagged interactions"
-          : "No selection";
-  const nextHint = !preview && hasChain ? NEXT_HINT[mode][ORDER[depth]] : "";
 
   /* ---------- User list: scroll paging and search ---------- */
 
@@ -1109,98 +974,19 @@ export function InteractionPlane() {
           </div>
         </div>
 
-        {/* ================= Detail box: the picked intent's hops, or every path in the trace ================= */}
-        {pickedIntent ? (
-          <IntentDetailPanel
-            intentId={pickedIntent}
-            intent={intentDetail.data ?? null}
-            loading={intentDetail.loading}
-            error={intentDetail.error}
-            onRetry={intentDetail.retry}
-            onClose={() => unpick("i")}
-            nameOf={nameOf}
-          />
-        ) : entityId && entityCol === "u" ? (
-          <UserDetailPanel
-            key={entityId}
-            did={refOf(entityId)}
-            name={NODES[entityId]?.name ?? refOf(entityId)}
-            kind="USER"
-            hint={nextHint}
-            onClose={() => unpick("u")}
-            nameOf={nameOf}
-          />
-        ) : entityId && entityCol ? (
-          <AgentDetailPanel
-            key={entityId}
-            did={refOf(entityId)}
-            name={NODES[entityId]?.name ?? refOf(entityId)}
-            kind={COLUMN_TYPE[entityCol].toUpperCase()}
-            hint={nextHint}
-            onClose={() => unpick(entityCol)}
-            nameOf={nameOf}
-          />
-        ) : (
-        <div className="ip-trace">
-          <div className="ip-trace-head">
-            <span className="ip-kicker">{traceKicker}</span>
-            <span className="ip-trace-title">{traceTitle}</span>
-            {nextHint && <span className="ip-trace-next">{nextHint}</span>}
-            {hasChain && (
-              <button
-                type="button"
-                className="btn ghost ip-clear"
-                onClick={() => {
-                  setChain({});
-                  setHovered(null);
-                }}
-              >
-                Clear trace
-              </button>
-            )}
-          </div>
-          {hasRows ? (
-            <>
-              {paths.data && rows.length > 0 && (
-                <div className="ip-trace-stats">
-                  {traceStats.map(([k, v, st]) => (
-                    <div key={k} className="ip-trace-stat">
-                      <div className="k">{k}</div>
-                      <div className="v" style={st && v !== "0" ? { color: STATUS_COLOR[st] } : undefined}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {paths.loading && <div className="ip-empty">Loading paths…</div>}
-              {paths.error && (
-                <div className="ip-empty">
-                  Couldn't load paths: {paths.error}{" "}
-                  <button type="button" className="btn ghost" onClick={paths.retry}>Retry</button>
-                </div>
-              )}
-              {paths.data && rows.length === 0 && <div className="ip-empty">No paths match this selection and filter.</div>}
-              <div className="ip-hops-list">
-                {rows.map((r, k) => (
-                  <PathHops key={k} row={r} order={ORDER} onOpen={r.intent ? () => openPath(r) : undefined} />
-                ))}
-              </div>
-              {paths.data && paths.data.total > rows.length && (
-                <div className="ip-empty" style={{ marginTop: 10 }}>
-                  Showing the {rows.length} most recent of {paths.data.total.toLocaleString()} paths. Narrow the selection to see the rest.
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="ip-empty">
-              {userMode
-                ? "Start with a user: the agents in their intents light up. Pick an agent to see the agents it worked with and the apps involved, pick a peer to narrow to the intents the two shared, then an app to see those intents."
-                : "Start with an app: the agents that called it light up. Pick an agent to see the agents it worked with on that app, pick a peer to see who started those intents, then a user to see their intents."}{" "}
-              Turn on Trace interaction to preview whole paths on hover.
-            </div>
-          )}
-        </div>
-        )}
       </section>
+
+      <DetailBox
+        mode={mode}
+        order={ORDER}
+        chain={chain}
+        preview={preview}
+        filter={filter}
+        nodes={model?.nodes ?? null}
+        scope={REST}
+        onChain={onDetailChain}
+        onClearTrace={onClearTrace}
+      />
     </div>
   );
 }
@@ -1294,78 +1080,6 @@ function ColumnNote({
         ) : (
           empty
         )}
-      </div>
-    </div>
-  );
-}
-
-/** One party on a path card: its layer and name, full DID on hover. */
-function HopNode({ kind, did, name }: { kind: string; did?: string; name?: string }) {
-  return (
-    <span className="ip-hop-node" title={did}>
-      <span className="k">{kind}</span>
-      <span className="v">{did ? name || did : "—"}</span>
-    </span>
-  );
-}
-
-function HopArrow() {
-  return (
-    <span className="ip-hop-gate">
-      <span className="ip-hop-line" />
-      <span className="ip-hop-line arrow" />
-    </span>
-  );
-}
-
-/**
- * A path in the trace as its hops, in the plane's column order (user → agent → peer → app,
- * or app → agent → peer → user), with the intent it ran and how it ended. Clicking opens
- * that intent's detail.
- */
-function PathHops({ row, order, onOpen }: { row: ObsPath; order: PlaneColumn[]; onOpen?: () => void }) {
-  const hop: Partial<Record<PlaneColumn, { kind: string; did?: string; name?: string }>> = {
-    u: { kind: "User", did: row.user.did, name: row.user.name },
-    a: { kind: "Agent", did: row.agent.did, name: row.agent.name },
-    ...(row.peer ? { r: { kind: "Peer agent", did: row.peer.did, name: row.peer.name } } : {}),
-    p: { kind: "App", did: row.app?.did, name: row.app?.name },
-  };
-  const hops = order.flatMap((c) => (hop[c] ? [{ col: c, ...hop[c] }] : []));
-  const code = row.policy?.split(" ")[0];
-  const title = row.intent
-    ? row.intent.titleFull || row.intent.title || row.intent.id
-    : "No intent recorded";
-  return (
-    <div
-      className={`ip-hops ip-hops-${row.outcome}${onOpen ? " clickable" : ""}`}
-      onClick={onOpen}
-      onKeyDown={onOpen && ((ev) => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), onOpen()))}
-      role={onOpen ? "button" : undefined}
-      tabIndex={onOpen ? 0 : undefined}
-    >
-      <div className="ip-hops-top">
-        <span
-          className="ip-outcome"
-          style={{ color: STATUS_COLOR[row.outcome], background: tint(row.outcome, ".07"), borderColor: tint(row.outcome, ".22") }}
-        >
-          {row.outcome.toUpperCase()}
-        </span>
-        <span className="ip-hops-title" style={{ color: row.intent ? undefined : "var(--fg-faint)" }} title={row.intent?.titleFull ?? row.intent?.title}>
-          {title}
-        </span>
-        {code && row.outcome !== "allowed" && <span className="ip-mono ip-faint" title={row.policy ?? "Threat code"}>{code}</span>}
-        <span className="ip-hops-meta">
-          <span className="ip-mono">{fmt(row.interactionsCount)} interactions</span>
-          {onOpen && <span className="ip-hops-open">Details →</span>}
-        </span>
-      </div>
-      <div className="ip-hops-chain">
-        {hops.map(({ col, kind, did, name }, k) => (
-          <Fragment key={col}>
-            {k > 0 && <HopArrow />}
-            <HopNode kind={kind} did={did} name={name} />
-          </Fragment>
-        ))}
       </div>
     </div>
   );
