@@ -2,13 +2,18 @@
  * Layout and graph model for the Observability interaction plane, built from the
  * middleware's `/observability-*` responses (see src/api/observability.ts).
  *
- * The plane reads left to right: User → Agent → Peer agents → App → Intent.
- * The peer column lists every agent at rest; once a user and an agent are picked it is
- * repopulated with the agents that took part in the same intents as that agent.
+ * The plane reads left to right in one of two modes:
+ * - user-first: User → Agent → Peer agents → App → Intent. The peer column lists every
+ *   agent at rest; once a user and an agent are picked it is repopulated with the agents
+ *   that took part in the same intents as that agent.
+ * - app-first: App → Agent → Peer agents → User → Intent. Picking an app and an agent
+ *   repopulates the peers; picking a peer repopulates the users.
  */
 
 import type {
   ObsAgentFlow,
+  ObsAppFlow,
+  ObsAppFlowUser,
   ObsAgentFlowApp,
   ObsGateEdge,
   ObsGraph,
@@ -21,6 +26,7 @@ import type {
 
 /** `r` is the peer-agent column. */
 export type PlaneColumn = "u" | "a" | "r" | "p" | "i";
+export type PlaneMode = "user" | "app";
 export type PlaneStatus = ObsOutcome;
 
 export interface PlaneNode {
@@ -63,8 +69,8 @@ export interface PlaneEdge {
 }
 
 /**
- * A path through the plane: `n` has one node per column (`""` where a column isn't part of
- * it), `also` any further nodes it lights, and `es` the edges it lights.
+ * A path through the plane: `n` has one node per column in the layout's order (`""` where
+ * a column isn't part of it), `also` any further nodes it lights, and `es` the edges it lights.
  */
 export interface PlaneFlow {
   n: string[];
@@ -83,13 +89,20 @@ export interface PlaneModel {
 export const PLANE_W = 1452;
 const MIN_PLANE_H = 760;
 
-export const ORDER: PlaneColumn[] = ["u", "a", "r", "p", "i"];
-export const COLUMNS: Record<PlaneColumn, [number, number]> = {
-  u: [0, 176],
-  a: [280, 460],
-  r: [564, 744],
-  p: [868, 1028],
-  i: [1132, 1452],
+export interface PlaneLayout {
+  /** Columns left to right. */
+  order: PlaneColumn[];
+  /** [left, right] of each column on the canvas. */
+  columns: Record<PlaneColumn, [number, number]>;
+}
+const WIDTH: Record<PlaneColumn, number> = { u: 176, a: 180, r: 180, p: 160, i: 320 };
+const layout = (order: PlaneColumn[], left: number[]): PlaneLayout => ({
+  order,
+  columns: Object.fromEntries(order.map((c, k) => [c, [left[k], left[k] + WIDTH[c]]])) as PlaneLayout["columns"],
+});
+export const LAYOUTS: Record<PlaneMode, PlaneLayout> = {
+  user: layout(["u", "a", "r", "p", "i"], [0, 280, 564, 868, 1132]),
+  app: layout(["p", "a", "r", "u", "i"], [0, 264, 548, 832, 1132]),
 };
 export const ROW_H: Record<PlaneColumn, number> = { u: 48, a: 56, r: 56, p: 48, i: 56 };
 /** The scroll lists start below the column titles. */
@@ -113,6 +126,7 @@ export const listY = (col: ListColumn, k: number) => LIST_PAD + k * LIST_PITCH[c
 export const listHeight = (col: ListColumn, count: number) => (count ? LIST_PAD * 2 + count * LIST_PITCH[col] - LIST_GAP : 0);
 export const USER_PITCH = LIST_PITCH.u;
 const APP_PITCH = 60;
+const COLUMN_COUNT = 5;
 
 export const COLUMN_TYPE: Record<PlaneColumn, string> = { u: "User", a: "Agent", r: "Peer agent", p: "App", i: "Intent" };
 
@@ -194,6 +208,78 @@ const spread = (count: number, pitch: number, height: number) => {
   return (k: number) => top + slot * (k + 0.5);
 };
 
+type UserCard = Pick<ObsUser | ObsAppFlowUser, "userDID" | "userName" | "email" | "subtitle" | "kind" | "signed">;
+
+const userNode = (u: UserCard, k: number): PlaneNode => ({
+  id: nodeId("u", u.userDID),
+  t: "u",
+  ref: u.userDID,
+  name: u.userName || u.email || u.userDID,
+  sub: u.subtitle || u.email,
+  ini: initials(u.userName || u.email || "?"),
+  av: k % 5,
+  svc: u.kind === "service" || !u.signed,
+  y: listY("u", k),
+});
+
+const agentSub = (a: ObsGraph["agents"][number]) => `${plural(a.usersCount, "user")}${a.revoked ? " · revoked" : ""}`;
+
+const peerNodes = (peers: ObsAgentFlow["peers"]): PlaneNode[] =>
+  [...peers]
+    .sort((x, y) => y.count - x.count)
+    .map((p, k) => ({
+      id: nodeId("r", p.agentDID),
+      t: "r",
+      ref: p.agentDID,
+      name: p.agentName || p.agentDID,
+      // Whether the two messaged each other directly is on the line's tooltip.
+      sub: `${plural(p.intentsCount, "shared intent")}${p.revoked ? " · revoked" : ""}`,
+      y: listY("r", k),
+    }));
+
+const peerTips = (p: ObsAgentFlow["peers"][number]) => [
+  p.direct
+    ? `Direct: ${p.direct.sent.toLocaleString()} sent · ${p.direct.received.toLocaleString()} received`
+    : "No direct messages · shared intents only",
+  plural(p.intentsCount, "shared intent"),
+];
+
+const intentNode = (it: ObsIntent, k: number): PlaneNode => {
+  const agentsNote = it.agents?.length ? `${plural(it.agents.length, "agent")} · ` : "";
+  return {
+    id: nodeId("i", it.intentID),
+    t: "i",
+    ref: it.intentID,
+    name: it.intentTitle || it.intentID,
+    st: it.outcome,
+    meta:
+      it.outcome === "allowed"
+        ? `${agentsNote}${it.interactionsCount.toLocaleString()} ixns · ${ago(it.lastAt)}${ago(it.lastAt) === "just now" ? "" : " ago"}`
+        : `${it.policy ?? "Needs review"} · ${plural(it.flags, "flag")}`,
+    // The plane re-stacks whichever intents are showing, so this is only the default.
+    y: listY("i", k),
+  };
+};
+
+/** Shared bookkeeping for both builders. */
+function modelParts() {
+  const nodes: Record<string, PlaneNode> = {};
+  const edges = new Map<string, PlaneEdge>();
+  const flows: PlaneFlow[] = [];
+  const addNode = (n: PlaneNode) => (nodes[n.id] = n);
+  const addEdge = (e: PlaneEdge) => (edges.set(e.id, e), e);
+  const addFlow = (n: string[], es: (PlaneEdge | null | undefined)[], st?: PlaneStatus, also?: string[]) => {
+    const list = es.filter((e): e is PlaneEdge => !!e);
+    flows.push({
+      n: Array.from({ length: COLUMN_COUNT }, (_, k) => n[k] ?? ""),
+      es: list,
+      st: st ?? worst(list.map((e) => e.st)),
+      also,
+    });
+  };
+  return { nodes, edges, flows, addNode, addEdge, addFlow };
+}
+
 interface BuildInput {
   graph: ObsGraph;
   users: ObsUser[];
@@ -208,41 +294,19 @@ interface BuildInput {
   intents: { userDID: string; agentDID: string; peerDID: string | null; appDID: string; list: ObsIntent[] } | null;
 }
 
+/** User-first plane: User → Agent → Peer agents → App → Intent. */
 export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: BuildInput): PlaneModel {
-  const nodes: Record<string, PlaneNode> = {};
-  const edges = new Map<string, PlaneEdge>();
-  const flows: PlaneFlow[] = [];
-  const addEdge = (e: PlaneEdge) => (edges.set(e.id, e), e);
-  const addFlow = (n: string[], es: (PlaneEdge | null | undefined)[], st?: PlaneStatus, also?: string[]) => {
-    const list = es.filter((e): e is PlaneEdge => !!e);
-    flows.push({ n: ORDER.map((_, k) => n[k] ?? ""), es: list, st: st ?? worst(list.map((e) => e.st)), also });
-  };
+  const { nodes, edges, flows, addNode, addEdge, addFlow } = modelParts();
 
   /* ---------- Users (list order = most recently active first) ---------- */
   const userPos = new Map<string, number>();
-  users.forEach((u, i) => {
-    const id = nodeId("u", u.userDID);
-    userPos.set(id, i);
-    nodes[id] = {
-      id,
-      t: "u",
-      ref: u.userDID,
-      name: u.userName || u.email || u.userDID,
-      sub: u.subtitle || u.email,
-      ini: initials(u.userName || u.email || "?"),
-      av: i % 5,
-      svc: u.kind === "service" || !u.signed,
-      y: listY("u", i),
-    };
-  });
+  users.forEach((u, i) => userPos.set(addNode(userNode(u, i)).id, i));
 
   /* ---------- Agents ---------- */
   const userAgentLinks = users.flatMap((u) =>
     u.agentEdges.map((e) => ({ from: nodeId("u", e.from), to: e.to, w: e.count })),
   );
   const agents = byBarycenter(graph.agents, (a) => a.agentDID, userAgentLinks, userPos);
-  const agentSub = (a: ObsGraph["agents"][number]) =>
-    `${plural(a.usersCount, "user")}${a.revoked ? " · revoked" : ""}`;
   agents.forEach((a, k) => {
     const id = nodeId("a", a.agentDID);
     nodes[id] = { id, t: "a", ref: a.agentDID, name: a.agentName || a.agentDID, sub: agentSub(a), y: listY("a", k) };
@@ -250,20 +314,7 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
 
   /* ---------- Peer column: every agent at rest, the picked agent's peers once loaded ---------- */
   if (agentFlow) {
-    [...agentFlow.base.peers]
-      .sort((x, y) => y.count - x.count)
-      .forEach((p, k) => {
-        const id = nodeId("r", p.agentDID);
-        nodes[id] = {
-          id,
-          t: "r",
-          ref: p.agentDID,
-          name: p.agentName || p.agentDID,
-          // Whether the two messaged each other directly is on the line's tooltip.
-          sub: `${plural(p.intentsCount, "shared intent")}${p.revoked ? " · revoked" : ""}`,
-          y: listY("r", k),
-        };
-      });
+    peerNodes(agentFlow.base.peers).forEach(addNode);
   } else {
     agents.forEach((a, k) => {
       const id = nodeId("r", a.agentDID);
@@ -345,13 +396,7 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
     const peerEdge = new Map<string, PlaneEdge>();
     for (const p of base.peers) {
       const r = nodeId("r", p.agentDID);
-      const tips = [
-        p.direct
-          ? `Direct: ${p.direct.sent.toLocaleString()} sent · ${p.direct.received.toLocaleString()} received`
-          : "No direct messages · shared intents only",
-        `${plural(p.intentsCount, "shared intent")}`,
-      ];
-      const e = addEdge(rollupEdge(a, r, p, tips));
+      const e = addEdge(rollupEdge(a, r, p, peerTips(p)));
       peerEdge.set(r, e);
       addFlow([u, a, r], [ua, e]);
     }
@@ -386,21 +431,7 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
     const r = intents.peerDID ? nodeId("r", intents.peerDID) : "";
     const picked = nodeId("p", intents.appDID);
     intents.list.forEach((it, k) => {
-      const id = nodeId("i", it.intentID);
-      const agentsNote = it.agents?.length ? `${plural(it.agents.length, "agent")} · ` : "";
-      nodes[id] = {
-        id,
-        t: "i",
-        ref: it.intentID,
-        name: it.intentTitle || it.intentID,
-        st: it.outcome,
-        meta:
-          it.outcome === "allowed"
-            ? `${agentsNote}${it.interactionsCount.toLocaleString()} ixns · ${ago(it.lastAt)}${ago(it.lastAt) === "just now" ? "" : " ago"}`
-            : `${it.policy ?? "Needs review"} · ${plural(it.flags, "flag")}`,
-        // The plane re-stacks whichever intents are showing, so this is only the default.
-        y: listY("i", k),
-      };
+      const { id } = addNode(intentNode(it, k));
       // Every app the intent reached feeds into it, so agents that went to different apps
       // meet again at the intent they share.
       const appIds = [...new Set([intents.appDID, ...it.appDIDs])].map((d) => nodeId("p", d)).filter((p) => nodes[p]);
@@ -426,4 +457,120 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
 
 function fmtCount(n: number) {
   return n < 1000 ? String(n) : `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+}
+
+interface AppBuildInput {
+  graph: ObsGraph;
+  /** The paged user list, shown until a peer is picked. */
+  users: ObsUser[];
+  /**
+   * Peers for the picked app + agent, once loaded. `narrowed` is the same call with the
+   * picked peer, which adds the users behind the intents the three share.
+   */
+  appFlow: { base: ObsAppFlow; narrowed: ObsAppFlow | null } | null;
+  /** Intents for the picked app + agent + peer + user, once loaded. */
+  intents: { userDID: string; agentDID: string; peerDID: string; appDID: string; list: ObsIntent[] } | null;
+}
+
+/** App-first plane: App → Agent → Peer agents → User → Intent. Flow `n` follows that order. */
+export function buildAppPlaneModel({ graph, users, appFlow, intents }: AppBuildInput): PlaneModel {
+  const { nodes, edges, flows, addNode, addEdge, addFlow } = modelParts();
+  const narrowed = appFlow?.narrowed ?? null;
+
+  /* ---------- Apps (busiest first) ---------- */
+  const appCalls = new Map<string, number>();
+  for (const e of graph.agentAppEdges) appCalls.set(e.to, (appCalls.get(e.to) ?? 0) + e.count);
+  const apps = [...graph.apps].sort((x, y) => (appCalls.get(y.appDID) ?? 0) - (appCalls.get(x.appDID) ?? 0));
+  const height = Math.max(MIN_PLANE_H, USER_LIST_TOP + 24 + apps.length * APP_PITCH);
+  const appY = spread(apps.length, APP_PITCH, height);
+  const appPos = new Map<string, number>();
+  apps.forEach((p, k) => {
+    const calls = appCalls.get(p.appDID) ?? 0;
+    appPos.set(nodeId("p", p.appDID), k);
+    addNode({ id: nodeId("p", p.appDID), t: "p", ref: p.appDID, name: p.appName || p.appDID, sub: plural(calls, "call"), y: appY(k) });
+  });
+
+  /* ---------- Agents, ordered to follow the apps they call ---------- */
+  const appAgentLinks = graph.agentAppEdges.map((e) => ({ from: nodeId("p", e.to), to: e.from, w: e.count }));
+  const agents = byBarycenter(graph.agents, (a) => a.agentDID, appAgentLinks, appPos);
+  agents.forEach((a, k) =>
+    addNode({ id: nodeId("a", a.agentDID), t: "a", ref: a.agentDID, name: a.agentName || a.agentDID, sub: agentSub(a), y: listY("a", k) }),
+  );
+
+  /* ---------- Peer column: every agent at rest, the picked agent's peers once loaded ---------- */
+  if (appFlow) peerNodes(appFlow.base.peers).forEach(addNode);
+  else
+    agents.forEach((a, k) =>
+      addNode({ id: nodeId("r", a.agentDID), t: "r", ref: a.agentDID, name: a.agentName || a.agentDID, sub: agentSub(a), y: listY("r", k) }),
+    );
+
+  /* ---------- Users: the paged list, or the picked trio's users once loaded ---------- */
+  if (narrowed) narrowed.users.forEach((u, k) => addNode(userNode(u, k)));
+  else users.forEach((u, k) => addNode(userNode(u, k)));
+
+  /* ---------- App → agent (agents drawn to the right of the apps they called) ---------- */
+  for (const e of graph.agentAppEdges) {
+    const p = nodeId("p", e.to);
+    const a = nodeId("a", e.from);
+    if (!nodes[p] || !nodes[a]) continue;
+    addFlow([p, a], [addEdge(rollupEdge(p, a, e))]);
+  }
+
+  /* ---------- At rest: peer-column agents → the users who messaged them ---------- */
+  if (!appFlow) {
+    for (const u of users) {
+      for (const e of u.agentEdges) {
+        const r = nodeId("r", e.to);
+        const id = nodeId("u", e.from);
+        if (!nodes[r] || !nodes[id]) continue;
+        addFlow(["", "", r, id], [addEdge(rollupEdge(r, id, e))]);
+      }
+    }
+  }
+
+  /* ---------- Picked app + agent: peers; + peer: users ---------- */
+  if (appFlow) {
+    const { base } = appFlow;
+    const p = nodeId("p", base.appDID);
+    const a = nodeId("a", base.agentDID);
+    const pa = edges.get(`${p}>${a}`);
+    const peerEdge = new Map<string, PlaneEdge>();
+    for (const peer of base.peers) {
+      const r = nodeId("r", peer.agentDID);
+      const e = addEdge(rollupEdge(a, r, peer, peerTips(peer)));
+      peerEdge.set(r, e);
+      addFlow([p, a, r], [pa, e]);
+    }
+    if (narrowed?.peerDID) {
+      const r = nodeId("r", narrowed.peerDID);
+      for (const u of narrowed.users) {
+        const id = nodeId("u", u.userDID);
+        const e = addEdge(rollupEdge(r, id, u, [plural(u.intentsCount, "intent")]));
+        addFlow([p, a, r, id], [pa, peerEdge.get(r), e]);
+      }
+    }
+  }
+
+  /* ---------- + user: intents ---------- */
+  if (intents) {
+    const p = nodeId("p", intents.appDID);
+    const a = nodeId("a", intents.agentDID);
+    const r = nodeId("r", intents.peerDID);
+    const u = nodeId("u", intents.userDID);
+    intents.list.forEach((it, k) => {
+      const { id } = addNode(intentNode(it, k));
+      const e = addEdge({
+        id: `${u}>${id}`,
+        from: u,
+        to: id,
+        n: it.interactionsCount,
+        st: it.outcome,
+        lastAt: it.lastAt,
+        pol: it.policy ?? undefined,
+      });
+      addFlow([p, a, r, u, id], [e], it.outcome);
+    });
+  }
+
+  return { nodes, edges: [...edges.values()], flows, height };
 }

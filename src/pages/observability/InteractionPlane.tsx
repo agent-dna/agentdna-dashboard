@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, type UIEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { Icon } from "../../components/Icon";
 import {
   fetchObsAgentFlow,
+  fetchObsAppFlow,
   fetchObsGraph,
   fetchObsIntents,
   fetchObsPaths,
@@ -15,9 +16,8 @@ import {
   type ObsUsersPage,
 } from "../../api/observability";
 import {
-  COLUMNS,
   COLUMN_TYPE,
-  ORDER,
+  LAYOUTS,
   PLANE_W,
   ROW_H,
   USER_LIST_TOP,
@@ -26,10 +26,12 @@ import {
   columnOf,
   listHeight,
   listY,
+  buildAppPlaneModel,
   buildPlaneModel,
   nodeId,
   type ListColumn,
   type PlaneColumn,
+  type PlaneMode,
   type PlaneEdge,
   type PlaneFlow,
   type PlaneNode,
@@ -40,8 +42,14 @@ import { IntentDetailPanel } from "./IntentDetailPanel";
 /**
  * Observability · Interaction plane.
  *
- * A five-column map: User → Agent → Peer agents → App → Intent.
+ * A five-column map with two starting points, picked in the header:
+ * - user-first: User → Agent → Peer agents → App → Intent.
+ * - app-first: App → Agent → Peer agents → User → Intent. Pick an app and the agents that
+ *   called it light up; pick one and the peer column is repopulated with the agents it
+ *   worked with in intents that reached the app; pick a peer and the user column is
+ *   repopulated with who started those intents; pick a user to see them.
  *
+ * In user-first mode:
  * Selection drills left to right: pick a user and the agents in their intents light up;
  * pick one of those agents and the peer column is repopulated with the agents it worked
  * with in that user's intents, and the apps those intents involved light up. Pick a peer
@@ -83,6 +91,10 @@ const AVATARS: [string, string][] = [
 ];
 
 type Filter = "all" | "risk" | "flagged";
+const MODES: { key: PlaneMode; label: string }[] = [
+  { key: "user", label: "User" },
+  { key: "app", label: "App" },
+];
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All intents" },
   { key: "risk", label: "High risk" },
@@ -100,22 +112,32 @@ const USERS_PAGE = 50;
 /** Room either side of cards inside a scroll list, so the pick ring isn't clipped. */
 const LIST_GUTTER = 8;
 
-/** Position of a card inside its scroll list (its column's width, offset by the gutter). */
+/** Position of a card inside its scroll list (its column's width, offset by the gutter). Widths are the same in every layout. */
 const listRowBox = (n: PlaneNode): CSSProperties => ({
   left: LIST_GUTTER,
   top: n.y - ROW_H[n.t] / 2,
-  width: COLUMNS[n.t][1] - COLUMNS[n.t][0],
+  width: LAYOUTS.user.columns[n.t][1] - LAYOUTS.user.columns[n.t][0],
   height: ROW_H[n.t],
 });
 /** Edges below this volume collapse to a small dot instead of a count pill. */
 const PILL_THRESHOLD = 10;
-const NEXT_HINT: Record<PlaneColumn, string> = {
-  u: "Pick an agent to see the agents it worked with and the apps involved.",
-  a: "Pick a peer agent to narrow the apps to the intents they shared, or an app to see intents.",
-  r: "Pick an app to see the intents the two agents shared there.",
-  p: "Pick an intent to see its detail.",
-  i: "",
+const NEXT_HINT: Record<PlaneMode, Record<PlaneColumn, string>> = {
+  user: {
+    u: "Pick an agent to see the agents it worked with and the apps involved.",
+    a: "Pick a peer agent to narrow the apps to the intents they shared, or an app to see intents.",
+    r: "Pick an app to see the intents the two agents shared there.",
+    p: "Pick an intent to see its detail.",
+    i: "",
+  },
+  app: {
+    p: "Pick one of the agents that called this app.",
+    a: "Pick a peer agent to see who started the intents they shared on this app.",
+    r: "Pick a user to see their intents.",
+    u: "Pick an intent to see its detail.",
+    i: "",
+  },
 };
+const COLUMN_LABEL: Record<PlaneColumn, string> = { u: "USER", a: "AGENT", r: "PEER AGENTS", p: "APP", i: "INTENT" };
 const PATH_PARAM: Record<PlaneColumn, keyof ObsPathFilter> = {
   u: "userDID",
   a: "agentDID",
@@ -127,8 +149,9 @@ const PATH_PARAM: Record<PlaneColumn, keyof ObsPathFilter> = {
 /** One selected node per layer, filled left to right. Values are plane node ids. */
 type Chain = Partial<Record<PlaneColumn, string>>;
 
-const matchesChain = (f: PlaneFlow, chain: Chain) =>
-  ORDER.every((col, k) => !chain[col] || f.n[k] === chain[col]);
+/** Whether a flow runs through every picked node. `order` is the layout's column order, which `f.n` follows. */
+const matchesChain = (f: PlaneFlow, chain: Chain, order: PlaneColumn[]) =>
+  order.every((col, k) => !chain[col] || f.n[k] === chain[col]);
 
 /** DID / intentID behind a plane node id (`u:<did>` → `<did>`). */
 const refOf = (id: string) => id.slice(2);
@@ -141,10 +164,11 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : "Request fai
 type Visibility = "normal" | "lit" | "muted";
 
 /**
- * Fetch-once-per-key with a per-component cache: a null key fetches nothing, and a key
+ * Fetch-once-per-key with a per-component cache: a falsy key fetches nothing, and a key
  * seen before is served from the cache, so clicking back and forth doesn't refetch.
  */
-function useObsQuery<T>(key: string | null, fetcher: () => Promise<T>) {
+function useObsQuery<T>(maybeKey: string | false | null | undefined, fetcher: () => Promise<T>) {
+  const key = maybeKey || null;
   const [store, setStore] = useState<Record<string, { data?: T; error?: string }>>({});
   const entry = key ? store[key] : undefined;
   useEffect(() => {
@@ -174,13 +198,17 @@ function useObsQuery<T>(key: string | null, fetcher: () => Promise<T>) {
 }
 
 export function InteractionPlane() {
+  const [mode, setMode] = useState<PlaneMode>("user");
+  const userMode = mode === "user";
+  const { order: ORDER, columns: COLUMNS } = LAYOUTS[mode];
   const [chain, setChain] = useState<Chain>({});
   const [hovered, setHovered] = useState<string | null>(null);
   const [traceMode, setTraceMode] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [hoverEdge, setHoverEdge] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
-  const [userScroll, setUserScroll] = useState(0);
+  /** User-list scroll, tied to what the list holds (the paged users, or an app-first selection's users). */
+  const [userScrollState, setUserScrollState] = useState({ key: "", top: 0 });
   const [agentScroll, setAgentScroll] = useState(0);
   /** Peer-list scroll, tied to the agent whose peers it lists (a new agent starts at the top). */
   const [peerScrollState, setPeerScrollState] = useState({ key: "", top: 0 });
@@ -225,47 +253,82 @@ export function InteractionPlane() {
     return [...listed, ...foundUsers.filter((u) => !seen.has(u.userDID))];
   }, [userPages, foundUsers]);
 
-  const pickedUser = chain.u ? refOf(chain.u) : null;
-  const pickedAgent = chain.a ? refOf(chain.a) : null;
-  // A peer or app only counts once a user and agent are picked; before that they just highlight.
-  const pickedPeer = pickedUser && pickedAgent && chain.r ? refOf(chain.r) : null;
-  const pickedApp = pickedUser && pickedAgent && chain.p ? refOf(chain.p) : null;
-  const userFlow = useObsQuery(pickedUser && `flow:${pickedUser}`, () => fetchObsUserFlow(REST, pickedUser!));
+  // A pick only counts once the columns it depends on are picked; before that it just highlights.
+  // User-first: user → agent, then an optional peer, then an app. App-first: app → agent → peer → user.
+  const ref = (c: PlaneColumn) => (chain[c] ? refOf(chain[c]!) : null);
+  const pickedUser = userMode ? ref("u") : ref("p") && ref("a") && ref("r") ? ref("u") : null;
+  const pickedAgent = userMode || ref("p") ? ref("a") : null;
+  const pickedPeer = (userMode ? ref("u") : ref("p")) && ref("a") ? ref("r") : null;
+  const pickedApp = userMode ? (ref("u") && ref("a") ? ref("p") : null) : ref("p");
+
+  // User-first calls.
+  const userFlow = useObsQuery(userMode && pickedUser && `flow:${pickedUser}`, () => fetchObsUserFlow(REST, pickedUser!));
   const agentFlow = useObsQuery(
-    pickedUser && pickedAgent && `aflow:${pickedUser}:${pickedAgent}`,
+    userMode && pickedUser && pickedAgent && `aflow:${pickedUser}:${pickedAgent}`,
     () => fetchObsAgentFlow(REST, pickedUser!, pickedAgent!),
   );
   const peerFlow = useObsQuery(
-    agentFlow.data && pickedPeer && `aflow:${pickedUser}:${pickedAgent}:${pickedPeer}`,
+    userMode && agentFlow.data && pickedPeer && `aflow:${pickedUser}:${pickedAgent}:${pickedPeer}`,
     () => fetchObsAgentFlow(REST, pickedUser!, pickedAgent!, pickedPeer!),
   );
+  // App-first calls.
+  const appFlow = useObsQuery(
+    !userMode && pickedApp && pickedAgent && `pflow:${pickedApp}:${pickedAgent}`,
+    () => fetchObsAppFlow(REST, pickedApp!, pickedAgent!),
+  );
+  const appPeerFlow = useObsQuery(
+    !userMode && appFlow.data && pickedPeer && `pflow:${pickedApp}:${pickedAgent}:${pickedPeer}`,
+    () => fetchObsAppFlow(REST, pickedApp!, pickedAgent!, pickedPeer!),
+  );
+  /** The call that fills the peer column in the current mode. */
+  const peersQuery = userMode ? agentFlow : appFlow;
+  /** App-first, once a peer is picked: the user column holds that selection's users. */
+  const flowUsers = !userMode && pickedPeer ? appPeerFlow.data : null;
+
+  /**
+   * Intents appear once the last column before them is picked: the app (user-first) or the
+   * user (app-first). Both ask for the same thing.
+   */
+  const showIntents = userMode ? !!pickedApp : !!pickedUser;
   const intents = useObsQuery(
-    pickedApp && `intents:${pickedUser}:${pickedAgent}:${pickedPeer ?? ""}:${pickedApp}`,
+    showIntents && `intents:${pickedUser}:${pickedAgent}:${pickedPeer ?? ""}:${pickedApp}`,
     () => fetchObsIntents(REST, pickedUser!, pickedAgent!, { peerDID: pickedPeer ?? undefined, appDID: pickedApp! }),
   );
 
-  const model = useMemo(
-    () =>
-      graph.data
-        ? buildPlaneModel({
-            graph: graph.data,
-            users,
-            userFlow: userFlow.data,
-            agentFlow: agentFlow.data ? { base: agentFlow.data, narrowed: pickedPeer ? peerFlow.data : null } : null,
-            intents:
-              intents.data && pickedUser && pickedAgent && pickedApp
-                ? {
-                    userDID: pickedUser,
-                    agentDID: pickedAgent,
-                    peerDID: pickedPeer,
-                    appDID: pickedApp,
-                    list: intents.data.intentsList,
-                  }
-                : null,
-          })
-        : null,
-    [graph.data, users, userFlow.data, agentFlow.data, peerFlow.data, intents.data, pickedUser, pickedAgent, pickedPeer, pickedApp],
-  );
+  const model = useMemo(() => {
+    if (!graph.data) return null;
+    const picks = intents.data && showIntents && pickedUser && pickedAgent && pickedApp ? { userDID: pickedUser, agentDID: pickedAgent, appDID: pickedApp } : null;
+    if (!userMode) {
+      return buildAppPlaneModel({
+        graph: graph.data,
+        users,
+        appFlow: appFlow.data ? { base: appFlow.data, narrowed: pickedPeer ? appPeerFlow.data : null } : null,
+        intents: picks && pickedPeer ? { ...picks, peerDID: pickedPeer, list: intents.data!.intentsList } : null,
+      });
+    }
+    return buildPlaneModel({
+      graph: graph.data,
+      users,
+      userFlow: userFlow.data,
+      agentFlow: agentFlow.data ? { base: agentFlow.data, narrowed: pickedPeer ? peerFlow.data : null } : null,
+      intents: picks ? { ...picks, peerDID: pickedPeer, list: intents.data!.intentsList } : null,
+    });
+  }, [
+    graph.data,
+    users,
+    userMode,
+    userFlow.data,
+    agentFlow.data,
+    peerFlow.data,
+    appFlow.data,
+    appPeerFlow.data,
+    intents.data,
+    showIntents,
+    pickedUser,
+    pickedAgent,
+    pickedPeer,
+    pickedApp,
+  ]);
   const NODES = model?.nodes ?? {};
   const planeH = model?.height ?? 760;
   const userListH = planeH - USER_LIST_TOP;
@@ -319,26 +382,23 @@ export function InteractionPlane() {
   /** Paths the canvas highlights. */
   const activeFlows = useMemo(() => {
     if (preview) return filtered.filter((f) => f.n.includes(preview));
-    return filtered.filter((f) => matchesChain(f, chain));
-  }, [filtered, preview, chain]);
+    return filtered.filter((f) => matchesChain(f, chain, ORDER));
+  }, [filtered, preview, chain, ORDER]);
 
   const hasFocus = !!preview || hasChain;
   const emphasis = hasFocus || filter !== "all";
-  /**
-   * Intents only appear once a user, an agent and an app are picked: the intents that user
-   * ran through that agent (and the picked peer, if any) which involved that app.
-   */
-  const showIntents = !!pickedApp;
+  /** Intents are the last column in both layouts. */
   const visibleIntents = useMemo(() => {
     const ids = new Set<string>();
     if (!showIntents) return ids;
-    for (const f of filtered) if (matchesChain(f, chain) && f.n[4]) ids.add(f.n[4]);
+    for (const f of filtered) if (matchesChain(f, chain, ORDER) && f.n[4]) ids.add(f.n[4]);
     return ids;
-  }, [filtered, chain, showIntents]);
+  }, [filtered, chain, showIntents, ORDER]);
 
   // A hover preview shows whole paths; a chain reveals one layer past its deepest pick,
-  // except that picking user + agent reveals its peers and apps together.
-  const revealTo = preview || !hasChain ? ORDER.length - 1 : Math.max(depth + 1, pickedUser && pickedAgent ? 3 : 0);
+  // except that user-first picking user + agent reveals its peers and apps together.
+  const revealTo =
+    preview || !hasChain ? ORDER.length - 1 : Math.max(depth + 1, userMode && pickedUser && pickedAgent ? 3 : 0);
   const revealed = (id: string) => ORDER.indexOf(columnOf(id)) <= revealTo;
 
   const { litNodes, litEdges } = useMemo(() => {
@@ -368,9 +428,9 @@ export function InteractionPlane() {
       ORDER.slice(0, k).forEach((c) => cur[c] && (upstream[c] = cur[c]));
       if (cur[col] === id) return upstream;
       const next = { ...upstream, [col]: id };
-      return FLOWS.some((f) => matchesChain(f, next)) ? next : { [col]: id };
+      return FLOWS.some((f) => matchesChain(f, next, ORDER)) ? next : { [col]: id };
     });
-    if (col === "u") revealAgentsOf(id);
+    if (col === "u" && userMode) revealAgentsOf(id);
   };
 
   /** If none of a user's agents is on screen in the agent list, scroll to the first of them. */
@@ -431,7 +491,11 @@ export function InteractionPlane() {
   const userNodes = byColumn("u");
   const agentNodes = byColumn("a");
   const peerNodes = byColumn("r");
-  const peerListKey = agentFlow.data ? `${chain.u}|${chain.a}` : "rest";
+  const peerListKey = peersQuery.data ? `${mode}|${chain.u}|${chain.p}|${chain.a}` : `${mode}|rest`;
+  const userListKey = flowUsers ? `${chain.p}|${chain.a}|${chain.r}` : "all";
+  const userScroll = userScrollState.key === userListKey ? userScrollState.top : 0;
+  /** The paged list only pages while it's showing every user. */
+  const pagingUsers = !flowUsers && hasMoreUsers;
   const peerScroll = peerScrollState.key === peerListKey ? peerScrollState.top : 0;
   /** Intents showing right now, re-stacked so a narrowed list has no gaps. */
   const intentNodes = byColumn("i")
@@ -439,7 +503,7 @@ export function InteractionPlane() {
     .map((n, k) => ({ ...n, y: listY("i", k) }));
   const intentById = new Map(intentNodes.map((n) => [n.id, n]));
   const nodeAt = (id: string): PlaneNode | undefined => intentById.get(id) ?? NODES[id];
-  const intentListKey = `${chain.u}|${chain.a}|${chain.r}|${chain.p}|${filter}`;
+  const intentListKey = `${mode}|${chain.u}|${chain.a}|${chain.r}|${chain.p}|${filter}`;
   const intentScroll = intentScrollState.key === intentListKey ? intentScrollState.top : 0;
 
   /* ---------- Edges, count pills and tooltip ---------- */
@@ -554,15 +618,15 @@ export function InteractionPlane() {
         : filter === "flagged"
           ? "Flagged interactions"
           : "No selection";
-  const nextHint = !preview && hasChain ? NEXT_HINT[ORDER[depth]] : "";
+  const nextHint = !preview && hasChain ? NEXT_HINT[mode][ORDER[depth]] : "";
 
   /* ---------- User list: scroll paging and search ---------- */
 
   const onUserScroll = (ev: UIEvent<HTMLDivElement>) => {
     const el = ev.currentTarget;
-    setUserScroll(el.scrollTop);
+    setUserScrollState({ key: userListKey, top: el.scrollTop });
     const nearEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 2 * USER_PITCH;
-    if (nearEnd && hasMoreUsers && userPages.length === usersWanted && !usersError) setUsersWanted((w) => w + 1);
+    if (nearEnd && pagingUsers && userPages.length === usersWanted && !usersError) setUsersWanted((w) => w + 1);
   };
 
   /** Scroll the user list so a user is in view (search, or an off-screen pick). */
@@ -614,6 +678,21 @@ export function InteractionPlane() {
 
   const isEmpty = !!model && userNodes.length === 0 && agentNodes.length === 0;
 
+  const columnHint = (c: PlaneColumn) => {
+    switch (c) {
+      case "u":
+        return flowUsers ? `Started these intents · ${flowUsers.usersTotal}` : `Who initiated · ${usersTotal}`;
+      case "a":
+        return userMode ? "Which agent acted" : "Agents that called it";
+      case "r":
+        return peersQuery.data && chain.a ? `Worked with ${NODES[chain.a]?.name ?? "this agent"}` : "Agents it worked with";
+      case "p":
+        return "What was accessed";
+      case "i":
+        return userMode ? "Shown for the picked app" : "Shown for the picked user";
+    }
+  };
+
   return (
     <div className="ip-layout">
       {/* ================= Plane ================= */}
@@ -630,6 +709,25 @@ export function InteractionPlane() {
             <div className="ip-summary">{headline}</div>
           </div>
           <div className="ip-head-tools">
+            <div className="seg" role="group" aria-label="Start from">
+              <span className="ip-seg-label">Start from</span>
+              {MODES.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  className={mode === m.key ? "active" : ""}
+                  aria-pressed={mode === m.key}
+                  onClick={() => {
+                    if (m.key === mode) return;
+                    setMode(m.key);
+                    setChain({});
+                    setHovered(null);
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
             <label className={`ip-search${searchMiss ? " miss" : ""}`} title={searchMiss ? "No match" : undefined}>
               <Icon name="search" size={14} />
               <input placeholder="Find a node…" onKeyDown={onSearchKey} aria-label="Find a user, agent, app or intent" aria-invalid={searchMiss} />
@@ -657,15 +755,9 @@ export function InteractionPlane() {
 
         <div ref={wrapRef} className="ip-canvas-wrap" style={{ height: Math.round(planeH * scale + 40) }}>
           <div className="ip-canvas" style={{ width: PLANE_W, height: planeH, transform: `scale(${scale})` }}>
-            <ColumnLabel col="u" n="01 · USER" hint={`Who initiated · ${usersTotal}`} />
-            <ColumnLabel col="a" n="02 · AGENT" hint="Which agent acted" />
-            <ColumnLabel
-              col="r"
-              n="03 · PEER AGENTS"
-              hint={agentFlow.data && chain.a ? `Worked with ${NODES[chain.a]?.name ?? "this agent"}` : "Agents it worked with"}
-            />
-            <ColumnLabel col="p" n="04 · APP" hint="What was accessed" />
-            <ColumnLabel col="i" n="05 · INTENT" hint="Shown for the picked app" />
+            {ORDER.map((c, k) => (
+              <ColumnLabel key={c} span={COLUMNS[c]} n={`0${k + 1} · ${COLUMN_LABEL[c]}`} hint={columnHint(c)} />
+            ))}
 
             {(booting || bootError || isEmpty) && (
               <div className="ip-state" style={{ top: USER_LIST_TOP, height: userListH - 8 }}>
@@ -752,10 +844,12 @@ export function InteractionPlane() {
             })}
 
             <PlaneList
+              key={userListKey}
               col="u"
+              span={COLUMNS.u}
               listRef={userListRef}
               height={userListH}
-              contentHeight={listHeight("u", userNodes.length) + (hasMoreUsers ? 36 : 0)}
+              contentHeight={listHeight("u", userNodes.length) + (pagingUsers ? 36 : 0)}
               onScroll={onUserScroll}
             >
               {userNodes.map((n) => {
@@ -776,7 +870,7 @@ export function InteractionPlane() {
                   </div>
                 );
               })}
-              {hasMoreUsers && (
+              {pagingUsers && (
                 <div className="ip-user-more" style={{ left: LIST_GUTTER, top: listHeight("u", userNodes.length) }}>
                   {usersError ? (
                     <button type="button" className="btn ghost" onClick={() => setUsersError(null)}>Retry</button>
@@ -789,6 +883,7 @@ export function InteractionPlane() {
 
             <PlaneList
               col="a"
+              span={COLUMNS.a}
               listRef={agentListRef}
               height={userListH}
               contentHeight={listHeight("a", agentNodes.length)}
@@ -814,6 +909,7 @@ export function InteractionPlane() {
             <PlaneList
               key={peerListKey}
               col="r"
+              span={COLUMNS.r}
               listRef={peerListRef}
               height={userListH}
               contentHeight={listHeight("r", peerNodes.length)}
@@ -835,21 +931,24 @@ export function InteractionPlane() {
                 </div>
               ))}
             </PlaneList>
-            {pickedUser && pickedAgent && (agentFlow.loading || agentFlow.error || agentFlow.data?.peers.length === 0) && (
-              <div className="ip-intent-gate" style={{ left: COLUMNS.r[0], top: USER_LIST_TOP + 8, width: COLUMNS.r[1] - COLUMNS.r[0], height: 120 }}>
-                <div className="ip-intent-gate-body">
-                  {agentFlow.loading ? (
-                    "Loading peer agents…"
-                  ) : agentFlow.error ? (
-                    <>
-                      Couldn't load peer agents: {agentFlow.error}{" "}
-                      <button type="button" className="btn ghost" onClick={agentFlow.retry}>Retry</button>
-                    </>
-                  ) : (
-                    "No other agent took part in this user's intents with this agent."
-                  )}
-                </div>
-              </div>
+            <ColumnNote
+              span={COLUMNS.r}
+              query={peersQuery}
+              what="peer agents"
+              empty={
+                peersQuery.data?.peers.length === 0 &&
+                (userMode
+                  ? "No other agent took part in this user's intents with this agent."
+                  : "No other agent took part in this app's intents with this agent.")
+              }
+            />
+            {!userMode && pickedPeer && (
+              <ColumnNote
+                span={COLUMNS.u}
+                query={appPeerFlow}
+                what="users"
+                empty={appPeerFlow.data?.users.length === 0 && "No user started an intent these agents shared on this app."}
+              />
             )}
 
             {byColumn("p").map((n) => (
@@ -870,11 +969,19 @@ export function InteractionPlane() {
                 <Icon name="intents" size={18} />
                 <div className="ip-intent-gate-title">Intents appear here</div>
                 <div className="ip-intent-gate-body">
-                  {!chain.u
-                    ? "Pick a user, then an agent, then an app."
-                    : !chain.a
-                      ? "Now pick one of the highlighted agents."
-                      : "Pick an app to see the intents that involved it."}
+                  {userMode
+                    ? !chain.u
+                      ? "Pick a user, then an agent, then an app."
+                      : !chain.a
+                        ? "Now pick one of the highlighted agents."
+                        : "Pick an app to see the intents that involved it."
+                    : !chain.p
+                      ? "Pick an app, then an agent, a peer agent and a user."
+                      : !chain.a
+                        ? "Now pick one of the agents that called this app."
+                        : !pickedPeer
+                          ? "Pick a peer agent to see who started the intents they shared."
+                          : "Pick a user to see their intents."}
                 </div>
               </div>
             )}
@@ -898,6 +1005,7 @@ export function InteractionPlane() {
               <PlaneList
                 key={intentListKey}
                 col="i"
+                span={COLUMNS.i}
                 listRef={intentListRef}
                 height={userListH}
                 contentHeight={listHeight("i", intentNodes.length)}
@@ -984,7 +1092,7 @@ export function InteractionPlane() {
               {paths.data && rows.length === 0 && <div className="ip-empty">No paths match this selection and filter.</div>}
               <div className="ip-hops-list">
                 {rows.map((r, k) => (
-                  <PathHops key={k} row={r} onOpen={r.intent ? () => openPath(r) : undefined} />
+                  <PathHops key={k} row={r} order={ORDER} onOpen={r.intent ? () => openPath(r) : undefined} />
                 ))}
               </div>
               {paths.data && paths.data.total > rows.length && (
@@ -995,7 +1103,10 @@ export function InteractionPlane() {
             </>
           ) : (
             <div className="ip-empty">
-              Start with a user: the agents in their intents light up. Pick an agent to see the agents it worked with and the apps involved, pick a peer to narrow to the intents the two shared, then an app to see those intents. Turn on Trace interaction to preview whole paths on hover.
+              {userMode
+                ? "Start with a user: the agents in their intents light up. Pick an agent to see the agents it worked with and the apps involved, pick a peer to narrow to the intents the two shared, then an app to see those intents."
+                : "Start with an app: the agents that called it light up. Pick an agent to see the agents it worked with on that app, pick a peer to see who started those intents, then a user to see their intents."}{" "}
+              Turn on Trace interaction to preview whole paths on hover.
             </div>
           )}
         </div>
@@ -1013,6 +1124,7 @@ export function InteractionPlane() {
  */
 function PlaneList({
   col,
+  span,
   listRef,
   height,
   contentHeight,
@@ -1020,16 +1132,19 @@ function PlaneList({
   children,
 }: {
   col: ListColumn;
+  /** The column's [left, right] in the current layout. */
+  span: [number, number];
   listRef: Ref<HTMLDivElement>;
   height: number;
   contentHeight: number;
   onScroll: (ev: UIEvent<HTMLDivElement>) => void;
   children: ReactNode;
 }) {
-  const [left, right] = COLUMNS[col];
+  const [left, right] = span;
   return (
     <div
       ref={listRef}
+      data-col={col}
       className={`ip-list${contentHeight > height ? " scrolls" : ""}`}
       style={{ left: left - LIST_GUTTER, top: USER_LIST_TOP, height, width: right - left + LIST_GUTTER * 2 }}
       onScroll={onScroll}
@@ -1039,12 +1154,43 @@ function PlaneList({
   );
 }
 
-function ColumnLabel({ col, n, hint }: { col: PlaneColumn; n: string; hint: string }) {
-  const [left, right] = COLUMNS[col];
+function ColumnLabel({ span, n, hint }: { span: [number, number]; n: string; hint: string }) {
+  const [left, right] = span;
   return (
     <div className="ip-col-label" style={{ left, width: right - left }}>
       <div className="ip-col-title">{n}</div>
       <div className="ip-col-hint">{hint}</div>
+    </div>
+  );
+}
+
+/** Loading, error or empty note over a column the selection repopulates. */
+function ColumnNote({
+  span,
+  query,
+  what,
+  empty,
+}: {
+  span: [number, number];
+  query: { loading: boolean; error: string | null; retry: () => unknown };
+  what: string;
+  empty: string | false | undefined;
+}) {
+  if (!query.loading && !query.error && !empty) return null;
+  return (
+    <div className="ip-intent-gate" style={{ left: span[0], top: USER_LIST_TOP + 8, width: span[1] - span[0], height: 120 }}>
+      <div className="ip-intent-gate-body">
+        {query.loading ? (
+          `Loading ${what}…`
+        ) : query.error ? (
+          <>
+            Couldn't load {what}: {query.error}{" "}
+            <button type="button" className="btn ghost" onClick={query.retry}>Retry</button>
+          </>
+        ) : (
+          empty
+        )}
+      </div>
     </div>
   );
 }
@@ -1069,10 +1215,18 @@ function HopArrow() {
 }
 
 /**
- * A path in the trace as its hops — user → agent → peer → app — with the intent it ran and
- * how it ended. Clicking opens that intent's detail.
+ * A path in the trace as its hops, in the plane's column order (user → agent → peer → app,
+ * or app → agent → peer → user), with the intent it ran and how it ended. Clicking opens
+ * that intent's detail.
  */
-function PathHops({ row, onOpen }: { row: ObsPath; onOpen?: () => void }) {
+function PathHops({ row, order, onOpen }: { row: ObsPath; order: PlaneColumn[]; onOpen?: () => void }) {
+  const hop: Partial<Record<PlaneColumn, { kind: string; did?: string; name?: string }>> = {
+    u: { kind: "User", did: row.user.did, name: row.user.name },
+    a: { kind: "Agent", did: row.agent.did, name: row.agent.name },
+    ...(row.peer ? { r: { kind: "Peer agent", did: row.peer.did, name: row.peer.name } } : {}),
+    p: { kind: "App", did: row.app?.did, name: row.app?.name },
+  };
+  const hops = order.flatMap((c) => (hop[c] ? [{ col: c, ...hop[c] }] : []));
   const code = row.policy?.split(" ")[0];
   const title = row.intent
     ? row.intent.titleFull || row.intent.title || row.intent.id
@@ -1102,17 +1256,12 @@ function PathHops({ row, onOpen }: { row: ObsPath; onOpen?: () => void }) {
         </span>
       </div>
       <div className="ip-hops-chain">
-        <HopNode kind="User" did={row.user.did} name={row.user.name} />
-        <HopArrow />
-        <HopNode kind="Agent" did={row.agent.did} name={row.agent.name} />
-        {row.peer && (
-          <>
-            <HopArrow />
-            <HopNode kind="Peer agent" did={row.peer.did} name={row.peer.name} />
-          </>
-        )}
-        <HopArrow />
-        <HopNode kind="App" did={row.app?.did} name={row.app?.name} />
+        {hops.map(({ col, kind, did, name }, k) => (
+          <Fragment key={col}>
+            {k > 0 && <HopArrow />}
+            <HopNode kind={kind} did={did} name={name} />
+          </Fragment>
+        ))}
       </div>
     </div>
   );

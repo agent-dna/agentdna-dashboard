@@ -524,7 +524,7 @@ interface ObservabilityAgentFlow {
     revoked: boolean;
     direct: { sent: number; received: number } | null;  // direct A↔peer hops; null = never messaged each other
     intentsCount: number;                                // shared intents (tooltip only)
-    ...HopRollup;                                        // hops in the shared intents where from or to is A or this peer
+    ...HopRollup;                                        // direct A↔peer hops only (either direction) within the shared intents; 0 if none
   }[];
   /**
    * No peerDID: apps involved in A's intents (for U).
@@ -601,3 +601,119 @@ Needed because U usually talks to only one entry agent (e.g. an orchestrator). `
 - maintain a derived `intent_agents(intent_id, agent_did, initiator_did, first_at, last_at)` table (one row per agent per intent), which makes peers a self-join on `intent_id`.
 
 The derived table is recommended if orgs get large.
+
+---
+
+## 10. App-first flow (2026-09-29)
+
+**Status: proposed — not implemented.** A header toggle, **Start from: User | App**, flips the plane to read **App → Agent → Peer agents → User → Intent**. The user-first flow (§9) is unchanged. Conventions (§2), hop classification, "took part" and interaction rollups (§9.2) all apply.
+
+### 10.1 What the screen shows
+
+| Step | What the user does | What the UI shows | Endpoint |
+|---|---|---|---|
+| Load | Toggles to "App" | Apps, agents, peers, users at rest | `summary`, `graph`, `users` (unchanged) |
+| 1 | Clicks an **app** P | Agents that called P light up | none — `graph.agentAppEdges` where `to = P` |
+| 2 | Clicks an **agent** A | Peer column repopulated with A's peers **in intents that reached P** | `/observability-app-flow?appDID=P&agentDID=A` |
+| 3 | Clicks a **peer** B (required) | Users who initiated the intents P, A and B share | `/observability-app-flow?appDID=P&agentDID=A&peerDID=B` |
+| 4 | Clicks a **user** U | That user's intents | `/observability-intents?userDID=U&agentDID=A&peerDID=B&appDID=P` (exists, §9.3) |
+| 5 | Clicks an **intent** | Intent detail panel | `/observability-paths?intentID=` (unchanged) |
+| Table | Any of the above | Trace rows | `/observability-paths` with `appDID/agentDID/peerDID/userDID` (§10.3) |
+
+### 10.2 Definitions
+
+- **App intents of P:** intents with at least one `agent_app` hop to P (any caller).
+- **S(P, A):** app intents of P in which agent A took part (§9.2). A doesn't have to be the agent that called P in every one of them.
+- **Peers of A on P:** every agent ≠ A that took part in at least one intent in S(P, A).
+- **S(P, A, B):** intents in S(P, A) in which B also took part.
+- **Users of S(P, A, B):** distinct `initiatorDID`s of those intents.
+- All counts are **interactions (hops)**, as in §9. **Peer counts are direct A↔peer hops only** (decided 2026-09-29, same as `/observability-agent-flow`); `allowed/elevated/flagged/outcome/lastAt/policies` on a peer are over those same direct hops. A peer that only shared intents has `count: 0`, `direct: null`, `outcome: "allowed"`.
+
+### 10.3 Endpoint changes
+
+#### New: `GET /observability-app-flow`
+
+**Query:** `appDID` (required), `agentDID` (required), `peerDID` (optional), `range`, `status`
+
+**Response `data`:**
+```ts
+interface ObservabilityAppFlow {
+  appDID: string;
+  agentDID: string;
+  peerDID: string | null;
+  /** A's peers on this app. The same list whether or not peerDID is set. */
+  peers: {
+    agentDID: string;
+    agentName: string;
+    handle: string;
+    revoked: boolean;
+    direct: { sent: number; received: number } | null;  // direct A↔peer hops in S(P, A); null if none
+    intentsCount: number;                                // |S(P, A, peer)|
+    count: number;                                       // direct A↔peer hops only (either direction) within S(P, A); 0 if none
+    allowed: number;
+    elevated: number;
+    flagged: number;
+    outcome: "allowed" | "elevated" | "flagged";         // worst of those hops
+    lastAt: string;
+    policies: string[];                                  // deciding threat codes, e.g. "3407 Tier 3: LLM Deny"
+  }[];
+  /** Only when peerDID is set (else []): who initiated S(P, A, B). Ordered by lastAt desc. */
+  users: {
+    userDID: string;
+    userName: string;
+    email: string;
+    subtitle: string;                                    // fallback email (§3.6)
+    kind: "human" | "service";
+    signed: boolean;
+    intentsCount: number;                                // this user's intents in S(P, A, B)
+    count: number;                                       // all hops in those intents
+    allowed: number;
+    elevated: number;
+    flagged: number;
+    outcome: "allowed" | "elevated" | "flagged";
+    lastAt: string;
+    policies: string[];
+  }[];
+  usersTotal: number;                                    // users may be capped at 200; this is the real total
+}
+```
+
+**Example** (`appDID=gmail&agentDID=fin&peerDID=mail`):
+```json
+{
+  "appDID": "bafy…gmail", "agentDID": "bafy…fin", "peerDID": "bafy…mail",
+  "peers": [
+    { "agentDID": "bafy…orch", "agentName": "Orchestrator", "handle": "orchestrator", "revoked": false,
+      "direct": { "sent": 12, "received": 12 }, "intentsCount": 6, "count": 48,
+      "allowed": 48, "elevated": 0, "flagged": 0, "outcome": "allowed",
+      "lastAt": "2026-09-29T09:12:00Z", "policies": [] },
+    { "agentDID": "bafy…mail", "agentName": "Email Agent", "handle": "email", "revoked": false,
+      "direct": null, "intentsCount": 4, "count": 31,
+      "allowed": 29, "elevated": 0, "flagged": 2, "outcome": "flagged",
+      "lastAt": "2026-09-29T08:40:00Z", "policies": ["3407 Tier 3: LLM Deny"] }
+  ],
+  "users": [
+    { "userDID": "bafy…noah", "userName": "Noah Kim", "email": "noah@acme.io", "subtitle": "noah@acme.io",
+      "kind": "human", "signed": true, "intentsCount": 3, "count": 42,
+      "allowed": 40, "elevated": 0, "flagged": 2, "outcome": "flagged",
+      "lastAt": "2026-09-29T08:40:00Z", "policies": ["3407 Tier 3: LLM Deny"] }
+  ],
+  "usersTotal": 1
+}
+```
+
+**Derivation:** find app intents of P (§10.2), keep those where A took part → S(P, A). Peers = other agents in S(P, A), rolled up over S(P, A, peer). With `peerDID`: narrow to S(P, A, B), group by `initiatorDID` → users. Admin sees the whole org; non-admin only intents they initiated (§2).
+
+**Errors:** unknown `appDID` → `status:false, message:"app not found"`; unknown `agentDID`/`peerDID` → `"agent not found"`.
+
+#### `GET /observability-intents` — no change
+
+Called with `userDID`, `agentDID`, `peerDID` and `appDID` all set, it already returns the intents in S(P, A, B) initiated by U (§9.3).
+
+#### `GET /observability-paths` — one change
+
+Return intent-grain rows (one per user, agent, peer, app, intent) when `agentDID` is set together with **either** `userDID` or `appDID`. Today this only happens when `userDID` is given, so an app-first selection with no user yet would get coarse rows.
+
+### 10.4 Performance
+
+S(P, A) starts from "intents that reached app P", so add an index on `new_interactions ("to", intent_id)`, or `intent_apps(intent_id, app_did)` next to the `intent_agents` table from §9.4.

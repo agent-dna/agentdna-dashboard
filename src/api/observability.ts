@@ -2,7 +2,7 @@ import { apiRequest } from "./client";
 
 /**
  * Observability · Interaction plane endpoints (middleware `/observability-*`).
- * Contract: docs/observability-api.md §4, with the v2 agent-peer changes in §9.
+ * Contract: docs/observability-api.md §4, with the agent-peer flow in §9 and the app-first flow in §10.
  */
 
 export type ObsRange = "24h" | "7d" | "30d" | "all";
@@ -125,6 +125,29 @@ export interface ObsAgentFlow {
   apps: ObsAgentFlowApp[];
 }
 
+/** A user who initiated intents in the app-first selection. */
+export interface ObsAppFlowUser extends ObsHopRollup {
+  userDID: string;
+  userName: string;
+  email: string;
+  subtitle: string;
+  kind: "human" | "service";
+  signed: boolean;
+  intentsCount: number;
+}
+
+/** App-first flow: the picked agent's peers in intents that reached the app, and (with a peer) their users. */
+export interface ObsAppFlow {
+  appDID: string;
+  agentDID: string;
+  peerDID: string | null;
+  /** The same list whether or not `peerDID` is set. */
+  peers: ObsPeer[];
+  /** Empty unless `peerDID` is set. */
+  users: ObsAppFlowUser[];
+  usersTotal: number;
+}
+
 export interface ObsIntent {
   intentID: string;
   intentTitle: string;
@@ -237,6 +260,9 @@ export const fetchObsUserFlow = (s: ObsScope, userDID: string) =>
 
 export const fetchObsAgentFlow = (s: ObsScope, userDID: string, agentDID: string, peerDID?: string) =>
   apiRequest<ObsAgentFlow>("/observability-agent-flow", { query: { ...s, userDID, agentDID, peerDID } });
+
+export const fetchObsAppFlow = (s: ObsScope, appDID: string, agentDID: string, peerDID?: string) =>
+  apiRequest<ObsAppFlow>("/observability-app-flow", { query: { ...s, appDID, agentDID, peerDID } });
 
 export const fetchObsIntents = (
   s: ObsScope,
