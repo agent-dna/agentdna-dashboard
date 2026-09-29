@@ -729,6 +729,7 @@ interface ApiAgentInfo {
   agentName: string;
   createdAt: string;
   deployerDID: string;
+  deployerName?: string;
   policy?: string;
   orgID: string;
   totalInteractions: number;
@@ -756,6 +757,7 @@ export async function fetchAgent(id: string): Promise<Agent | null> {
       status: r.totalThreats > 5 ? "warn" : "safe",
       env: r.orgID || "",
       owner: r.deployerDID || "",
+      ownerName: r.deployerName?.trim() || undefined,
       policy: r.policy || "",
       revoked: !!r.revoked,
     };
@@ -1363,6 +1365,8 @@ function mapToolIntent(i: ApiToolIntent): Intent {
 
 interface ApiUserIntent {
   intentID: string;
+  title?: string;
+  titleFull?: string;
   initiatorDID: string;
   initiatorName?: string;
   flowType?: string;
@@ -1385,14 +1389,15 @@ interface ApiUserIntent {
 function mapUserIntent(i: ApiUserIntent): Intent {
   return {
     id: i.intentID,
-    name: i.intentID,
+    name: i.titleFull || i.title || i.intentID,
     initiator: { id: i.initiatorDID, name: i.initiatorName || shortDid(i.initiatorDID) } as Agent,
     runtime: (i.runtimeSeconds || 0) * 1000,
     started: i.startedAt ? isoToMinutesAgo(i.startedAt) : 0,
     agentsInteracted: i.agentsCount || 0,
     toolsInteracted: i.toolsCount || 0,
     interactionsCount: i.interactionsCount || 0,
-    threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
+    // threatCount can be 0 while threatDetected is true; count the detection then.
+    threats: i.threatCount || (i.threatDetected ? 1 : 0),
     score: i.threatDetected ? 0 : 100,
     status: (i.status as Agent["status"]) || "safe",
     provenanceRecordID: "",

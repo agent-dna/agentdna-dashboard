@@ -1,6 +1,9 @@
 import { Fragment, memo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AppWindow, Bot, ExternalLink, FileText, UserRound, X, type LucideIcon } from "lucide-react";
 import { fetchObsPaths, type ObsPath, type ObsPathFilter, type ObsScope } from "../../api/observability";
-import { AgentDetailPanel, AppDetailPanel, UserDetailPanel } from "./EntityDetailPanel";
+import { AppDetailPanel } from "./EntityDetailPanel";
+import { AgentInfoPanel, UserInfoPanel } from "./ProfilePanels";
 import { IntentDetailPanel } from "./IntentDetailPanel";
 import { loadIntentDetail } from "./intentDetail";
 import { COLUMN_TYPE, STATUS_COLOR, STATUS_TINT, nodeId, refOf, type PlaneColumn, type PlaneMode, type PlaneNode, type PlaneStatus } from "./planeModel";
@@ -57,11 +60,11 @@ const PATH_PARAM: Record<PlaneColumn, keyof ObsPathFilter> = {
 
 type TabKey = "user" | "agent" | "app" | "intent";
 /** Each tab and the layer whose pick enables it. */
-const TABS: { key: TabKey; label: string; col: PlaneColumn }[] = [
-  { key: "user", label: "User Info", col: "u" },
-  { key: "agent", label: "Agents Info", col: "a" },
-  { key: "app", label: "Application Info", col: "p" },
-  { key: "intent", label: "Intent Info", col: "i" },
+const TABS: { key: TabKey; label: string; col: PlaneColumn; icon: LucideIcon }[] = [
+  { key: "user", label: "User Info", col: "u", icon: UserRound },
+  { key: "agent", label: "Agents Info", col: "a", icon: Bot },
+  { key: "app", label: "Application Info", col: "p", icon: AppWindow },
+  { key: "intent", label: "Intent Info", col: "i", icon: FileText },
 ];
 const TAB_OF: Record<PlaneColumn, TabKey> = { u: "user", a: "agent", r: "agent", p: "app", i: "intent" };
 
@@ -83,6 +86,22 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, preview, 
   const autoTab = depth >= 0 ? TAB_OF[order[depth]] : null;
   const [manualTab, setManualTab] = useState<{ key: string; tab: TabKey } | null>(null);
   const activeTab = manualTab && manualTab.key === chainKey && tabEnabled(manualTab.tab) ? manualTab.tab : autoTab;
+  // With a peer picked too, the Agents tab switches between the agent and the peer; it resets with the selection.
+  const [peerView, setPeerView] = useState<{ key: string; peer: boolean } | null>(null);
+  const showPeer = !!chain.r && !!peerView && peerView.key === chainKey && peerView.peer;
+  const shownAgent = showPeer ? chain.r : chain.a;
+  const navigate = useNavigate();
+  /** Full page for what the active tab shows. */
+  const pagePath =
+    activeTab === "user" && chain.u
+      ? `/users/${encodeURIComponent(refOf(chain.u))}`
+      : activeTab === "agent" && shownAgent
+        ? `/agents/${encodeURIComponent(refOf(shownAgent))}`
+        : activeTab === "app" && chain.p
+          ? `/tools/${encodeURIComponent(refOf(chain.p))}`
+          : activeTab === "intent" && pickedIntent
+            ? `/intents/${pickedIntent}`
+            : null;
 
   /** The current selection as path filters. */
   const chainFilter: ObsPathFilter = Object.fromEntries(order.filter((c) => chain[c]).map((c) => [PATH_PARAM[c], refOf(chain[c]!)]));
@@ -145,6 +164,7 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, preview, 
       <div className="tabs ip-detail-tabs" role="tablist">
         {TABS.map((t) => {
           const enabled = tabEnabled(t.key);
+          const I = t.icon;
           return (
             <button
               key={t.key}
@@ -156,10 +176,23 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, preview, 
               title={enabled ? undefined : `Pick ${t.col === "u" ? "a user" : t.col === "a" ? "an agent" : t.col === "p" ? "an app" : "an intent"} on the plane first`}
               onClick={() => setManualTab({ key: chainKey, tab: t.key })}
             >
+              <I size={16} strokeWidth={1.8} />
               {t.label}
             </button>
           );
         })}
+        {hasChain && (
+          <div className="ip-detail-actions">
+            {pagePath && (
+              <button type="button" className="btn ghost" onClick={() => navigate(pagePath)} title="Open full page" aria-label="Open full page">
+                <ExternalLink size={16} />
+              </button>
+            )}
+            <button type="button" className="btn ghost" onClick={onClearTrace} title="Clear selection" aria-label="Clear selection">
+              <X size={16} />
+            </button>
+          </div>
+        )}
       </div>
       {activeTab === "intent" && pickedIntent ? (
         <IntentDetailPanel
@@ -168,20 +201,26 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, preview, 
           loading={intentDetail.loading}
           error={intentDetail.error}
           onRetry={intentDetail.retry}
-          onClose={onClearTrace}
           nameOf={nameOf}
         />
       ) : activeTab === "user" && chain.u ? (
-        <UserDetailPanel key={chain.u} did={refOf(chain.u)} name={panelName(chain.u)} kind="USER" hint={nextHint} onClose={onClearTrace} nameOf={nameOf} />
-      ) : activeTab === "agent" && chain.a ? (
+        <UserInfoPanel key={chain.u} did={refOf(chain.u)} name={panelName(chain.u)} />
+      ) : activeTab === "agent" && shownAgent ? (
         <>
-          <AgentDetailPanel key={chain.a} did={refOf(chain.a)} name={panelName(chain.a)} kind="AGENT" hint={nextHint} onClose={onClearTrace} nameOf={nameOf} />
           {chain.r && (
-            <AgentDetailPanel key={chain.r} did={refOf(chain.r)} name={panelName(chain.r)} kind="PEER AGENT" onClose={onClearTrace} nameOf={nameOf} />
+            <div className="seg ip-pf-peer-switch" role="group" aria-label="Agent shown">
+              <button type="button" className={!showPeer ? "active" : ""} onClick={() => setPeerView({ key: chainKey, peer: false })}>
+                {panelName(chain.a!)}
+              </button>
+              <button type="button" className={showPeer ? "active" : ""} onClick={() => setPeerView({ key: chainKey, peer: true })}>
+                Peer · {panelName(chain.r)}
+              </button>
+            </div>
           )}
+          <AgentInfoPanel key={shownAgent} did={refOf(shownAgent)} name={panelName(shownAgent)} nameOf={nameOf} />
         </>
       ) : activeTab === "app" && chain.p ? (
-        <AppDetailPanel key={chain.p} did={refOf(chain.p)} name={panelName(chain.p)} kind="APP" hint={nextHint} onClose={onClearTrace} nameOf={nameOf} />
+        <AppDetailPanel key={chain.p} did={refOf(chain.p)} name={panelName(chain.p)} kind="APP" hint={nextHint} />
       ) : (
         <div className="ip-trace">
           <div className="ip-trace-head">

@@ -14,6 +14,8 @@ export interface Agent {
   status: Status;
   env: string;
   owner: string;
+  /** Deployer's display name. Only /agent-info returns it, and it can be blank. */
+  ownerName?: string;
   /** Raw .md/.txt policy text from /agent-info; empty string when no policy uploaded. */
   policy?: string;
   /** From /agent-info's `revoked` field. Only /agent-info returns this — false for endpoints that don't. */

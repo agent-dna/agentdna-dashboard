@@ -14,7 +14,8 @@ interface Props {
   loading: boolean;
   error: string | null;
   onRetry: () => void;
-  onClose: () => void;
+  /** Shows a close button when given. */
+  onClose?: () => void;
   /** Display name for a DID the payload left unnamed (apps usually are), from the plane's nodes. */
   nameOf: (did: string) => string | undefined;
 }
@@ -69,9 +70,11 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
         <button type="button" className="btn primary" onClick={() => navigate(`/intents/${intentId}`)}>
           Inspect
         </button>
-        <button type="button" className="btn ghost" onClick={onClose} aria-label="Close intent detail" title="Close (Esc)">
-          <Icon name="close" size={14} />
-        </button>
+        {onClose && (
+          <button type="button" className="btn ghost" onClick={onClose} aria-label="Close intent detail" title="Close (Esc)">
+            <Icon name="close" size={14} />
+          </button>
+        )}
       </div>
     </div>
   );

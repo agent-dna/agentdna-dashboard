@@ -8,8 +8,6 @@ export type { DirectoryEntry };
 
 interface DirectoryContextValue {
   map: Map<string, DirectoryEntry>;
-  /** Every org user, as /users-list returns them. */
-  users: OrgUser[];
   loading: boolean;
 }
 
@@ -77,7 +75,7 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
   // guessing from DID shape.
   useEffect(() => setDirectorySnapshot(map), [map]);
 
-  const value = useMemo<DirectoryContextValue>(() => ({ map, users, loading }), [map, users, loading]);
+  const value = useMemo<DirectoryContextValue>(() => ({ map, loading }), [map, loading]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -85,12 +83,6 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
 /** Returns the DID → entry map (empty Map if no provider mounted). */
 export function useDirectory(): Map<string, DirectoryEntry> {
   return useContext(Ctx)?.map ?? new Map<string, DirectoryEntry>();
-}
-
-/** Every org user from /users-list (empty until the directory loads, or with no provider mounted). */
-export function useDirectoryUsers(): { users: OrgUser[]; loading: boolean } {
-  const ctx = useContext(Ctx);
-  return { users: ctx?.users ?? [], loading: ctx?.loading ?? true };
 }
 
 /** True until the directory's initial fetchAllAgents/fetchAllTools/listAllUsers walk settles. */
