@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, type UIEvent } from "react";
 import { Icon } from "../../components/Icon";
 import { AppIcon } from "../../components/AppIcon";
+import { Bot, UserRound } from "lucide-react";
 import {
   fetchObsAgentFlow,
   fetchObsAppFlow,
@@ -86,6 +87,10 @@ const RING_TINT: Record<PlaneColumn, string> = {
 };
 /** Resting node outline — dark enough to read against the dotted canvas. */
 const NODE_BORDER = "rgba(15,32,70,.24)";
+/** Card border while nothing is selected or hovered. */
+const NODE_BORDER_IDLE = "rgba(15,32,70,.6)";
+/** Allowed-line colour while nothing is selected or hovered. */
+const LINE_IDLE = "#93C5FD";
 const AVATARS: [string, string][] = [
   ["rgba(37,99,235,.10)", "#2563EB"],
   ["rgba(14,165,233,.12)", "#0B7FB5"],
@@ -490,7 +495,7 @@ export function InteractionPlane() {
   const nodeLook = (node: PlaneNode): CSSProperties => {
     const vis = visibility(litNodes.has(node.id));
     const picked = isPicked(node.id);
-    let border = NODE_BORDER;
+    let border = hasFocus ? NODE_BORDER : NODE_BORDER_IDLE;
     let background = "#fff";
     if (node.t === "i" && node.st && node.st !== "allowed") {
       border = node.st === "flagged" ? "rgba(220,38,38,.5)" : "rgba(217,119,6,.55)";
@@ -835,14 +840,15 @@ export function InteractionPlane() {
               {edgeGeometry.map(({ e, d, vis, offscreen }) => {
                 const lit = vis === "lit";
                 const sw = 1.1 + Math.min(1.7, Math.log10(e.n + 1) * 0.55) + (lit ? 0.4 : 0);
-                const base = vis === "muted" ? 0.08 : lit ? 0.9 : e.st === "allowed" ? 0.42 : 0.65;
+                const idle = !hasFocus && e.st === "allowed";
+                const base = vis === "muted" ? 0.08 : lit ? 0.9 : idle ? 0.95 : e.st === "allowed" ? 0.42 : 0.65;
                 const op = offscreen ? base * 0.35 : base;
                 return (
                   <g key={e.id}>
                     <path
                       d={d}
                       fill="none"
-                      stroke={LINE_COLOR[e.st]}
+                      stroke={idle ? LINE_IDLE : LINE_COLOR[e.st]}
                       strokeWidth={sw}
                       strokeOpacity={op}
                       strokeDasharray={e.st === "flagged" ? "4 4" : undefined}
@@ -915,7 +921,7 @@ export function InteractionPlane() {
                     title={n.sub}
                     {...nodeHandlers(n.id)}
                   >
-                    <div className="ip-av" style={{ background: bg, color: fg }}>{n.ini}</div>
+                    <div className="ip-av" style={{ background: bg, color: fg }}><UserRound size={16} strokeWidth={2} /></div>
                     <div className="ip-node-text">
                       <div className="ip-node-name" style={{ fontFamily: n.svc ? "var(--font-mono)" : undefined }}>{n.name}</div>
                       <div className="ip-node-sub">{n.sub}</div>
@@ -950,7 +956,7 @@ export function InteractionPlane() {
                   title={n.ref}
                   {...nodeHandlers(n.id)}
                 >
-                  <div className="ip-glyph ip-glyph-agent"><Icon name="agents" size={16} /></div>
+                  <div className="ip-glyph ip-glyph-agent"><Bot size={18} strokeWidth={1.8} /></div>
                   <div className="ip-node-text">
                     <div className="ip-node-name ip-display">{n.name}</div>
                     <div className="ip-node-sub ip-mono">{n.sub}</div>
@@ -976,7 +982,7 @@ export function InteractionPlane() {
                   title={n.ref}
                   {...nodeHandlers(n.id)}
                 >
-                  <div className="ip-glyph ip-glyph-agent"><Icon name="agents" size={16} /></div>
+                  <div className="ip-glyph ip-glyph-agent"><Bot size={18} strokeWidth={1.8} /></div>
                   <div className="ip-node-text">
                     <div className="ip-node-name ip-display">{n.name}</div>
                     <div className="ip-node-sub ip-mono">{n.sub}</div>
