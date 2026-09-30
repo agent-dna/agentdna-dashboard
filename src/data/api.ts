@@ -341,6 +341,49 @@ export async function fetchThreatByID(threatId: string): Promise<ThreatByID | nu
   };
 }
 
+/** One flagged interaction in an intent, with its /threat-by-id detail when that loaded. */
+export interface IntentThreat {
+  interactionID: string;
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  /** ISO time of the interaction. */
+  time: string;
+  threatID: string;
+  detail: ThreatByID | null;
+  /** Why the detail is missing: no threatID on the interaction, or the lookup failed. */
+  error?: string;
+}
+
+/**
+ * Every threat in an intent: the flagged interactions from /intent-info (all of them, not one
+ * page), each looked up in /threat-by-id in parallel. A failed lookup keeps the row with `error`.
+ */
+export async function fetchIntentThreats(intentId: string): Promise<IntentThreat[]> {
+  const info = await fetchIntentInfo(intentId);
+  const flagged = (info?.interactions ?? []).filter((i) => i.threat);
+  return Promise.all(
+    flagged.map(async (ix): Promise<IntentThreat> => {
+      const base = {
+        interactionID: ix.interactionID,
+        from: ix.from,
+        fromName: ix.fromName?.trim() || "",
+        to: ix.to,
+        toName: ix.toName?.trim() || "",
+        time: ix.time,
+        threatID: ix.threatID || "",
+      };
+      if (!ix.threatID) return { ...base, detail: null, error: "No threat ID on this interaction" };
+      try {
+        return { ...base, detail: await fetchThreatByID(ix.threatID) };
+      } catch (e) {
+        return { ...base, detail: null, error: e instanceof Error ? e.message : "Failed to load threat details" };
+      }
+    }),
+  );
+}
+
 /**
  * The actual "list of threats" endpoint — flagged interactions (new_interactions
  * where threat = 1), each already carrying its resolved message. Role-scoped

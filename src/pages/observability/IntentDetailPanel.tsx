@@ -318,7 +318,8 @@ function Step({
         </span>
         <span className="ix-step-main">
           <span className="ix-step-flow">
-            {s.type && <span className={`ix-type ${s.type}`}>{titleCase(s.type)}</span>}
+            {/* Delegate / Response labels hidden for now; only the trigger is marked. */}
+            {s.type === "trigger" && <span className={`ix-type ${s.type}`}>{titleCase(s.type)}</span>}
             <span className="ix-party" title={s.from}>{name(s.from, s.fromName)}</span>
             {!self && (
               <>

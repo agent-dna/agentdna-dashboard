@@ -10,14 +10,14 @@ import { entityPath } from "../lib/entityLinks";
 import { useResolveName, resolveDisplayName, shortDid } from "../context/DirectoryContext";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
-import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useThreatByID } from "../data/hooks";
+import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useIntentThreats } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { useIntentReview } from "../context/IntentReviewContext";
 import { timeAgo, titleOrUnknown } from "../lib/format";
 import { LedgerTable } from "../components/LedgerTable";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
-import { updateIntentStatus } from "../data/api";
+import { updateIntentStatus, type IntentThreat } from "../data/api";
 import { ApiError } from "../api/client";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
@@ -91,8 +91,7 @@ export function IntentDetailPage() {
   const interactionsTotal = interactionsPaged.total;
   const interactionsTotalPages = interactionsPaged.totalPages;
   const { data: participants } = useIntentParticipants(intentId);
-  const firstThreatID = interactions.find((i) => i.threat && i.threatID)?.threatID;
-  const { data: threatSummary, loading: threatSummaryLoading, error: threatSummaryError } = useThreatByID(firstThreatID);
+  const { data: threats, loading: threatsLoading, error: threatsError } = useIntentThreats(intentId);
   if (loading) {
     return (
       <div className="page">
@@ -145,7 +144,10 @@ export function IntentDetailPage() {
     else openDrawer("tool", p.entity as unknown as Tool);
   };
 
-  const threatCount = interactions.filter((i: { threat: boolean }) => i.threat).length;
+  // Counted across the whole intent (every interaction), not just the page the table shows.
+  const threatCount = threatsLoading || threatsError
+    ? interactions.filter((i: { threat: boolean }) => i.threat).length
+    : threats.length;
 
   // Interaction IDs end in "-<n>", the sequence number within the intent's
   // block chain — list them in that order (1, 2, 3, …) rather than however
@@ -419,43 +421,26 @@ export function IntentDetailPage() {
         </div>
 
         {threatCount > 0 && (
-          <div
-            style={{
-              marginTop: 18,
-              paddingTop: 16,
-              borderTop: "1px solid var(--line)",
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 10,
-            }}
-          >
-            <Icon name="shield" size={15} style={{ color: "var(--threat)", flexShrink: 0, marginTop: 1 }} />
-            <div style={{ minWidth: 0 }}>
-              {threatSummaryLoading ? (
-                <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Loading threat details…</span>
-              ) : threatSummary ? (
-                <>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--threat)" }}>{titleOrUnknown(threatSummary.title)}</span>
-                  <span style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--fg-muted)", marginLeft: 8 }}>
-                    code {threatSummary.threatCode}
-                  </span>
-                  {threatSummary.message && (
-                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-muted)", marginTop: 3 }}>{threatSummary.message}</div>
-                  )}
-                  {threatCount > 1 && (
-                    <div style={{ fontSize: 11.5, color: "var(--fg-faint)", marginTop: 3 }}>
-                      +{threatCount - 1} more threat{threatCount - 1 === 1 ? "" : "s"} in this intent
-                    </div>
-                  )}
-                </>
-              ) : (
-                <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-                  {threatCount} threat{threatCount === 1 ? "" : "s"} detected in this intent
-                  {!firstThreatID && " (no threatID on the first threat interaction)"}
-                  {threatSummaryError && ` (failed to load details: ${threatSummaryError.message})`}
-                </span>
-              )}
+          <div className="it-threats">
+            <div className="it-threats-head">
+              <Icon name="shield" size={15} />
+              <span>
+                {threatCount} threat{threatCount === 1 ? "" : "s"} detected in this intent
+              </span>
             </div>
+            {threatsLoading ? (
+              <div className="it-threats-note">Loading threat details…</div>
+            ) : threatsError ? (
+              <div className="it-threats-note">Couldn't load threat details: {threatsError.message}</div>
+            ) : (
+              <ol className="it-threats-list">
+                {[...threats]
+                  .sort((a, b) => interactionSeq(a.interactionID) - interactionSeq(b.interactionID))
+                  .map((t) => (
+                    <ThreatRow key={t.threatID || t.interactionID} t={t} seq={interactionSeq(t.interactionID)} />
+                  ))}
+              </ol>
+            )}
           </div>
         )}
       </div>
@@ -532,5 +517,39 @@ function CopyButton({ text }: { text: string }) {
     >
       <Icon name={copied ? "check" : "copy"} size={13} />
     </button>
+  );
+}
+
+/** One threat in the intent header: what it was, its code, which hop raised it, and the raw message. */
+function ThreatRow({ t, seq }: { t: IntentThreat; seq: number }) {
+  const [open, setOpen] = useState(false);
+  const d = t.detail;
+  const message = d?.message || "";
+  const long = message.length > 220;
+  const hop = [t.fromName || shortDid(t.from), t.toName || shortDid(t.to)].join(" → ");
+  return (
+    <li className="it-threat">
+      <div className="it-threat-top">
+        <span className="it-threat-title">{d ? titleOrUnknown(d.title) : "Threat"}</span>
+        {d && <span className="it-threat-code">code {d.threatCode}</span>}
+        <span className="it-threat-hop" title={t.interactionID}>
+          {seq !== Number.MAX_SAFE_INTEGER && <b>#{seq}</b>} {hop}
+        </span>
+        {t.time && <span className="it-threat-time">{timeAgo(Math.max(0, (Date.now() - new Date(t.time).getTime()) / 60000))}</span>}
+      </div>
+      {d?.description && <div className="it-threat-desc">{d.description}</div>}
+      {message ? (
+        <>
+          <div className={`it-threat-msg${open || !long ? "" : " clamped"}`}>{message}</div>
+          {long && (
+            <button type="button" className="it-threat-more" onClick={() => setOpen((o) => !o)}>
+              {open ? "Show less" : "Show full message"}
+            </button>
+          )}
+        </>
+      ) : (
+        !d && <div className="it-threat-desc">{t.error ?? "No details for this threat."}</div>
+      )}
+    </li>
   );
 }

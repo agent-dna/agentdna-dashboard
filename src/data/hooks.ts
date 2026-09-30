@@ -84,6 +84,8 @@ export const useThreatEventsPaged = (page = 1, limit = 10) =>
     [page, limit],
   );
 export const useTopThreats = () => useAsync<api.TopThreat[]>(api.fetchTopThreats, []);
+export const useIntentThreats = (intentId: string) =>
+  useAsync<api.IntentThreat[]>(() => api.fetchIntentThreats(intentId), [], [intentId]);
 export const useThreatByID = (threatId: string | undefined) =>
   useAsync<api.ThreatByID | null>(() => api.fetchThreatByID(threatId || ""), null, [threatId]);
 export const useThreatsListPaged = (page = 1) =>
