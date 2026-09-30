@@ -204,16 +204,6 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
                 </span>
               )}
             </Fact>
-            <Fact k="Provenance record">
-              {intent.provenanceRecordID ? (
-                <>
-                  <span className="ix-mono" title={intent.provenanceRecordID}>{shortId(intent.provenanceRecordID)}</span>
-                  <CopyId value={intent.provenanceRecordID} label="provenance record ID" />
-                </>
-              ) : (
-                <span className="ix-muted">Not recorded</span>
-              )}
-            </Fact>
             <Fact k="Intent ID">
               <span className="ix-mono" title={intent.id}>{shortId(intent.id)}</span>
               <CopyId value={intent.id} label="intent ID" />

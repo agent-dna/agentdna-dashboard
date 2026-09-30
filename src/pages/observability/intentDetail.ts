@@ -1,5 +1,6 @@
 import { apiRequest } from "../../api/client";
 import type { ObsInteraction, ObsPathIntent } from "../../api/observability";
+import { compareInteractionIds, parseInteractionId } from "../../lib/interactionBranch";
 
 /** GET /intent-info: the intent's summary and every interaction in its chain. */
 interface IntentInfo {
@@ -16,7 +17,6 @@ interface IntentInfo {
   status?: string;
   reviewStatus?: string;
   threatDetected?: boolean;
-  provenanceRecordID?: string;
   interactions?: Partial<ObsInteraction>[];
 }
 
@@ -40,10 +40,10 @@ export async function loadIntentDetail(intentID: string, title: string): Promise
     threat: !!x.threat,
     threatID: x.threatID ?? "",
     time: x.time ?? "",
-    provenanceRecordID: x.provenanceRecordID,
-    provenanceReqID: x.provenanceReqID,
-  }));
-  const trigger = interactions.find((x) => x.type === "trigger")?.message;
+  })).sort((a, b) => compareInteractionIds(a.interactionID, b.interactionID));
+  // Every branch shares the intent's first block, so its message is the intent's title.
+  const first = interactions.find((x) => parseInteractionId(x.interactionID)?.path.join("-") === "1");
+  const trigger = (first ?? interactions.find((x) => x.type === "trigger"))?.message;
   return {
     id: i.intentID || intentID,
     title: title && title !== intentID ? title : trigger || intentID,
@@ -59,7 +59,6 @@ export async function loadIntentDetail(intentID: string, title: string): Promise
     status: i.status,
     reviewStatus: i.reviewStatus,
     threatDetected: i.threatDetected,
-    provenanceRecordID: i.provenanceRecordID,
     interactions,
   };
 }

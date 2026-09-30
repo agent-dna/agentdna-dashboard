@@ -183,8 +183,6 @@ export interface ObsInteraction {
   threat: boolean;
   threatID: string;
   time: string;
-  provenanceRecordID?: string;
-  provenanceReqID?: string;
 }
 
 /** The intent on a path row. The detail fields come back when the paths call is filtered by `intentID`. */
@@ -208,7 +206,6 @@ export interface ObsPathIntent {
   status?: string;
   reviewStatus?: string;
   threatDetected?: boolean;
-  provenanceRecordID?: string;
   interactions?: ObsInteraction[];
 }
 

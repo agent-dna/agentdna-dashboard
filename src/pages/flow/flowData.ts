@@ -14,6 +14,7 @@
 import type { Intent, Interaction } from "../../types";
 import type { DiagramInteraction, IntentBlock, IntentDiagram } from "../../data/api";
 import type { useResolveName } from "../../context/DirectoryContext";
+import { branchName, compareInteractionIds, forkPosition, isOnPath, parentBranch, parseInteractionId } from "../../lib/interactionBranch";
 
 export type FlowNodeKind = "human" | "agent" | "tool" | "provenance";
 export type FlowDirection = "request" | "response";
@@ -52,6 +53,30 @@ export interface FlowStep {
   interactionID?: string;
   /** Ordering stamp from /intent-diagram; equal values mean concurrent hops. */
   epoch?: number;
+  /** Branch this hop belongs to: `""` on the trunk, else e.g. `"2b"` (see lib/interactionBranch). */
+  branch?: string;
+  /** Hop label from the interaction ID: `"1"`, `"2b.1"`. */
+  label?: string;
+}
+
+/** One branch of the intent's tree: the hops that diverged from `parent` at `forkAt`. */
+export interface FlowBranch {
+  /** e.g. `"2b"`, `"2b.3a"`. */
+  key: string;
+  /** `"Branch B"`, `"Branch B › A"`. */
+  name: string;
+  /** `""` when it forked off the trunk. */
+  parent: string;
+  /** Position on the parent where it diverged; the parent's hops before it are shared. */
+  forkAt: number;
+  /** Index into the branch palette, stable for the flow. */
+  color: number;
+  /** Any hop in this branch (not its sub-branches) was blocked. */
+  blocked: boolean;
+  /** Hops in this branch itself, not counting sub-branches. */
+  hops: number;
+  /** No branch forks off this one: a complete path ends here. */
+  leaf: boolean;
 }
 
 export interface TraceSpan {
@@ -106,6 +131,8 @@ export interface Flow {
   steps: FlowStep[];
   status: "halted" | "completed";
   trace: FlowTrace;
+  /** Branches in tree order; empty when the intent never forked. */
+  branches: FlowBranch[];
   /** Raw /intent-diagram response — shown as-is in the JSON tab. */
   rawDiagram?: unknown;
 }
@@ -392,8 +419,9 @@ interface BuildArgs {
 }
 
 export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs): Flow {
-  // Chronological order (oldest first).
-  const sorted = [...interactions].sort((a, b) => b.created - a.created);
+  // Tree order from the interaction IDs (trunk, then each branch depth first); oldest first
+  // for anything whose ID doesn't carry a position.
+  const sorted = sortInteractions(interactions);
 
 
   const nodesById = new Map<string, FlowNode>();
@@ -464,6 +492,8 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       // Links this step back to the real Interaction record, so the trace
       // inspector can show the exact same raw data as the interaction drawer.
       interactionID: ixn.id,
+      branch: parseInteractionId(ixn.id)?.branch ?? "",
+      label: parseInteractionId(ixn.id)?.label,
     });
     // Only the target — the entity where the threat was detected — gets the
     // red box. The initiator (`fromNode`) is the culprit, not the victim, so
@@ -642,7 +672,63 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     steps,
     status: halted ? "halted" : "completed",
     trace: flowTrace,
+    branches: collectBranches(steps),
   };
+}
+
+/**
+ * The flow narrowed to one path through the tree: the trunk plus every branch from the root
+ * down to `leaf`. Nodes keep their positions so switching paths doesn't reshuffle the canvas;
+ * edges, threat marks and the closing seal follow the hops on the path. `null` → the whole flow.
+ */
+export function flowForPath(flow: Flow, leaf: string | null): Flow {
+  if (leaf == null || flow.branches.length === 0) return flow;
+  const steps = flow.steps.filter((s) => isOnPath(s.branch ?? "", leaf));
+  const used = new Set(steps.flatMap((s) => [s.from, s.to]));
+  const blockedTo = new Set(steps.filter((s) => s.verdict === "blocked").map((s) => s.to));
+  const nodes = flow.nodes.map((n) => (n.kind === "provenance" ? n : { ...n, threat: blockedTo.has(n.id) }));
+  const edges = flow.edges.filter(([a, b]) => steps.some((s) => s.from === a && s.to === b));
+  const blocked = steps.some((s) => s.verdict === "blocked");
+  return {
+    ...flow,
+    nodes: nodes.filter((n) => n.kind === "provenance" || used.has(n.id)),
+    nodeById: Object.fromEntries(nodes.map((n) => [n.id, n])),
+    edges,
+    steps,
+    sealEdges: flow.sealEdges.map((e) => ({ ...e, threat: blocked, stepIndex: steps.length - 1 })),
+    status: blocked ? "halted" : "completed",
+  };
+}
+
+/** Interactions in branch-tree order, falling back to oldest first. */
+export function sortInteractions(interactions: Interaction[]): Interaction[] {
+  return [...interactions]
+    .sort((a, b) => b.created - a.created)
+    .sort((a, b) => compareInteractionIds(a.id, b.id));
+}
+
+/** The flow's branches, in the order their first hop appears (tree order). */
+function collectBranches(steps: FlowStep[]): FlowBranch[] {
+  const byKey = new Map<string, FlowBranch>();
+  const ensure = (key: string): FlowBranch => {
+    let b = byKey.get(key);
+    if (!b) {
+      // Parents first, so a nested branch never appears before the branch it forked from.
+      const parent = parentBranch(key);
+      if (parent) ensure(parent);
+      b = { key, name: branchName(key), parent, forkAt: forkPosition(key), color: byKey.size, blocked: false, hops: 0, leaf: true };
+      byKey.set(key, b);
+    }
+    return b;
+  };
+  for (const s of steps) {
+    if (!s.branch) continue;
+    const b = ensure(s.branch);
+    b.hops++;
+    if (s.verdict === "blocked") b.blocked = true;
+  }
+  for (const b of byKey.values()) if (b.parent) byKey.get(b.parent)!.leaf = false;
+  return [...byKey.values()];
 }
 
 // ---- Diagram-based full flow builder (uses /intent-diagram flat interactions) ----
@@ -894,6 +980,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     steps,
     status: halted ? "halted" : "completed",
     trace: flowTrace,
+    branches: collectBranches(steps),
     rawDiagram: diagram,
   };
 }
@@ -1040,7 +1127,7 @@ export function buildInteractionTrace(
   nameOf: (did: string) => string | undefined,
 ): FlowTrace {
   // Same ordering as buildFlowFromIntent, so the tree and the step rail agree on sequence.
-  const sorted = [...interactions].sort((a, b) => b.created - a.created);
+  const sorted = sortInteractions(interactions);
   const name = (ref: Interaction["initiator"]) => nameOf(ref.id) || ref.name || shortDid(ref.id);
   const halted = sorted.some((ix) => ix.threat);
 
@@ -1071,9 +1158,10 @@ export function buildInteractionTrace(
 
     // Interactions carry no payload of their own, so Preview splits the record into
     // what was asked (who → whom) and what came back (verdict, runtime, threat).
+    const pos = parseInteractionId(ix.id);
     const span: TraceSpan = {
       id: ix.id,
-      name: `${from} → ${to}`,
+      name: pos?.branch ? `${from} → ${to} · ${branchName(pos.branch)}` : `${from} → ${to}`,
       kind: isTool ? "tool" : "agent",
       label: ix.blockType || (isTool ? "Tool call" : "Agent call"),
       status: ix.threat ? "blocked" : "ok",
@@ -1092,6 +1180,7 @@ export function buildInteractionTrace(
       parentId: parent.id,
       metadata: {
         interactionId: ix.id,
+        ...(pos?.branch ? { branch: branchName(pos.branch), hop: pos.label } : {}),
         ...(ix.blockType ? { blockType: ix.blockType } : {}),
         created: ix.created,
         runtime: ix.runtime,

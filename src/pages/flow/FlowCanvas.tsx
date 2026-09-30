@@ -251,6 +251,7 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
           <div className={`canvas-badge ${flow.status === "halted" ? "halted" : ""}`}>
             <span className="lv" />
             {flow.status === "halted" ? "POLICY HALT" : "LIVE TRACE"} · {flow.nodes.filter((n) => n.kind !== "provenance").length} nodes · {steps.length} hops
+            {flow.branches.length > 0 && ` · ${flow.branches.length} branches`}
           </div>
           <div className="canvas-legend">
             <span className="lg">
@@ -475,7 +476,9 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
 
       {cur && (
         <div className={`canvas-bar ${cur.verdict === "blocked" ? "blk" : ""}`}>
-          <span className="cb-num">{String(step + 1).padStart(2, "0")}</span>
+          <span className="cb-num" title={cur.branch ? `Hop ${cur.label} on ${flow.branches.find((b) => b.key === cur.branch)?.name ?? cur.branch}` : undefined}>
+            {cur.label ?? String(step + 1).padStart(2, "0")}
+          </span>
           <span className="cb-pair">
             <span className="cb-node">{nb(cur.from)}</span>
             <span className={`cb-arr ${cur.dir === "response" ? "ret" : ""}`}>

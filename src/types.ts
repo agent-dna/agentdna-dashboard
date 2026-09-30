@@ -48,7 +48,6 @@ export interface Intent {
   threats: number;
   score: number;
   status: Status;
-  provenanceRecordID: string;
   signature?: string;
   /** Distinct apps/tools this intent's interactions touched. Only populated where explicitly computed (e.g. an agent's own intents list). */
   appsInteracted?: EntityRef[];

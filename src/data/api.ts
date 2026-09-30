@@ -633,7 +633,6 @@ interface ApiIntent {
   agentsCount?: number;
   /** Distinct tools touched by this intent. */
   toolsCount?: number;
-  provenanceRecordID?: string;
   /** Human review state — separate from `status` (the pipeline state). Defaults to "Ongoing" server-side. */
   reviewStatus?: string;
 }
@@ -687,7 +686,6 @@ function mapIntent(i: ApiIntent): Intent {
     threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
     score: 0,
     status: i.threatDetected ? "threat" : "safe",
-    provenanceRecordID: i.provenanceRecordID ?? "",
     reviewStatus: toReviewStatus(i.reviewStatus),
   };
 }
@@ -817,7 +815,6 @@ export interface ApiIntentInfo {
   endedAt?: string;
   status: string;
   threatDetected: boolean;
-  provenanceRecordID?: string;
   reviewStatus?: string;
   interactions?: ApiInteraction[];
 }
@@ -887,7 +884,6 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     agentsCount: agentDids.size,
     toolsCount: toolDids.size,
     interactionsCount: firstPage.total,
-    provenanceRecordID: r.provenanceRecordID ?? "",
     reviewStatus: r.reviewStatus,
   });
 }
@@ -1305,7 +1301,6 @@ interface ApiToolInteraction {
   intentID: string;
   message?: string;
   signature?: string;
-  provenanceRecordID?: string;
   time: string;
   /** Non-empty only when `threat` is true — pass to GET /threat-by-id for the full message. */
   threatID?: string;
@@ -1399,7 +1394,6 @@ function mapToolIntent(i: ApiToolIntent): Intent {
     threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
     score: i.threatDetected ? 0 : 100,
     status: (i.status as Agent["status"]) || "safe",
-    provenanceRecordID: "",
     reviewStatus: toReviewStatus(i.reviewStatus),
   };
 }
@@ -1443,7 +1437,6 @@ function mapUserIntent(i: ApiUserIntent): Intent {
     threats: i.threatCount || (i.threatDetected ? 1 : 0),
     score: i.threatDetected ? 0 : 100,
     status: (i.status as Agent["status"]) || "safe",
-    provenanceRecordID: "",
     reviewStatus: toReviewStatus(i.reviewStatus),
   };
 }

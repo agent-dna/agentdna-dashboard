@@ -20,6 +20,7 @@ import { exportIntentPdf } from "../lib/exportIntentPdf";
 import { updateIntentStatus, type IntentThreat } from "../data/api";
 import { ApiError } from "../api/client";
 import { IntentIdChip } from "../context/IntentNumbersContext";
+import { branchName, compareInteractionIds, parseInteractionId } from "../lib/interactionBranch";
 import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
 
 const REVIEW_STATUSES: IntentReviewStatus[] = ["Ongoing", "Acknowledged", "Flagged"];
@@ -149,14 +150,9 @@ export function IntentDetailPage() {
     ? interactions.filter((i: { threat: boolean }) => i.threat).length
     : threats.length;
 
-  // Interaction IDs end in "-<n>", the sequence number within the intent's
-  // block chain — list them in that order (1, 2, 3, …) rather than however
-  // the backend happened to return the page.
-  const interactionSeq = (id: string): number => {
-    const m = id.match(/-(\d+)$/);
-    return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
-  };
-  const sortedInteractions = [...interactions].sort((a, b) => interactionSeq(a.id) - interactionSeq(b.id));
+  // Interaction IDs carry their place in the intent's branch tree (`-1`, `-2-b-1`, …) —
+  // list them in tree order rather than however the backend returned the page.
+  const sortedInteractions = [...interactions].sort((a, b) => compareInteractionIds(a.id, b.id));
 
   const participantCols: DataTableColumn<IntentParticipant & { id: string }>[] = [
     {
@@ -281,36 +277,13 @@ export function IntentDetailPage() {
                     </div>
                   );
                 })()}
-                {intent.provenanceRecordID ? (
-                  <a
-                    href={`https://testnetexplorer.rubix.net/transaction-explorer?tx=${intent.provenanceRecordID}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 5,
-                      marginTop: 6,
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 11.5,
-                      color: "var(--accent)",
-                      textDecoration: "none",
-                      fontWeight: 600,
-                    }}
-                    onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
-                    onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
-                  >
-                    View on Provenance Layer ↗
-                  </a>
-                ) : (
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6,
-                    fontFamily: "var(--font-mono)", fontSize: 11.5,
-                    color: "var(--fg-faint)", fontWeight: 600,
-                  }}>
-                    Saved on Provenance Layer
-                  </span>
-                )}
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6,
+                  fontFamily: "var(--font-mono)", fontSize: 11.5,
+                  color: "var(--fg-faint)", fontWeight: 600,
+                }}>
+                  Saved on Provenance Layer
+                </span>
               </div>
               <InfoStat
                 label="Intent ID"
@@ -435,9 +408,9 @@ export function IntentDetailPage() {
             ) : (
               <ol className="it-threats-list">
                 {[...threats]
-                  .sort((a, b) => interactionSeq(a.interactionID) - interactionSeq(b.interactionID))
+                  .sort((a, b) => compareInteractionIds(a.interactionID, b.interactionID))
                   .map((t) => (
-                    <ThreatRow key={t.threatID || t.interactionID} t={t} seq={interactionSeq(t.interactionID)} />
+                    <ThreatRow key={t.threatID || t.interactionID} t={t} />
                   ))}
               </ol>
             )}
@@ -521,19 +494,20 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /** One threat in the intent header: what it was, its code, which hop raised it, and the raw message. */
-function ThreatRow({ t, seq }: { t: IntentThreat; seq: number }) {
+function ThreatRow({ t }: { t: IntentThreat }) {
   const [open, setOpen] = useState(false);
   const d = t.detail;
   const message = d?.message || "";
   const long = message.length > 220;
   const hop = [t.fromName || shortDid(t.from), t.toName || shortDid(t.to)].join(" → ");
+  const pos = parseInteractionId(t.interactionID);
   return (
     <li className="it-threat">
       <div className="it-threat-top">
         <span className="it-threat-title">{d ? titleOrUnknown(d.title) : "Threat"}</span>
         {d && <span className="it-threat-code">code {d.threatCode}</span>}
         <span className="it-threat-hop" title={t.interactionID}>
-          {seq !== Number.MAX_SAFE_INTEGER && <b>#{seq}</b>} {hop}
+          {pos && <b>#{pos.label}</b>} {pos?.branch ? `${branchName(pos.branch)} · ` : ""}{hop}
         </span>
         {t.time && <span className="it-threat-time">{timeAgo(Math.max(0, (Date.now() - new Date(t.time).getTime()) / 60000))}</span>}
       </div>
