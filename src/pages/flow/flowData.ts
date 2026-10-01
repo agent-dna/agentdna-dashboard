@@ -154,123 +154,118 @@ const MIN_ROW_GAP = 0.16;
 const MIN_COL_GAP = 0.12;
 
 /**
- * Lay nodes out by longest-path depth from the initiator instead of by role.
+ * Lay nodes out in call order: each node takes the column after the node that first
+ * called it, so a chain A → B → C reads left to right in exactly that order.
  *
- * A role-based layout collapses every agent into a single "worker" column, so a chain
- * reads as one vertical stack and a parallel flow (A fans out to B and C, both returning
- * to A) draws every edge as an intra-column arc. Layering by depth gives each hop its own
- * column — a horizontal chain — and lets concurrent siblings share one.
- *
- * Response hops are excluded from the depth graph: they point back up the tree
- * and would otherwise form cycles that have no valid layering.
+ * Layering is driven by discovery order rather than by every edge in the graph. Replies
+ * (C → B, B → A) aren't always tagged as responses — the interactions list marks every
+ * hop a request — and treating them as calls creates cycles with no valid layering.
+ * Any edge that points back to an already-discovered node is therefore a return or
+ * re-entry and never moves a node rightwards. Over the remaining (acyclic) edges each
+ * node takes its longest path from the initiator, so concurrent siblings share a column.
  */
 function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
   const ids = new Set(nodes.map((n) => n.id));
+  const initiatorId = flowOriginId(nodes, steps);
 
-  // First-appearance order, used to seed column ordering before crossing reduction.
-  const order: Record<string, number> = {};
-  let o = 0;
-  for (const s of steps) {
-    for (const id of [s.from, s.to]) {
-      if (order[id] == null) order[id] = o++;
-    }
-  }
-
-  // Forward (request) edges only, deduped.
-  const outAdj = new Map<string, string[]>();
-  const inAdj = new Map<string, string[]>();
-  const indeg = new Map<string, number>();
-  for (const id of ids) { outAdj.set(id, []); inAdj.set(id, []); indeg.set(id, 0); }
-
-  const seenEdge = new Set<string>();
-  const forward: Array<[string, string]> = [];
+  // Discovery order: the initiator first, then each node the first time it's reached.
+  const order = new Map<string, number>();
+  const discover = (id: string) => { if (ids.has(id) && !order.has(id)) order.set(id, order.size); };
+  if (initiatorId) discover(initiatorId);
   for (const s of steps) {
     if (s.dir === "response") continue;
-    if (s.from === s.to) continue;
+    discover(s.from);
+    discover(s.to);
+  }
+  for (const s of steps) { discover(s.from); discover(s.to); }
+  for (const n of nodes) discover(n.id);
+  const ord = (id: string) => order.get(id) ?? 0;
+
+  // Forward edges only — caller discovered before callee — deduped.
+  const outAdj = new Map<string, string[]>();
+  const inAdj = new Map<string, string[]>();
+  for (const id of ids) { outAdj.set(id, []); inAdj.set(id, []); }
+  const seenEdge = new Set<string>();
+  for (const s of steps) {
+    if (s.dir === "response" || s.from === s.to) continue;
     if (!ids.has(s.from) || !ids.has(s.to)) continue;
+    if (ord(s.from) >= ord(s.to)) continue;
     const key = `${s.from}>${s.to}`;
     if (seenEdge.has(key)) continue;
     seenEdge.add(key);
-    forward.push([s.from, s.to]);
     outAdj.get(s.from)!.push(s.to);
     inAdj.get(s.to)!.push(s.from);
-    indeg.set(s.to, indeg.get(s.to)! + 1);
   }
 
-  // Kahn's topological sort, propagating longest-path depth.
+  // Longest path in discovery order — a valid topological order by construction.
   const depth = new Map<string, number>();
-  for (const id of ids) depth.set(id, 0);
-
-  const queue = Array.from(ids).filter((id) => indeg.get(id) === 0);
-  queue.sort((a, b) => (order[a] ?? 0) - (order[b] ?? 0));
-  const settled = new Set<string>();
-
-  while (queue.length) {
-    const id = queue.shift()!;
-    settled.add(id);
-    for (const next of outAdj.get(id)!) {
-      depth.set(next, Math.max(depth.get(next)!, depth.get(id)! + 1));
-      indeg.set(next, indeg.get(next)! - 1);
-      if (indeg.get(next) === 0) queue.push(next);
-    }
+  const byOrder = Array.from(ids).sort((a, b) => ord(a) - ord(b));
+  for (const id of byOrder) {
+    const parents = inAdj.get(id)!;
+    depth.set(id, parents.length ? Math.max(...parents.map((p) => depth.get(p)! + 1)) : 0);
   }
 
-  // Anything left unsettled sits in a request-edge cycle (a re-entrant agent).
-  // Best-effort: place it one column past its deepest parent so it still lands
-  // somewhere sensible rather than collapsing to column 0.
-  for (const [from, to] of forward) {
-    if (!settled.has(to)) {
-      depth.set(to, Math.max(depth.get(to)!, depth.get(from)! + 1));
-    }
-  }
-
-  // Rule 1: the initiator is the flow's origin, so it alone holds column 0.
-  // Anything else that happens to have no parent is pushed one column in rather
-  // than sharing the left edge and muddying where the flow starts.
-  const initiatorId = flowOriginId(nodes, steps);
+  // The initiator alone holds column 0; any other parentless node starts one column in.
   if (initiatorId && ids.has(initiatorId)) {
     depth.set(initiatorId, 0);
     for (const id of ids) {
-      if (id !== initiatorId && (depth.get(id) ?? 0) === 0) depth.set(id, 1);
+      if (id !== initiatorId && depth.get(id) === 0) depth.set(id, 1);
     }
   }
 
-  // Group into columns.
+  // Group into columns, seeded in discovery order.
   const byDepth = new Map<number, FlowNode[]>();
   for (const n of nodes) {
     const d = depth.get(n.id) ?? 0;
     if (!byDepth.has(d)) byDepth.set(d, []);
     byDepth.get(d)!.push(n);
   }
-
-  const depths = Array.from(byDepth.keys()).sort((a, b) => a - b);
-  const columns = depths.map((d) => {
-    const col = byDepth.get(d)!;
-    col.sort((a, b) => (order[a.id] ?? 0) - (order[b.id] ?? 0));
-    return col;
-  });
+  const columns = Array.from(byDepth.keys())
+    .sort((a, b) => a - b)
+    .map((d) => byDepth.get(d)!.sort((a, b) => ord(a.id) - ord(b.id)));
 
   reduceCrossings(columns, inAdj, outAdj, initiatorId);
 
-  // Rule 4: spread each axis across its band, widening the gap floor before
-  // letting two nodes land close enough for their icons or captions to touch.
+  // X: columns spread evenly across the band, with a floor so captions never touch.
   const colGap = columns.length > 1
     ? Math.max(MIN_COL_GAP, (X_BAND.end - X_BAND.start) / (columns.length - 1))
     : 0;
   const colSpan = colGap * (columns.length - 1);
   const xStart = columns.length > 1 ? Math.max(0.06, X_BAND.start - (colSpan - (X_BAND.end - X_BAND.start)) / 2) : 0.5;
 
+  // Y: every node aims for the height of its callers, so a chain stays on one
+  // horizontal line even inside a branch. Columns are then packed at a minimum
+  // gap and shifted as a block to sit as close to those targets as possible.
+  const mid = (Y_BAND.start + Y_BAND.end) / 2;
+  const rowGap = Math.max(
+    MIN_ROW_GAP,
+    Math.min(0.22, (Y_BAND.end - Y_BAND.start) / Math.max(1, Math.max(...columns.map((c) => c.length)) - 1)),
+  );
+  const yOf = new Map<string, number>();
   columns.forEach((col, i) => {
     const x = columns.length === 1 ? 0.5 : xStart + colGap * i;
-    const k = col.length;
-    const rowGap = k > 1
-      ? Math.max(MIN_ROW_GAP, (Y_BAND.end - Y_BAND.start) / (k - 1))
-      : 0;
-    const span = rowGap * (k - 1);
-    const mid = (Y_BAND.start + Y_BAND.end) / 2;
+    const targets = col.map((n) => {
+      const ys = inAdj.get(n.id)!.map((p) => yOf.get(p)).filter((v): v is number => v != null);
+      return ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : mid;
+    });
+    // Pack top-down at the minimum gap, never above each node's target.
+    const ys: number[] = [];
+    targets.forEach((t, j) => { ys.push(j === 0 ? t : Math.max(t, ys[j - 1] + rowGap)); });
+    // Shift the block so its mean sits on the mean target, then keep it in the band.
+    const drift = targets.reduce((a, t, j) => a + (t - ys[j]), 0) / ys.length;
+    let shift = drift;
+    const top = ys[0] + shift;
+    const bottom = ys[ys.length - 1] + shift;
+    if (bottom - top <= Y_BAND.end - Y_BAND.start) {
+      if (top < Y_BAND.start) shift += Y_BAND.start - top;
+      if (bottom > Y_BAND.end) shift -= bottom - Y_BAND.end;
+    } else {
+      shift = mid - (top + bottom) / 2 + shift;
+    }
     col.forEach((n, j) => {
       n.x = x;
-      n.y = k === 1 ? mid : mid - span / 2 + rowGap * j;
+      n.y = ys[j] + shift;
+      yOf.set(n.id, n.y);
     });
   });
 

@@ -77,9 +77,10 @@ function qbez(p0: Point, c: Point, p1: Point, t: number): Point {
 /**
  * Control point for the arc between two nodes.
  *
- * `bow` scales how far the curve bulges out. Repeated interactions between the
- * same pair pass different values so each hop gets its own visible arc instead
- * of stacking on one path.
+ * The normal is chosen so a left → right call bows upward and the reply
+ * (right → left) bows downward — a request and its response between the same
+ * pair read as two separate lanes rather than one line with two arrowheads.
+ * `bow` scales how far the curve bulges out.
  */
 function ctrlFor(a: Point, b: Point, bow = 1): Point {
   const mx = (a.x + b.x) / 2;
@@ -88,7 +89,62 @@ function ctrlFor(a: Point, b: Point, bow = 1): Point {
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
   const off = Math.min(40, len * 0.12) * bow;
-  return { x: mx + (-dy / len) * off, y: my + (dx / len) * off };
+  return { x: mx + (dy / len) * off, y: my + (-dx / len) * off };
+}
+
+/** Space a node occupies around its centre: the icon plus its caption. */
+interface NodeBox {
+  x: number;
+  y: number;
+  top: number;
+  bottom: number;
+  half: number;
+}
+
+const ICON_CLEAR = 32;
+const CAPTION_CLEAR = 36;
+const CAPTION_HALF = 50;
+
+function hitsBox(p: Point, box: NodeBox): boolean {
+  const dx = Math.abs(p.x - box.x);
+  const dy = p.y - box.y;
+  if (dx <= ICON_CLEAR && Math.abs(dy) <= ICON_CLEAR) return true;
+  return dx <= box.half && dy >= -box.top && dy <= box.bottom;
+}
+
+/**
+ * Control point that routes an edge around every node between its endpoints.
+ *
+ * Starts from the default bow and grows it until the curve clears the icon and
+ * caption of each node in the way — so a hop that skips a column arcs over the
+ * node it passes rather than drawing through it. Falls back to the opposite
+ * side when that clears with a shallower arc.
+ */
+function routeCtrl(a: Point, b: Point, boxes: NodeBox[]): Point {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = dy / len;
+  const ny = -dx / len;
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const base = Math.min(40, len * 0.12);
+
+  const clears = (c: Point) => {
+    for (let t = 0.1; t <= 0.9; t += 0.04) {
+      const p = qbez(a, c, b, t);
+      if (boxes.some((box) => hitsBox(p, box))) return false;
+    }
+    return true;
+  };
+  const at = (off: number) => ({ x: mx + nx * off, y: my + ny * off });
+
+  if (clears(at(base))) return at(base);
+  for (let off = base + 12; off <= 320; off += 12) {
+    if (clears(at(off))) return at(off);
+    if (off > base + 60 && clears(at(-off))) return at(-off);
+  }
+  return at(base);
 }
 
 function trimEnds(a: Point, c: Point, b: Point, dStart: number, dEnd: number) {
@@ -186,11 +242,39 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
   }, [steps, step]);
 
   /**
-   * Repeated hops between the same two nodes trace the same line rather than
-   * each drawing their own arc — once a pair's edge exists, every later
-   * interaction on that pair reuses it instead of piling up parallel lines.
+   * One routed control point per A→B pair. Repeated hops between the same two
+   * nodes trace the same line rather than each drawing their own arc, and the
+   * route bends around any node sitting between the two endpoints.
    */
-  const EDGE_BOW = 1;
+  const ctrlByPair = useMemo(() => {
+    const m = new Map<string, Point>();
+    if (!ready) return m;
+    const boxes = new Map<string, NodeBox>();
+    for (const n of flow.nodes) {
+      const p = pts[n.id];
+      if (!p) continue;
+      const above = sealSources.has(n.id);
+      boxes.set(n.id, {
+        x: p.x,
+        y: p.y,
+        top: above ? ICON_CLEAR + CAPTION_CLEAR : ICON_CLEAR,
+        bottom: above ? ICON_CLEAR : ICON_CLEAR + CAPTION_CLEAR,
+        half: CAPTION_HALF,
+      });
+    }
+    for (const [from, to] of flow.edges) {
+      const a = pts[from];
+      const b = pts[to];
+      if (!a || !b) continue;
+      const others = Array.from(boxes.entries())
+        .filter(([id]) => id !== from && id !== to)
+        .map(([, box]) => box);
+      m.set(`${from}>${to}`, routeCtrl(a, b, others));
+    }
+    return m;
+  }, [ready, flow.nodes, flow.edges, pts, sealSources]);
+  const ctrlOf = (from: string, to: string, a: Point, b: Point) =>
+    ctrlByPair.get(`${from}>${to}`) ?? ctrlFor(a, b);
 
   /**
    * Edges into the provenance layer. These aren't timed hops — they're always
@@ -233,11 +317,11 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
       const a0 = pts[st.from];
       const b0 = pts[st.to];
       if (!a0 || !b0) return [];
-      const c = ctrlFor(a0, b0, EDGE_BOW);
+      const c = ctrlByPair.get(pairKey) ?? ctrlFor(a0, b0);
       const { a, b } = trimEnds(a0, c, b0, 20, 36);
       return [{ key: si, a, b, c, blocked: st.verdict === "blocked" }];
     });
-  }, [ready, active, steps, pts]);
+  }, [ready, active, steps, pts, ctrlByPair]);
 
   // Gradients are defined once against the first active edge.
   const activeEdge = activeEdges[0] ?? null;
@@ -318,7 +402,7 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
               const a0 = pts[from];
               const b0 = pts[to];
               if (!a0 || !b0) return null;
-              const c = ctrlFor(a0, b0, EDGE_BOW);
+              const c = ctrlOf(from, to, a0, b0);
               const { a, b } = trimEnds(a0, c, b0, 20, 34);
               // Active this beat → drawn separately, highlighted.
               const isActive = active.some((si) => steps[si]?.from === from && steps[si]?.to === to);
