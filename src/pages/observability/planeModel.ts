@@ -95,20 +95,19 @@ export interface PlaneLayout {
   /** [left, right] of each column on the canvas. */
   columns: Record<PlaneColumn, [number, number]>;
 }
-const WIDTH: Record<PlaneColumn, number> = { u: 176, a: 180, r: 180, p: 160, i: 303 };
+const WIDTH: Record<PlaneColumn, number> = { u: 214, a: 218, r: 218, p: 206, i: 315 };
 const layout = (order: PlaneColumn[], left: number[]): PlaneLayout => ({
   order,
   columns: Object.fromEntries(order.map((c, k) => [c, [left[k], left[k] + WIDTH[c]]])) as PlaneLayout["columns"],
 });
 export const LAYOUTS: Record<PlaneMode, PlaneLayout> = {
-  // User-first gaps hold 60px gates, centred: 115px for one COCA, 270px for
-  // COCA + CBAC + Whitelisting. The last gap, into the intents, is a tight 48px.
-  user: layout(["u", "a", "r", "p", "i"], [0, 291, 586, 1036, 1244]),
-  // App-first has no gates: three ~167px gaps, then a tight 48px into the intents.
-  app: layout(["p", "a", "r", "u", "i"], [0, 327, 674, 1020, 1244]),
+  // Both modes share one rhythm: the same 94px gap between every pair of
+  // columns, and the columns together fill PLANE_W exactly.
+  user: layout(["u", "a", "r", "p", "i"], [0, 308, 620, 932, 1232]),
+  app: layout(["p", "a", "r", "u", "i"], [0, 300, 612, 924, 1232]),
 };
 /** Every card is the same height, so the lists line up row for row and show the same number of cards. */
-export const ROW_H: Record<PlaneColumn, number> = { u: 56, a: 56, r: 56, p: 56, i: 56 };
+export const ROW_H: Record<PlaneColumn, number> = { u: 64, a: 64, r: 64, p: 64, i: 64 };
 /** The scroll lists start below the column titles. */
 export const USER_LIST_TOP = 56;
 /**
@@ -116,7 +115,7 @@ export const USER_LIST_TOP = 56;
  * top padding and the same gap between cards, rows stacked from the top.
  */
 const LIST_PAD = 8;
-const LIST_GAP = 16;
+const LIST_GAP = 14;
 export type ListColumn = PlaneColumn;
 export const LIST_PITCH: Record<ListColumn, number> = {
   u: ROW_H.u + LIST_GAP,

@@ -2305,24 +2305,24 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   position: absolute; box-sizing: border-box; border: 1px solid; cursor: pointer; z-index: 4;
   transition: opacity 200ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
-.ip-node-user, .ip-node-app { border-radius: 10px; display: flex; align-items: center; gap: 9px; padding: 0 10px; }
-.ip-node-agent { border-radius: 12px; display: flex; align-items: center; gap: 10px; padding: 0 12px; }
-.ip-node-intent { border-radius: 10px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 12px; }
-.ip-node-text { min-width: 0; }
-.ip-node-name { font-size: 12.5px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ip-node-name.ip-display { font-family: var(--font-display); font-size: 13.5px; }
+.ip-node-user, .ip-node-app { border-radius: 11px; display: flex; align-items: center; gap: 12px; padding: 0 14px; }
+.ip-node-agent { border-radius: 12px; display: flex; align-items: center; gap: 12px; padding: 0 14px; }
+.ip-node-intent { border-radius: 11px; display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 0 16px; }
+.ip-node-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ip-node-name { font-size: 14px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ip-node-name.ip-display { font-family: var(--font-display); font-size: 14.5px; }
 .ip-node-user .ip-node-name, .ip-node-agent .ip-node-name { font-weight: 700; color: #0B0F17; }
-.ip-node-sub { font-size: 11px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ip-node-sub.ip-mono { font-size: 10.5px; }
-.ip-node-app .ip-node-sub.ip-mono { font-size: 10px; }
+.ip-node-sub { font-size: 12px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ip-node-sub.ip-mono { font-size: 11.5px; }
+.ip-node-app .ip-node-sub.ip-mono { font-size: 11px; }
 .ip-av {
-  width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; flex-shrink: 0;
-  font-family: var(--font-display); font-size: 11px; font-weight: 600;
+  width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0;
+  font-family: var(--font-display); font-size: 12px; font-weight: 600;
 }
 .ip-glyph { display: grid; place-items: center; flex-shrink: 0; }
-.ip-glyph-agent { width: 32px; height: 32px; border-radius: 8px; background: rgba(37,99,235,.08); color: #2563EB; }
+.ip-glyph-agent { width: 36px; height: 36px; border-radius: 9px; background: rgba(37,99,235,.08); color: #2563EB; }
 .ip-intent-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.ip-intent-meta { display: flex; align-items: center; gap: 6px; padding-left: 15px; font-family: var(--font-mono); font-size: 10px; white-space: nowrap; overflow: hidden; }
+.ip-intent-meta { display: flex; align-items: center; gap: 6px; padding-left: 15px; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; overflow: hidden; }
 .ip-intent-gate {
   position: absolute; box-sizing: border-box; z-index: 2; border-radius: 12px;
   border: 1.5px dashed rgba(15,32,70,.22); background: rgba(255,255,255,.7);
@@ -2473,6 +2473,9 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 /* Detail box: its own card under the plane. A fixed height range so loading or swapping
    content scrolls inside the box instead of moving the page. */
 .ip-detail { margin-top: 16px; min-height: 280px; max-height: 720px; overflow-y: auto; }
+/* Text in the box reads one step larger than the rest of the page. Every rule inside it is
+   set in px, so the contents scale as a whole rather than resizing each rule by hand. */
+.ip-detail > * { zoom: 1.08; }
 .ip-trace { padding: 16px 20px 18px; }
 /* Detail box tabs: buttons styled as .tab, pinned to the top while the box scrolls. */
 .ip-detail-tabs { position: sticky; top: 0; z-index: 1; background: var(--bg-1); border-radius: 14px 14px 0 0; }

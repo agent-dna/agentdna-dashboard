@@ -125,26 +125,27 @@ const listRowBox = (n: PlaneNode): CSSProperties => ({
 });
 /** Edges below this volume collapse to a small dot instead of a count pill. */
 const PILL_THRESHOLD = 10;
-/**
- * Security gates on the user-first plane, each a band in the gap between two columns: COCA
- * (identity & integrity) on every hop; CBAC (policy authorization) and Whitelisting (agent
- * approved, not revoked) on agent → app calls. Gates that share a gap sit side by side, in
- * the order they're evaluated.
- */
-type GateKind = "coca" | "cbac" | "whitelist";
-const USER_GATES: { kind: GateKind; from: PlaneColumn; to: PlaneColumn; title: string }[] = [
-  { kind: "coca", from: "u", to: "a", title: "COCA · verifies identity & integrity on user → agent hops" },
-  { kind: "coca", from: "a", to: "r", title: "COCA · verifies identity & integrity on agent → agent hops" },
-  { kind: "coca", from: "r", to: "p", title: "COCA · verifies identity & integrity on agent → app hops" },
-  { kind: "cbac", from: "r", to: "p", title: "CBAC · policy authorization on agent → app calls" },
-  { kind: "whitelist", from: "r", to: "p", title: "Whitelisting · the calling agent is approved and not revoked" },
-];
-const GATE_NAME: Record<GateKind, string> = { coca: "COCA", cbac: "CBAC", whitelist: "Whitelist" };
-const GATE_VERB: Record<GateKind, string> = { coca: "VERIFY", cbac: "AUTHORIZE", whitelist: "APPROVED" };
-const GATE_ICON: Record<GateKind, "shield" | "key" | "check"> = { coca: "shield", cbac: "key", whitelist: "check" };
-const GATE_W = 60;
-/** Space between gates that share a gap — the same as between a gate and a column (see LAYOUTS). */
-const GATE_GAP = 18;
+// Gates hidden for now — restore with the gates calculation and render in InteractionPlane.
+// /**
+//  * Security gates on the user-first plane, each a band in the gap between two columns: COCA
+//  * (identity & integrity) on every hop; CBAC (policy authorization) and Whitelisting (agent
+//  * approved, not revoked) on agent → app calls. Gates that share a gap sit side by side, in
+//  * the order they're evaluated.
+//  */
+// type GateKind = "coca" | "cbac" | "whitelist";
+// const USER_GATES: { kind: GateKind; from: PlaneColumn; to: PlaneColumn; title: string }[] = [
+//   { kind: "coca", from: "u", to: "a", title: "COCA · verifies identity & integrity on user → agent hops" },
+//   { kind: "coca", from: "a", to: "r", title: "COCA · verifies identity & integrity on agent → agent hops" },
+//   { kind: "coca", from: "r", to: "p", title: "COCA · verifies identity & integrity on agent → app hops" },
+//   { kind: "cbac", from: "r", to: "p", title: "CBAC · policy authorization on agent → app calls" },
+//   { kind: "whitelist", from: "r", to: "p", title: "Whitelisting · the calling agent is approved and not revoked" },
+// ];
+// const GATE_NAME: Record<GateKind, string> = { coca: "COCA", cbac: "CBAC", whitelist: "Whitelist" };
+// const GATE_VERB: Record<GateKind, string> = { coca: "VERIFY", cbac: "AUTHORIZE", whitelist: "APPROVED" };
+// const GATE_ICON: Record<GateKind, "shield" | "key" | "check"> = { coca: "shield", cbac: "key", whitelist: "check" };
+// const GATE_W = 60;
+// /** Space between gates that share a gap — the same as between a gate and a column (see LAYOUTS). */
+// const GATE_GAP = 18;
 
 const COLUMN_LABEL: Record<PlaneColumn, string> = { u: "USER", a: "AGENT", r: "PEER AGENTS", p: "APP", i: "INTENT" };
 
@@ -533,20 +534,21 @@ export function InteractionPlane() {
       return { e, a, d: `M${x1} ${y1} C${cx} ${y1} ${cx} ${y2} ${x2} ${y2}`, cx: bez(x1, cx, cx, x2), my: bez(y1, y1, y2, y2), vis, offscreen };
     });
 
-  /** User-first gates, centred in their gap; a gate lights up when a highlighted line crosses it. */
-  const gates = userMode
-    ? USER_GATES.map((g) => {
-        const shared = USER_GATES.filter((x) => x.from === g.from && x.to === g.to);
-        const k = shared.indexOf(g);
-        const mid = (COLUMNS[g.from][1] + COLUMNS[g.to][0]) / 2;
-        const span = shared.length * GATE_W + (shared.length - 1) * GATE_GAP;
-        const [i, j] = [ORDER.indexOf(g.from), ORDER.indexOf(g.to)];
-        const lit = edgeGeometry.some(
-          ({ e, vis }) => vis === "lit" && ORDER.indexOf(columnOf(e.from)) <= i && ORDER.indexOf(columnOf(e.to)) >= j,
-        );
-        return { ...g, left: mid - span / 2 + k * (GATE_W + GATE_GAP), lit };
-      })
-    : [];
+  // Gates hidden for now — restore this along with the <GateBand> render below.
+  // /** User-first gates, centred in their gap; a gate lights up when a highlighted line crosses it. */
+  // const gates = userMode
+  //   ? USER_GATES.map((g) => {
+  //       const shared = USER_GATES.filter((x) => x.from === g.from && x.to === g.to);
+  //       const k = shared.indexOf(g);
+  //       const mid = (COLUMNS[g.from][1] + COLUMNS[g.to][0]) / 2;
+  //       const span = shared.length * GATE_W + (shared.length - 1) * GATE_GAP;
+  //       const [i, j] = [ORDER.indexOf(g.from), ORDER.indexOf(g.to)];
+  //       const lit = edgeGeometry.some(
+  //         ({ e, vis }) => vis === "lit" && ORDER.indexOf(columnOf(e.from)) <= i && ORDER.indexOf(columnOf(e.to)) >= j,
+  //       );
+  //       return { ...g, left: mid - span / 2 + k * (GATE_W + GATE_GAP), lit };
+  //     })
+  //   : [];
 
   const hoveredEdge = edgeGeometry.find((g) => g.e.id === hoverEdge);
   const tooltip = hoveredEdge ? { x: hoveredEdge.cx, y: hoveredEdge.my, edge: hoveredEdge.e } : null;
@@ -695,9 +697,11 @@ export function InteractionPlane() {
 
         <div ref={wrapRef} className="ip-canvas-wrap" style={{ height: Math.round(planeH * scale + 40) }}>
           <div className="ip-canvas" style={{ width: PLANE_W, height: planeH, transform: `scale(${scale})` }}>
+            {/* Gates hidden for now.
             {gates.map((g) => (
               <GateBand key={`${g.kind}:${g.from}${g.to}`} left={g.left} height={planeH} kind={g.kind} lit={g.lit} title={g.title} />
             ))}
+            */}
             {ORDER.map((c, k) => (
               <ColumnLabel key={c} span={COLUMNS[c]} n={`0${k + 1} · ${COLUMN_LABEL[c]}`} hint={columnHint(c)} />
             ))}
@@ -806,7 +810,7 @@ export function InteractionPlane() {
                     title={n.sub}
                     {...nodeHandlers(n.id)}
                   >
-                    <div className="ip-av" style={{ background: bg, color: fg }}><UserRound size={16} strokeWidth={2} /></div>
+                    <div className="ip-av" style={{ background: bg, color: fg }}><UserRound size={18} strokeWidth={2} /></div>
                     <div className="ip-node-text">
                       <div className="ip-node-name" style={{ fontFamily: n.svc ? "var(--font-mono)" : undefined }}>{n.name}</div>
                       <div className="ip-node-sub">{n.sub}</div>
@@ -841,7 +845,7 @@ export function InteractionPlane() {
                   title={n.ref}
                   {...nodeHandlers(n.id)}
                 >
-                  <div className="ip-glyph ip-glyph-agent"><Bot size={18} strokeWidth={1.8} /></div>
+                  <div className="ip-glyph ip-glyph-agent"><Bot size={20} strokeWidth={1.8} /></div>
                   <div className="ip-node-text">
                     <div className="ip-node-name ip-display">{n.name}</div>
                     <div className="ip-node-sub ip-mono">{n.sub}</div>
@@ -867,7 +871,7 @@ export function InteractionPlane() {
                   title={n.ref}
                   {...nodeHandlers(n.id)}
                 >
-                  <div className="ip-glyph ip-glyph-agent"><Bot size={18} strokeWidth={1.8} /></div>
+                  <div className="ip-glyph ip-glyph-agent"><Bot size={20} strokeWidth={1.8} /></div>
                   <div className="ip-node-text">
                     <div className="ip-node-name ip-display">{n.name}</div>
                     <div className="ip-node-sub ip-mono">{n.sub}</div>
@@ -920,7 +924,7 @@ export function InteractionPlane() {
                   title={n.ref}
                   {...nodeHandlers(n.id)}
                 >
-                  <AppIcon name={n.name} size={30} />
+                  <AppIcon name={n.name} size={34} />
                   <div className="ip-node-text">
                     <div className="ip-node-name">{n.name}</div>
                     <div className="ip-node-sub ip-mono">{n.sub}</div>
@@ -1065,20 +1069,21 @@ function ColumnLabel({ span, n, hint }: { span: [number, number]; n: string; hin
   );
 }
 
-/** A gate band between two columns: name and what it does at the top, full canvas height. */
-function GateBand({ left, height, kind, lit, title }: { left: number; height: number; kind: GateKind; lit: boolean; title: string }) {
-  return (
-    <div className={`ip-gate ip-gate-${kind}${lit ? " lit" : ""}`} style={{ left, width: GATE_W, height }} title={title}>
-      <div className="ip-gate-card">
-        <div className="ip-gate-head">
-          <Icon name={GATE_ICON[kind]} size={12} />
-          <span className="ip-gate-name">{GATE_NAME[kind]}</span>
-        </div>
-        <div className="ip-gate-verb">{GATE_VERB[kind]}</div>
-      </div>
-    </div>
-  );
-}
+// Gates hidden for now — restore with the gates calculation and render in InteractionPlane.
+// /** A gate band between two columns: name and what it does at the top, full canvas height. */
+// function GateBand({ left, height, kind, lit, title }: { left: number; height: number; kind: GateKind; lit: boolean; title: string }) {
+//   return (
+//     <div className={`ip-gate ip-gate-${kind}${lit ? " lit" : ""}`} style={{ left, width: GATE_W, height }} title={title}>
+//       <div className="ip-gate-card">
+//         <div className="ip-gate-head">
+//           <Icon name={GATE_ICON[kind]} size={12} />
+//           <span className="ip-gate-name">{GATE_NAME[kind]}</span>
+//         </div>
+//         <div className="ip-gate-verb">{GATE_VERB[kind]}</div>
+//       </div>
+//     </div>
+//   );
+// }
 
 /** Loading, error or empty note over a column the selection repopulates. */
 function ColumnNote({
