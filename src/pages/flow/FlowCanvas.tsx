@@ -167,14 +167,16 @@ function Packet({ a, c, b, blocked, duration }: { a: Point; c: Point; b: Point; 
     let start: number | null = null;
     const el = ref.current;
     if (!el) return;
+    // One run per beat: the packet crosses the edge once and stays gone, so
+    // each interaction reads as a single send rather than a repeating loop.
     const tick = (now: number) => {
       if (start == null) start = now;
-      const t = ((now - start) % duration) / duration;
+      const t = Math.min(1, (now - start) / duration);
       const p = qbez(a, c, b, blocked ? Math.min(t, 0.62) : t);
       el.style.transform = `translate(${p.x}px, ${p.y}px)`;
       const fade = t < 0.08 ? t / 0.08 : t > 0.88 ? Math.max(0, (1 - t) / 0.12) : 1;
       el.style.opacity = String(blocked && t > 0.6 ? 0 : fade);
-      raf = requestAnimationFrame(tick);
+      if (t < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -531,7 +533,7 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
               c={e.c}
               b={e.b}
               blocked={e.threat}
-              duration={1150}
+              duration={1400}
             />
           ))}
 
@@ -542,7 +544,7 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
             c={e.c}
             b={e.b}
             blocked={e.blocked}
-            duration={1150}
+            duration={1400}
           />
         ))}
       </div>
