@@ -80,7 +80,7 @@ export function IntentsPage() {
       label: "Intent",
       sortFn: (a, b) => a.id.localeCompare(b.id),
       render: (r) => (
-        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)" }} />
+        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {
@@ -88,7 +88,7 @@ export function IntentsPage() {
       label: "Initiator",
       sortFn: (a, b) => a.initiator.name.localeCompare(b.initiator.name),
       render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>
+        <span style={{ fontSize: 12.5, color: "var(--fg)", fontWeight: 600 }}>
           {resolveDisplayName(resolve, r.initiator)}
         </span>
       ),
@@ -98,7 +98,7 @@ export function IntentsPage() {
       label: "Interactions",
       sortFn: (a, b) => a.interactionsCount - b.interactionsCount,
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactionsCount}</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{r.interactionsCount}</span>
       ),
     },
     {
@@ -107,7 +107,7 @@ export function IntentsPage() {
       render: (r) => {
         const apps = r.appsInteracted || [];
         if (apps.length === 0) {
-          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
+          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12 }}>—</span>;
         }
         return (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -134,9 +134,9 @@ export function IntentsPage() {
       render: (r) => (
         <span
           style={{
-            fontSize: 11.5,
+            fontSize: 11,
             fontWeight: 700,
-            padding: "3px 9px",
+            padding: "3px 8px",
             borderRadius: 999,
             color: REVIEW_STATUS_STYLE[r.reviewStatus].color,
             background: REVIEW_STATUS_STYLE[r.reviewStatus].bg,
@@ -152,7 +152,7 @@ export function IntentsPage() {
       align: "right",
       sortFn: (a, b) => a.started - b.started,
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)" }}>
           {timeAgo(r.started)}
         </span>
       ),
@@ -161,7 +161,7 @@ export function IntentsPage() {
       key: "actions",
       label: "",
       align: "right",
-      width: 60,
+      width: 76,
       render: (r) => (
         <div className="row-actions">
           <button
@@ -221,12 +221,14 @@ export function IntentsPage() {
           </div>
         </div>
 
-        <DataTable
-          onRowClick={(r) => navigate(`/intents/${r.id}`)}
-          columns={cols}
-          rows={rows}
-          emptyText="No intents yet"
-        />
+        <div className="intents-table">
+          <DataTable
+            onRowClick={(r) => navigate(`/intents/${r.id}`)}
+            columns={cols}
+            rows={rows}
+            emptyText="No intents yet"
+          />
+        </div>
       </div>
     </div>
   );
