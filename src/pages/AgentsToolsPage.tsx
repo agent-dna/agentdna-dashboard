@@ -11,7 +11,6 @@ import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics, useHomeMetrics } f
 import { useAuth } from "../context/AuthContext";
 import { AppIcon } from "../components/AppIcon";
 import { EmptyAgentsState } from "../components/EmptyAgentsState";
-import { useDrawer } from "../context/DrawerContext";
 import { timeAgo } from "../lib/format";
 import { exportAgentsListPdf, exportToolsListPdf } from "../lib/exportListPdf";
 import type { Agent, Tool } from "../types";
@@ -37,7 +36,6 @@ export function AgentsToolsPage() {
   const toolsPageSize = toolsState.data.pageSize || 10;
   const { data: agentsAppsMetrics, loading: metricsLoading } = useAgentsAppsMetrics();
   const { data: homeMetrics, loading: homeMetricsLoading } = useHomeMetrics();
-  const { openDrawer } = useDrawer();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState<{ open: boolean; agent?: Agent }>({ open: false });
@@ -183,13 +181,14 @@ export function AgentsToolsPage() {
       render: (r) => (
         <div className="row-actions">
           <button
-            className="btn-mini at-btn"
+            className="btn-mini info at-btn"
             onClick={(e) => {
               e.stopPropagation();
-              openDrawer("tool", r);
+              navigate(`/tools/${encodeURIComponent(r.name)}`);
             }}
           >
-            Quick view
+            <Icon name="search" size={12} />
+            Inspect
           </button>
         </div>
       ),

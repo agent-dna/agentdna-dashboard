@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { Modal } from "../components/Modal";
@@ -9,7 +9,6 @@ import { Pagination } from "../components/Pagination";
 import { AppIcon } from "../components/AppIcon";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { IntentIdChip } from "../context/IntentNumbersContext";
-import { useResolveName, resolveDisplayName, useDirectoryLoading } from "../context/DirectoryContext";
 import { useDrawer } from "../context/DrawerContext";
 import { ThreatPill } from "../components/ThreatPill";
 import { SeverityPill } from "../components/SeverityPill";
@@ -200,7 +199,6 @@ export function HomePage() {
 
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
-  const resolve = useResolveName();
 
   const [bottomTab, setBottomTab] = useState<"intents" | "threats">("intents");
   const [intentsPage, setIntentsPage] = useState(1);
@@ -216,7 +214,8 @@ export function HomePage() {
   const [infoCard, setInfoCard] = useState<"interactions" | "agents" | "apps" | "intents" | null>(null);
 
   const homeState = useHomeMetrics();
-  const intentsState = useIntentsPaged(intentsPage);
+  // /intent-list as is: one call, no per-intent /interactions-list and no org directory.
+  const intentsState = useIntentsPaged(intentsPage, { enrich: false });
   const threatsListState = useThreatsListPaged(threatsPage);
   const { data: topThreats, error: topThreatsError } = useTopThreats();
   // Only the card's list is capped — the severity totals below still sum every code.
@@ -226,24 +225,6 @@ export function HomePage() {
   );
   const seriesState = useSeries(series);
   const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
-
-  // Belt-and-suspenders for the "Apps interacted" icons bug: enrichIntentApps
-  // (in api.ts) already awaits waitForDirectoryReady() before classifying
-  // tools vs agents, but if that ever loses the race anyway (e.g. a pathological
-  // slow load past its own backstop timeout), self-heal by refetching intents
-  // once the directory *actually* finishes loading, instead of requiring a
-  // manual page refresh. Only fires on the loading→loaded transition, not on
-  // every render, and not if the directory was already loaded when this page
-  // mounted (the common case when navigating here from elsewhere).
-  const directoryLoading = useDirectoryLoading();
-  const prevDirectoryLoading = useRef(directoryLoading);
-  useEffect(() => {
-    if (prevDirectoryLoading.current && !directoryLoading) {
-      intentsState.refetch();
-    }
-    prevDirectoryLoading.current = directoryLoading;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [directoryLoading]);
 
   const metrics = homeState.data;
   const intents = intentsState.data.items;
@@ -298,7 +279,7 @@ export function HomePage() {
       key: "initiator",
       label: "Initiator",
       render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(resolveDisplayName(resolve, r.initiator))}</span>
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(r.initiator.name)}</span>
       ),
     },
     {
@@ -309,22 +290,14 @@ export function HomePage() {
     {
       key: "apps",
       label: "Apps interacted",
-      render: (r) => {
-        const apps = r.appsInteracted || [];
-        if (apps.length === 0) {
-          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 13 }}>—</span>;
-        }
-        return (
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {apps.slice(0, 3).map((app) => (
-              <AppIcon key={app.id} name={resolveDisplayName(resolve, app)} size={20} />
-            ))}
-            {apps.length > 3 && (
-              <span style={{ fontSize: 13, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>+{apps.length - 3}</span>
-            )}
-          </div>
-        );
-      },
+      render: (r) =>
+        r.toolsInteracted > 0 ? (
+          <span style={{ fontSize: 13, color: "var(--fg-dim)", fontWeight: 600 }}>
+            {r.toolsInteracted} {r.toolsInteracted === 1 ? "app" : "apps"}
+          </span>
+        ) : (
+          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 13 }}>—</span>
+        ),
     },
     {
       key: "threats",
@@ -1624,11 +1597,11 @@ export function HomePage() {
             </div>
             <div className="kv" style={{ fontSize: 12.5 }}>
               <div className="k">Initiator</div>
-              <div className="v">{capitalizeFirst(resolveDisplayName(resolve, threatMessage.initiator))}</div>
+              <div className="v">{capitalizeFirst(threatMessage.initiator.name)}</div>
               {threatMessage.initiator.id !== threatMessage.target.id && (
                 <>
                   <div className="k">Interacted with</div>
-                  <div className="v">{capitalizeFirst(resolveDisplayName(resolve, threatMessage.target))}</div>
+                  <div className="v">{capitalizeFirst(threatMessage.target.name)}</div>
                 </>
               )}
               <div className="k">Intent</div>

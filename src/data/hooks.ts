@@ -63,11 +63,11 @@ export const useToolsPaged = (page = 1) =>
     [page],
   );
 export const useIntents = (page = 1) => useAsync<Intent[]>(() => api.fetchIntents(page), [], [page]);
-export const useIntentsPaged = (page = 1) =>
+export const useIntentsPaged = (page = 1, { enrich = true }: { enrich?: boolean } = {}) =>
   useAsync<api.PagedIntentsResult>(
-    () => api.fetchIntentsPaged(page),
+    () => api.fetchIntentsPaged(page, { enrich }),
     { items: [], total: 0, page: 1, totalPages: 1, pageSize: 10 },
-    [page],
+    [page, enrich],
   );
 export const useInteractions = (page = 1) => useAsync<Interaction[]>(() => api.fetchInteractions(page), [], [page]);
 export const useInteractionsPaged = (page = 1) =>

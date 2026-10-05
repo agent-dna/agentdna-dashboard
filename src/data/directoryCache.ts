@@ -67,9 +67,28 @@ export function resetDirectory() {
   });
 }
 
+// ── On-demand loading ────────────────────────────────────────────────────────
+// The directory walks every page of /agents-list, /tools-list and /users-list, so it is only
+// loaded once something needs it (a page resolving names, or api.ts classifying participants)
+// rather than on every page — the Home page, for one, never needs it.
+let loader: (() => void) | null = null;
+let requested = false;
+
+/** DirectoryProvider registers how to start a load; a request made before that is kept. */
+export function setDirectoryLoader(fn: (() => void) | null) {
+  loader = fn;
+  if (fn && requested) fn();
+}
+
+/** Ask for the directory to be loaded (idempotent; the provider ignores repeat requests). */
+export function requestDirectory() {
+  requested = true;
+  loader?.();
+}
+
 /**
  * Resolves once the org directory has completed its initial load — await
- * this before classifying participants.
+ * this before classifying participants. Starts the load if nothing has yet.
  *
  * markDirectoryReady() is *guaranteed* to fire eventually (DirectoryProvider's
  * fetchAllAgents/fetchAllTools/listAllUsers are all wrapped in .catch(), so
@@ -83,6 +102,7 @@ export function resetDirectory() {
  */
 export function waitForDirectoryReady(): Promise<void> {
   if (ready) return Promise.resolve();
+  requestDirectory();
   return Promise.race([
     readyPromise,
     new Promise<void>((resolve) =>

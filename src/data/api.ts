@@ -107,8 +107,18 @@ function mapInteraction(i: ApiInteraction): Interaction {
 
 // ============ Home ============
 
+/** In-flight /home-metrics requests by page: the sidebar badge and the Home page both ask on load. */
+const homeMetricsInFlight = new Map<number, Promise<HomeMetrics>>();
+
+/** GET /home-metrics. Callers asking while the same page is in flight share that request. */
 export function fetchHomeMetrics(page = 1): Promise<HomeMetrics> {
-  return apiRequest<HomeMetrics>("/home-metrics", { query: { page } });
+  const pending = homeMetricsInFlight.get(page);
+  if (pending) return pending;
+  const req = apiRequest<HomeMetrics>("/home-metrics", { query: { page } }).finally(() => {
+    homeMetricsInFlight.delete(page);
+  });
+  homeMetricsInFlight.set(page, req);
+  return req;
 }
 
 export function fetchPublicMetrics(): Promise<PublicMetrics> {
@@ -726,9 +736,15 @@ export interface PagedIntentsResult {
   pageSize: number;
 }
 
-export async function fetchIntentsPaged(page = 1): Promise<PagedIntentsResult> {
+/**
+ * One page of /intent-list. With `enrich` (the default), each intent also gets its apps from a
+ * per-intent /interactions-list call (see enrichIntentApps), which waits on the org directory.
+ * Pass `enrich: false` to take /intent-list as is: one call, with counts but no app names.
+ */
+export async function fetchIntentsPaged(page = 1, { enrich = true }: { enrich?: boolean } = {}): Promise<PagedIntentsResult> {
   const res = await apiRequest<PagedIntents>("/intent-list", { query: { page } });
-  const items = await Promise.all((res.intentsList || []).map(mapIntent).map(enrichIntentApps));
+  const mapped = (res.intentsList || []).map(mapIntent);
+  const items = enrich ? await Promise.all(mapped.map(enrichIntentApps)) : mapped;
   return {
     items,
     total: res.total || 0,

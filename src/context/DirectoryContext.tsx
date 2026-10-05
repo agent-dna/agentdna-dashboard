@@ -1,7 +1,14 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchAllAgents, fetchAllTools } from "../data/api";
 import { listAllUsers, type OrgUser } from "../api/users";
-import { setDirectorySnapshot, markDirectoryReady, resetDirectory, type DirectoryEntry } from "../data/directoryCache";
+import {
+  setDirectorySnapshot,
+  markDirectoryReady,
+  resetDirectory,
+  setDirectoryLoader,
+  requestDirectory,
+  type DirectoryEntry,
+} from "../data/directoryCache";
 import { useAuth } from "./AuthContext";
 import type { Agent, Tool } from "../types";
 
@@ -19,6 +26,9 @@ const Ctx = createContext<DirectoryContextValue | null>(null);
  * fetchAllAgents/fetchAllTools) and exposes a DID → { name, kind } lookup.
  * Loaded per signed-in identity: it reloads when a different user signs in and empties on
  * sign-out, since the page isn't reloaded between sessions and each user sees their own org.
+ * Loaded on demand: nothing is fetched until a component reads the directory (useDirectory and
+ * the hooks built on it) or api.ts awaits waitForDirectoryReady(). Pages that never resolve
+ * names, like Home, never pay for walking every agent, tool and user.
  * Used by interaction tables (and anywhere we render counterparty info) to
  * display real names instead of raw DIDs — and, via directoryCache, as the
  * source of truth for agent-vs-tool classification in api.ts.
@@ -31,12 +41,19 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState<{ session: string; agents: Agent[]; tools: Tool[]; users: OrgUser[] } | null>(null);
   const current = loaded && loaded.session === session ? loaded : null;
   const loading = session !== null && !current;
+  /** Set once anything asks for the directory; it then stays loaded for later sessions too. */
+  const [wanted, setWanted] = useState(false);
+
+  useEffect(() => {
+    setDirectoryLoader(() => setWanted(true));
+    return () => setDirectoryLoader(null);
+  }, []);
 
   useEffect(() => {
     // New user or signed out: drop the previous directory from the api.ts mirror and
     // make classification wait for this session's load.
     resetDirectory();
-    if (!session) return;
+    if (!session || !wanted) return;
     let cancelled = false;
     Promise.all([
       fetchAllAgents().catch((e) => {
@@ -67,7 +84,7 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [session]);
+  }, [session, wanted]);
 
   const map = useMemo(() => directoryMap(current?.agents ?? [], current?.tools ?? [], current?.users ?? []), [current]);
 
@@ -89,13 +106,15 @@ function directoryMap(agents: Agent[], tools: Tool[], users: OrgUser[]): Map<str
   return m;
 }
 
-/** Returns the DID → entry map (empty Map if no provider mounted). */
+/** Returns the DID → entry map (empty Map if no provider mounted, or until it loads). Starts the load. */
 export function useDirectory(): Map<string, DirectoryEntry> {
+  useEffect(requestDirectory, []);
   return useContext(Ctx)?.map ?? new Map<string, DirectoryEntry>();
 }
 
-/** True until the directory's initial fetchAllAgents/fetchAllTools/listAllUsers walk settles. */
+/** True until the directory's initial fetchAllAgents/fetchAllTools/listAllUsers walk settles. Starts the load. */
 export function useDirectoryLoading(): boolean {
+  useEffect(requestDirectory, []);
   return useContext(Ctx)?.loading ?? true;
 }
 
