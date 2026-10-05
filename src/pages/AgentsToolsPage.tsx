@@ -58,85 +58,71 @@ export function AgentsToolsPage() {
     {
       key: "name",
       label: "Agent",
-      width: "20%",
+      width: "28%",
       sortFn: (a, b) => a.name.localeCompare(b.name),
-      render: (r) => <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>,
+      render: (r) => (
+        <div className="at-name">
+          <span className={`at-av a${monogramTone(r.id || r.name)}`} aria-hidden>
+            {initials(r.name)}
+          </span>
+          <div className="at-name-text">
+            <div className="at-nm" title={r.name}>{r.name}</div>
+            <div className="at-sub at-did" title={r.id}>{shortDid(r.id)}</div>
+          </div>
+        </div>
+      ),
     },
     {
       key: "interactions",
       label: "Interactions",
       align: "right",
-      width: "15%",
+      width: "13%",
       sortFn: (a, b) => a.interactions - b.interactions,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
-      ),
+      render: (r) => <span className="at-num">{r.interactions.toLocaleString()}</span>,
+    },
+    {
+      key: "threats",
+      label: "Threats",
+      align: "right",
+      width: "11%",
+      sortFn: (a, b) => a.threats - b.threats,
+      render: (r) => <ThreatCount n={r.threats} />,
     },
     {
       key: "score",
       label: "Reliability",
-      align: "right",
-      width: "25%",
-      sortFn: (a, b) => a.score - b.score,
-      render: (r) => {
-        if (r.interactions <= 0) {
-          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
-        }
-        const pct = computeReliability(r.interactions, r.threats);
-        const color = pct < 70 ? "var(--threat)" : pct < 85 ? "var(--warn)" : "var(--safe)";
-        return (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color, minWidth: 40, textAlign: "right" }}>
-              {pct}
-            </span>
-            <div style={{ width: 80, height: 6, borderRadius: 999, background: "var(--bg-3)", overflow: "hidden", flexShrink: 0 }}>
-              <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: color, borderRadius: 999 }} />
-            </div>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-muted)", minWidth: 34, textAlign: "right" }}>
-              {Math.round(pct)}%
-            </span>
-          </div>
-        );
-      },
+      width: "20%",
+      sortFn: (a, b) => computeReliability(a.interactions, a.threats) - computeReliability(b.interactions, b.threats),
+      render: (r) => <ReliabilityBar interactions={r.interactions} threats={r.threats} />,
     },
     {
       key: "created",
       label: "Created",
       align: "right",
-      width: "15%",
+      width: "11%",
       sortFn: (a, b) => a.created - b.created,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-dim)" }}>{timeAgo(r.created)}</span>
-      ),
+      render: (r) => <span className="at-meta">{timeAgo(r.created)}</span>,
     },
-    // {
-    //   key: "connected",
-    //   label: "Apps Interacted",
-    //   align: "right",
-    //   sortFn: (a, b) => a.connected - b.connected,
-    //   render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.connected}</span>,
-    // },
     {
       key: "actions",
-      label: "Action",
+      label: "",
       align: "right",
-      width: "25%",
+      width: "17%",
       render: (r) => (
         <div className="row-actions" style={{ flexWrap: "nowrap" }}>
           <button
-            className="btn-mini danger"
-            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            className="btn-mini at-btn"
+            title={r.policy ? "Read this agent's policy" : "No policy uploaded"}
             onClick={(e) => {
               e.stopPropagation();
               setPolicyOpen(r);
             }}
           >
             <Icon name="eye" size={12} />
-            View Policy
+            Policy
           </button>
           <button
-            className="btn-mini info"
-            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            className="btn-mini info at-btn"
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/agents/${r.id}`);
@@ -154,13 +140,14 @@ export function AgentsToolsPage() {
     {
       key: "name",
       label: "App",
+      width: "34%",
       sortFn: (a, b) => a.name.localeCompare(b.name),
       render: (r) => (
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <AppIcon name={r.name} size={28} />
-          <div>
-            <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</div>
-            {r.provider && <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 1 }}>{r.provider}</div>}
+        <div className="at-name">
+          <AppIcon name={r.name} size={32} />
+          <div className="at-name-text">
+            <div className="at-nm" title={r.name}>{r.name}</div>
+            {r.provider && r.provider !== r.name && <div className="at-sub">{r.provider}</div>}
           </div>
         </div>
       ),
@@ -169,45 +156,50 @@ export function AgentsToolsPage() {
       key: "interactions",
       label: "Interactions",
       align: "right",
+      width: "15%",
       sortFn: (a, b) => a.interactions - b.interactions,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
-      ),
+      render: (r) => <span className="at-num">{r.interactions.toLocaleString()}</span>,
     },
     {
       key: "threats",
-      label: "Incidents",
+      label: "Threats",
       align: "right",
+      width: "13%",
       sortFn: (a, b) => a.threats - b.threats,
-      render: (r) =>
-        r.threats > 0 ? (
-          <span className="chip threat" style={{ fontVariantNumeric: "tabular-nums" }}>
-            {r.threats}
-          </span>
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>
-        ),
+      render: (r) => <ThreatCount n={r.threats} />,
+    },
+    {
+      key: "score",
+      label: "Reliability",
+      width: "24%",
+      sortFn: (a, b) => computeReliability(a.interactions, a.threats) - computeReliability(b.interactions, b.threats),
+      render: (r) => <ReliabilityBar interactions={r.interactions} threats={r.threats} />,
     },
     {
       key: "actions",
       label: "",
       align: "right",
-      width: 60,
+      width: "14%",
       render: (r) => (
         <div className="row-actions">
           <button
-            className="btn-mini"
+            className="btn-mini at-btn"
             onClick={(e) => {
               e.stopPropagation();
               openDrawer("tool", r);
             }}
           >
-            View
+            Quick view
           </button>
         </div>
       ),
     },
   ];
+
+  // Tab counts come from the same metrics as the cards above; the paged lists only know
+  // their current page. Fall back to the list's own total until the metrics arrive.
+  const agentsTabCount = countLoading ? agentsTotal : agentCount;
+  const appsTabCount = noAgents ? 0 : metricsLoading ? toolsTotal : m.totalApps || toolsTotal;
 
   return (
     <div className="page">
@@ -291,14 +283,14 @@ export function AgentsToolsPage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            {([{ key: "agents", label: "Agents", count: agents.length }, { key: "tools", label: "Apps", count: tools.length }] as const).map((t) => (
+            {([{ key: "agents", label: "Agents", count: agentsTabCount }, { key: "tools", label: "Apps", count: appsTabCount }] as const).map((t) => (
               <div
                 key={t.key}
                 className={`tab ${tab === t.key ? "active" : ""}`}
                 onClick={() => setTab(t.key as Tab)}
               >
                 {t.label}
-                <span className="pill">{t.count}</span>
+                <span className="pill">{t.count.toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -318,13 +310,15 @@ export function AgentsToolsPage() {
             rows={rows as Agent[]}
             onRowClick={(r) => navigate(`/agents/${r.id}`)}
             emptyText="No agents yet"
+            alignCells
           />
         ) : (
           <DataTable
             columns={toolCols}
             rows={rows as Tool[]}
             onRowClick={(r) => navigate(`/tools/${encodeURIComponent(r.name)}`)}
-            emptyText="No tools yet"
+            emptyText="No apps yet"
+            alignCells
           />
         )}
       </div>
@@ -363,6 +357,55 @@ function computeReliability(interactions: number, threats: number): number {
   if (!interactions || interactions <= 0) return 0;
   const pct = ((interactions - threats) / interactions) * 100;
   return Math.max(0, Math.round(pct * 100) / 100);
+}
+
+/** Clean share of traffic as a bar; the unfilled part is the flagged share, tinted red. */
+function ReliabilityBar({ interactions, threats }: { interactions: number; threats: number }) {
+  if (interactions <= 0) return <span className="at-meta">No traffic yet</span>;
+  const pct = computeReliability(interactions, threats);
+  const band = pct < 70 ? "low" : pct < 85 ? "mid" : "high";
+  const clean = Math.max(0, interactions - threats);
+  return (
+    <div
+      className={`at-rel ${band}`}
+      title={`${clean.toLocaleString()} of ${interactions.toLocaleString()} interactions passed without a threat`}
+    >
+      <div className="at-rel-track">
+        <div className="at-rel-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+      <span className="at-rel-pct">{pct % 1 === 0 ? pct : pct.toFixed(1)}%</span>
+    </div>
+  );
+}
+
+function ThreatCount({ n }: { n: number }) {
+  return n > 0 ? (
+    <span className="at-threats">{n.toLocaleString()}</span>
+  ) : (
+    <span className="at-meta">None</span>
+  );
+}
+
+function initials(name: string): string {
+  const parts = name.split(/[\s._-]+/).filter(Boolean);
+  const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2);
+  return letters.toUpperCase() || "?";
+}
+
+/** One of the five avatar tones (.at-av.a1…a5), stable per agent. */
+function monogramTone(key: string): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return (h % 5) + 1;
+}
+
+/** did:method:abcdef…7890 — enough to tell agents apart; the full DID is in the tooltip. */
+function shortDid(id: string): string {
+  if (id.length <= 24) return id;
+  const lastColon = id.lastIndexOf(":");
+  const prefix = lastColon > 0 && lastColon < 16 ? id.slice(0, lastColon + 1) : "";
+  const key = id.slice(prefix.length);
+  return `${prefix}${key.slice(0, 6)}…${key.slice(-4)}`;
 }
 
 interface VolumeRow {
