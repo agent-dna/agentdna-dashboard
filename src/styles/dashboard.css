@@ -1377,32 +1377,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 /* Left: hierarchy */
 .ti-tree { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--bg-1); }
 .ti-tree-tools { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
-.ti-search {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 8px 0 10px;
-  border-radius: 8px; border: 1px solid var(--line); background: var(--bg-0); color: var(--fg-muted);
-  transition: border-color 120ms, box-shadow 120ms;
-}
-.ti-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.10); }
-.ti-search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font: 500 12.5px var(--font-body); color: var(--fg); }
-.ti-search-clear { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; border: none; background: var(--bg-2); color: var(--fg-muted); cursor: pointer; }
-/* Filter chips */
-.ti-filters { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 12px 10px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
-.ti-filter {
-  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 5px 0 9px; border-radius: 999px;
-  border: 1px solid var(--line); background: var(--bg-1); cursor: pointer;
-  font: 600 11px var(--font-body); color: var(--fg-dim);
-  transition: background 120ms, border-color 120ms, color 120ms;
-}
-.ti-filter .n {
-  min-width: 18px; height: 16px; padding: 0 5px; border-radius: 999px; display: grid; place-items: center;
-  font: 700 9.5px var(--font-mono); background: var(--bg-2); color: var(--fg-muted);
-}
-.ti-filter:hover { border-color: var(--line-strong); color: var(--fg); }
-.ti-filter.active { background: var(--fg); border-color: var(--fg); color: #fff; }
-.ti-filter.active .n { background: rgba(255,255,255,0.18); color: #fff; }
-.ti-filter.blk .n { background: rgba(220,38,38,0.10); color: var(--threat); }
-.ti-filter.blk.active { background: var(--threat); border-color: var(--threat); }
-.ti-filter.blk.active .n { background: rgba(255,255,255,0.2); color: #fff; }
+.ti-tree-count { flex: 1; min-width: 0; font: 600 12px var(--font-body); color: var(--fg-dim); }
 
 .ti-tree-list { flex: 1; min-height: 0; overflow: auto; padding: 8px 8px 14px; }
 .ti-tree-empty { padding: 24px 12px; text-align: center; font: 500 12px var(--font-body); color: var(--fg-muted); }
@@ -1425,8 +1400,8 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ti-node.root.sel { background: rgba(37,99,235,0.06); border-color: rgba(37,99,235,0.35); box-shadow: none; }
 .ti-node.root .ti-kind { width: 28px; height: 28px; border-radius: 8px; margin-left: 0; }
 .ti-node.root .ti-name { font: 700 13px var(--font-display); letter-spacing: -0.01em; }
-.ti-node.root .ti-span-info .si-label { color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 9.5px; font-weight: 600; }
-.ti-root-status { align-self: center; flex-shrink: 0; padding: 3px 8px; border-radius: 6px; font: 700 9.5px var(--font-mono); letter-spacing: 0.06em; }
+.ti-node.root .ti-span-info .si-label { color: var(--fg-muted); font: 500 11px var(--font-body); }
+.ti-root-status { align-self: center; flex-shrink: 0; padding: 3px 8px; border-radius: 6px; font: 600 11px var(--font-body); }
 .ti-root-status.ok { color: var(--safe); background: rgba(5,150,105,0.10); }
 .ti-root-status.blocked { color: var(--threat); background: rgba(220,38,38,0.10); }
 
@@ -1453,7 +1428,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ti-node-main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 0; }
 .ti-name { font: 600 12.5px var(--font-body); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 120ms; }
 .ti-span-info { display: flex; align-items: center; gap: 7px; font: 500 10.5px var(--font-mono); color: var(--fg-muted); min-width: 0; }
-.ti-span-info .si-level { flex-shrink: 0; padding: 0 5px; border-radius: 4px; font: 700 9px/15px var(--font-mono); }
+.ti-span-info .si-hop { flex-shrink: 0; padding: 0 6px; border-radius: 4px; font: 700 10px/16px var(--font-mono); color: var(--fg-dim); background: var(--bg-2); border: 1px solid var(--line); }
 .ti-span-info .si-label { color: var(--fg-dim); }
 .ti-span-info .si-label.blk { color: var(--threat); font-weight: 700; }
 .ti-span-info .si-count { color: var(--fg-faint); white-space: nowrap; }
@@ -1484,53 +1459,37 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ti-d-kind { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; }
 .ti-d-title { min-width: 0; }
 .ti-d-title .nm { font: 700 19px var(--font-display); color: var(--fg); letter-spacing: -0.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ti-d-title .sub { font: 600 9.5px var(--font-mono); color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 1px; }
-.ti-d-status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font: 700 10px var(--font-mono); letter-spacing: 0.06em; padding: 5px 10px; border-radius: 7px; flex-shrink: 0; }
+.ti-d-status { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font: 600 12.5px var(--font-body); padding: 6px 11px; border-radius: 8px; flex-shrink: 0; }
 .ti-d-status .d { width: 7px; height: 7px; border-radius: 50%; }
 .ti-d-status.ok { color: var(--safe); background: rgba(5,150,105,0.10); }
 .ti-d-status.ok .d { background: var(--safe); }
 .ti-d-status.blocked { color: var(--threat); background: rgba(220,38,38,0.10); }
 .ti-d-status.blocked .d { background: var(--threat); animation: pulse 1.8s ease-in-out infinite; }
 
-.ti-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 22px 12px; flex-shrink: 0; }
-.ti-chip {
-  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 5px 10px; border-radius: 7px;
-  background: var(--bg-2); border: 1px solid var(--line); cursor: default;
-  font: 600 11.5px var(--font-mono); color: var(--fg);
-  transition: background 120ms, border-color 120ms;
-}
-.ti-chip b { font: 600 11px var(--font-body); color: var(--fg-dim); }
-.ti-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ti-chip svg { opacity: 0.6; flex-shrink: 0; }
-.ti-chip.dark { background: #0F172A; border-color: #0F172A; color: #F1F5F9; }
-.ti-chip.dark b { color: #CBD5E1; }
-.ti-chip.copyable { cursor: pointer; }
-.ti-chip.copyable:hover { border-color: var(--accent); }
-.ti-chip.dark.copyable:hover { background: #1E293B; border-color: #1E293B; }
-
-.ti-tabs {
-  display: flex; align-items: flex-end; gap: 22px; padding: 0 22px; flex-shrink: 0;
-  border-bottom: 1px solid var(--line);
-}
-.ti-tabs > button {
-  position: relative; padding: 10px 0 11px; border: none; background: none; cursor: pointer;
-  font: 600 13px var(--font-body); color: var(--fg-muted); transition: color 120ms;
-}
-.ti-tabs > button:hover { color: var(--fg); }
-.ti-tabs > button.active { color: var(--fg); }
-.ti-tabs > button.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2.5px; border-radius: 2px; background: var(--accent); }
-.ti-seg { margin: 0 0 7px auto; display: inline-flex; padding: 2px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); }
+.ti-seg { margin: 0; display: inline-flex; padding: 2px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); }
 .ti-seg button {
   padding: 4px 10px; border-radius: 6px; border: none; background: transparent; cursor: pointer;
   font: 600 11.5px var(--font-body); color: var(--fg-muted); transition: background 120ms, color 120ms;
 }
 .ti-seg button.active { background: var(--bg-1); color: var(--fg); box-shadow: 0 1px 2px rgba(15,32,70,0.10); }
 
-.ti-d-scroll { flex: 1; min-height: 0; overflow: auto; padding: 16px 22px 24px; display: flex; flex-direction: column; gap: 18px; }
-.ti-payload { display: flex; flex-direction: column; }
-.ti-payload-head { display: flex; align-items: center; margin-bottom: 8px; }
-.ti-payload-head .lbl { font: 700 14px var(--font-display); color: var(--fg); letter-spacing: -0.01em; }
-.ti-copy { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font: 500 11.5px var(--font-body); color: var(--fg-muted); background: none; border: none; cursor: pointer; padding: 3px 7px; border-radius: 6px; transition: color 120ms, background 120ms; }
+.ti-d-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 22px 24px; display: flex; flex-direction: column; gap: 18px; }
+
+/* The selected interaction's ID: the one value people copy from here. */
+.ti-id {
+  display: flex; align-items: center; gap: 10px; margin: 12px 22px 0; padding: 8px 12px; min-width: 0;
+  border-radius: 9px; border: 1px solid var(--line); background: var(--bg-0); cursor: pointer; text-align: left;
+  color: var(--fg-muted); transition: border-color 120ms;
+}
+.ti-id:hover { border-color: var(--accent); color: var(--accent); }
+.ti-id:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ti-id .k { flex-shrink: 0; font: 600 11.5px var(--font-body); color: var(--fg-dim); }
+.ti-id .v { flex: 1; min-width: 0; font: 500 12px var(--font-mono); color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Raw data controls: Tree/JSON and copy. */
+.ti-raw-bar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 22px 10px; flex-shrink: 0; }
+.ti-seg button:focus-visible, .ti-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ti-copy { display: inline-flex; align-items: center; gap: 5px; font: 500 11.5px var(--font-body); color: var(--fg-muted); background: none; border: none; cursor: pointer; padding: 3px 7px; border-radius: 6px; transition: color 120ms, background 120ms; }
 .ti-copy:hover { color: var(--accent); background: var(--bg-2); }
 .ti-json, .ti-pre {
   margin: 0; padding: 12px 14px; border-radius: 10px;
@@ -1539,14 +1498,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 }
 .ti-pre { white-space: pre-wrap; word-break: break-word; }
 .ti-pre.json { color: #1E3A8A; }
-.ti-payload.out .ti-json, .ti-payload.out .ti-pre { background: #F3FBF6; border-color: rgba(5,150,105,0.18); }
-.ti-payload.out.blk .ti-json, .ti-payload.out.blk .ti-pre { background: #FFF6F6; border-color: rgba(220,38,38,0.2); }
 .ti-none { padding: 14px; border-radius: 10px; border: 1px dashed var(--line-strong); font: 500 12px var(--font-body); color: var(--fg-muted); }
-.ti-more {
-  margin-left: 8px; padding: 0; border: none; background: none; cursor: pointer;
-  font: 500 11.5px var(--font-mono); color: var(--fg-muted); text-decoration: underline; text-underline-offset: 2px;
-}
-.ti-more:hover { color: var(--accent); }
 
 /* ============ Envelope JSON tree ============ */
 .agd-json-row {

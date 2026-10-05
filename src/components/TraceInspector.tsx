@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { FlowTrace, TraceSpan } from "../pages/flow/flowData";
 import { interactionRawData } from "../lib/format";
+import { parseInteractionId } from "../lib/interactionBranch";
 import type { Interaction } from "../types";
 import { Icon, type IconName } from "./Icon";
 
@@ -26,18 +27,6 @@ function spanKind(s: TraceSpan): string {
   return s.kind;
 }
 
-function tryParse(s: string): unknown {
-  try { return JSON.parse(s); } catch { return s; }
-}
-
-/** `0x1a2b3c4d5e6f7c9d` → `0x1a2b…7c9d` */
-function truncateMiddle(value: string, max: number): string {
-  if (!value || value.length <= max) return value;
-  const head = Math.ceil((max - 1) * 0.6);
-  const tail = max - 1 - head;
-  return `${value.slice(0, head)}…${value.slice(-tail)}`;
-}
-
 function useCopy() {
   const [copied, setCopied] = useState<string | null>(null);
   const copy = (key: string, text: string) => {
@@ -49,7 +38,11 @@ function useCopy() {
 }
 
 
-// ─── Collapsible JSON tree (light theme) ──────────────────────────────────────
+// ─── Raw data views ───────────────────────────────────────────────────────────
+//
+// Both views show the value exactly as received: every key in its original order (null, "",
+// [] and {} included), strings in full and JSON-escaped. The JSON view is the exact text the
+// Copy button copies.
 
 const INDENT = 16;
 const ROW = { lineHeight: "22px" } as const;
@@ -62,23 +55,19 @@ const LEVELS = ["#2563EB", "#7C3AED", "#0D9488", "#C2410C", "#DB2777"];
 const levelColor = (depth: number) => LEVELS[depth % LEVELS.length];
 /** `#RRGGBB` + alpha 0..1 → `#RRGGBBAA` */
 const alpha = (hex: string, a: number) => hex + Math.round(a * 255).toString(16).padStart(2, "0");
-/** Payloads run to several KB; show a head and let the reader opt into the rest. */
-const STRING_PREVIEW = 220;
 
 const C = {
   string: "#0F172A",
   number: "#047857",
   bool: "#C2410C",
   null: "#94A3B8",
+  key: "#1E3A8A",
+  punct: "#64748B",
 };
 
 function JsonChildren({ children, closing, color }: { children: React.ReactNode; closing: string; color: string }) {
   return (
-    <div style={{
-      paddingLeft: INDENT,
-      marginLeft: 5,
-      borderLeft: `2px solid ${alpha(color, 0.45)}`,
-    }}>
+    <div style={{ paddingLeft: INDENT, marginLeft: 5, borderLeft: `2px solid ${alpha(color, 0.45)}` }}>
       {children}
       <div style={{ ...ROW, color, fontWeight: 700, marginLeft: -INDENT + 4 }}>{closing}</div>
     </div>
@@ -102,31 +91,9 @@ function Twisty({ open, hidden, color }: { open: boolean; hidden: boolean; color
   );
 }
 
-/** String leaf with an expand affordance for long values. */
-function JsonString({ labelEl, value }: { labelEl: React.ReactNode; value: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const long = value.length > STRING_PREVIEW;
-  const shown = long && !expanded ? value.slice(0, STRING_PREVIEW) : value;
-  return (
-    <div className="agd-json-row" style={{ ...ROW, wordBreak: "break-word", paddingLeft: 16 }}>
-      {labelEl}
-      <span style={{ color: C.string }}>&quot;{shown}{long && !expanded ? "…" : ""}&quot;</span>
-      {long && (
-        <button type="button" className="ti-more" onClick={() => setExpanded((e) => !e)}>
-          {expanded ? "collapse" : `expand (${(value.length - STRING_PREVIEW).toLocaleString()} more characters)`}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function JsonNode({ label, value, depth = 0, defaultOpen = true }: {
-  label?: string;
-  value: unknown;
-  depth?: number;
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
+function JsonNode({ label, value, depth = 0 }: { label?: string; value: unknown; depth?: number }) {
+  // Three levels open: an envelope, its parent_envelope list, and the parent inside it.
+  const [open, setOpen] = useState(depth < 3);
   const color = levelColor(depth);
   const isBranch = value !== null && typeof value === "object";
 
@@ -135,92 +102,84 @@ function JsonNode({ label, value, depth = 0, defaultOpen = true }: {
     <span style={{ color, fontWeight: isBranch ? 700 : 500, marginRight: 6 }}>{label}:</span>
   ) : null;
 
-  const leaf = (color: string, text: React.ReactNode) => (
-    <div className="agd-json-row" style={{ ...ROW, paddingLeft: 16 }}>
+  const leaf = (color: string, text: string) => (
+    <div className="agd-json-row" style={{ ...ROW, paddingLeft: 16, wordBreak: "break-word" }}>
       {labelEl}<span style={{ color }}>{text}</span>
     </div>
   );
 
   if (value === null) return leaf(C.null, "null");
   if (typeof value === "boolean") return leaf(C.bool, String(value));
-  if (typeof value === "number") return leaf(C.number, value);
-  if (typeof value === "string") return <JsonString labelEl={labelEl} value={value} />;
+  if (typeof value === "number") return leaf(C.number, JSON.stringify(value));
+  // Quoted and escaped exactly as in the JSON, so a payload that is itself JSON text reads as a string.
+  if (typeof value === "string") return leaf(C.string, JSON.stringify(value));
+  if (!isBranch) return leaf(C.null, String(value));
 
   const isArray = Array.isArray(value);
+  const items: Array<[string, unknown]> = isArray
+    ? (value as unknown[]).map((v, i) => [String(i), v])
+    : Object.entries(value as Record<string, unknown>);
+  const empty = items.length === 0;
+  const openBrace = isArray ? "[" : "{";
+  const closeBrace = isArray ? "]" : "}";
+  const noun = isArray ? "item" : "field";
+  const countLabel = `${items.length} ${noun}${items.length === 1 ? "" : "s"}`;
 
-  if (isArray || typeof value === "object") {
-    const items: Array<[string | undefined, unknown]> = isArray
-      ? (value as unknown[]).map((v, i) => [String(i), v])
-      : Object.entries(value as Record<string, unknown>)
-          .filter(([, v]) => {
-            if (v === null || v === undefined) return false;
-            if (typeof v === "string" && v.trim() === "") return false;
-            if (Array.isArray(v) && v.length === 0) return false;
-            if (typeof v === "object" && !Array.isArray(v) && Object.keys(v as object).length === 0) return false;
-            return true;
-          })
-          .map(([k, v]) => [k, v]);
-
-    const empty = items.length === 0;
-    const openBrace = isArray ? "[" : "{";
-    const closeBrace = isArray ? "]" : "}";
-    const countLabel = `${items.length} item${items.length === 1 ? "" : "s"}`;
-
-    return (
-      <div>
-        <div
-          className="agd-json-row"
-          style={{ ...ROW, cursor: empty ? "default" : "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 4 }}
-          onClick={() => !empty && setOpen((o) => !o)}
-        >
-          <Twisty open={open} hidden={empty} color={color} />
-          {labelEl}
-          <span style={{ color, fontWeight: 700 }}>{openBrace}</span>
-          {/* Item count stays visible in both states so the document's shape reads without expanding. */}
-          {!empty && (
-            <span style={{
-              color,
-              background: alpha(color, 0.1),
-              border: `1px solid ${alpha(color, 0.22)}`,
-              borderRadius: 999,
-              padding: "0 7px",
-              fontSize: "0.82em",
-              fontWeight: 600,
-              lineHeight: "16px",
-              margin: "0 4px",
-            }}>
-              {countLabel}
-            </span>
-          )}
-          {(!open || empty) && <span style={{ color, fontWeight: 700 }}>{closeBrace}</span>}
-        </div>
-        {open && !empty && (
-          <JsonChildren closing={closeBrace} color={color}>
-            {items.map(([k, v], i) => (
-              <JsonNode
-                key={k ?? i}
-                label={k}
-                value={v}
-                depth={depth + 1}
-                // Two levels open by default: enough to see the payload's shape, not so much it floods the panel.
-                defaultOpen={depth < 1}
-              />
-            ))}
-          </JsonChildren>
+  return (
+    <div>
+      <div
+        className="agd-json-row"
+        style={{ ...ROW, cursor: empty ? "default" : "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 4 }}
+        onClick={() => !empty && setOpen((o) => !o)}
+      >
+        <Twisty open={open} hidden={empty} color={color} />
+        {labelEl}
+        <span style={{ color, fontWeight: 700 }}>{openBrace}</span>
+        {/* Item count stays visible in both states so the document's shape reads without expanding. */}
+        {!empty && (
+          <span style={{
+            color,
+            background: alpha(color, 0.1),
+            border: `1px solid ${alpha(color, 0.22)}`,
+            borderRadius: 999,
+            padding: "0 7px",
+            fontSize: "0.82em",
+            fontWeight: 600,
+            lineHeight: "16px",
+            margin: "0 4px",
+          }}>
+            {countLabel}
+          </span>
         )}
+        {(!open || empty) && <span style={{ color, fontWeight: 700 }}>{closeBrace}</span>}
       </div>
-    );
-  }
-
-  return null;
+      {open && !empty && (
+        <JsonChildren closing={closeBrace} color={color}>
+          {items.map(([k, v]) => (
+            <JsonNode key={k} label={k} value={v} depth={depth + 1} />
+          ))}
+        </JsonChildren>
+      )}
+    </div>
+  );
 }
 
-/** Input/Output body: a tree for structured payloads, prose for plain text, or raw JSON on request. */
-function Payload({ raw, mode }: { raw: string; mode: "formatted" | "json" }) {
-  const value = tryParse(raw);
-  if (mode === "json") return <pre className="ti-pre json">{JSON.stringify(value, null, 2)}</pre>;
-  if (typeof value === "string") return <pre className="ti-pre">{value}</pre>;
-  return <div className="ti-json"><JsonNode value={value} /></div>;
+/** Tokens of a JSON text, for colouring: strings (keys when followed by a colon), booleans, null, numbers. */
+const JSON_TOKEN = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
+
+/** The exact JSON text, coloured. Tokens are only wrapped in spans; no character is changed. */
+function JsonText({ text }: { text: string }) {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(JSON_TOKEN)) {
+    const i = m.index ?? 0;
+    if (i > last) parts.push(<span key={`p${last}`} style={{ color: C.punct }}>{text.slice(last, i)}</span>);
+    const color = m[1] ? (m[2] ? C.key : C.string) : m[3] ? C.bool : m[0] === "null" ? C.null : C.number;
+    parts.push(<span key={i} style={{ color }}>{m[0]}</span>);
+    last = i + m[0].length;
+  }
+  if (last < text.length) parts.push(<span key={`p${last}`} style={{ color: C.punct }}>{text.slice(last)}</span>);
+  return <pre className="ti-pre json">{parts}</pre>;
 }
 
 
@@ -241,16 +200,6 @@ function preorder(root: TraceSpan): TraceSpan[] {
   return out;
 }
 
-type Filter = "all" | "human" | "agent" | "tool" | "blocked";
-
-const FILTERS: { id: Filter; label: string; test: (s: TraceSpan) => boolean }[] = [
-  { id: "all", label: "All", test: () => true },
-  { id: "human", label: "Users", test: (s) => s.kind === "human" },
-  { id: "agent", label: "Agents", test: (s) => s.kind === "agent" },
-  { id: "tool", label: "Tools", test: (s) => s.kind === "tool" },
-  { id: "blocked", label: "Blocked", test: (s) => s.status === "blocked" },
-];
-
 /** Descendant count per span — shown on collapsed rows so hidden depth isn't invisible. */
 function descendantCounts(root: TraceSpan): Map<string, number> {
   const out = new Map<string, number>();
@@ -263,25 +212,8 @@ function descendantCounts(root: TraceSpan): Map<string, number> {
   return out;
 }
 
-/** Ids matching the search text and filter, plus every ancestor of a match so the hierarchy around it stays visible. */
-function searchVisible(root: TraceSpan, q: string, filter: Filter): Set<string> | null {
-  const needle = q.trim().toLowerCase();
-  if (!needle && filter === "all") return null;
-  const test = FILTERS.find((f) => f.id === filter)!.test;
-  const keep = new Set<string>();
-  const walk = (s: TraceSpan): boolean => {
-    const self = test(s) && (!needle || `${s.name} ${s.label} ${s.id}`.toLowerCase().includes(needle));
-    let child = false;
-    for (const c of s.children) if (walk(c)) child = true;
-    if (self || child) keep.add(s.id);
-    return self || child;
-  };
-  walk(root);
-  return keep;
-}
-
 /** Flattens the visible tree into rows, each carrying the guide cells that draw its connector lines. */
-function visibleRows(root: TraceSpan, collapsed: Set<string>, keep: Set<string> | null): TreeRow[] {
+function visibleRows(root: TraceSpan, collapsed: Set<string>): TreeRow[] {
   const rows: TreeRow[] = [];
   const walk = (s: TraceSpan, trail: boolean[], isLast: boolean, depth: number) => {
     const guides: GuideCell[] = depth === 0 ? [] : [
@@ -289,14 +221,20 @@ function visibleRows(root: TraceSpan, collapsed: Set<string>, keep: Set<string> 
       isLast ? "elbow" : "tee",
     ];
     rows.push({ span: s, guides });
-    // While searching, everything on a matching path is shown regardless of collapse state.
-    if (!keep && collapsed.has(s.id)) return;
-    const kids = keep ? s.children.filter((c) => keep.has(c.id)) : s.children;
-    kids.forEach((c, i) => walk(c, [...trail, !isLast], i === kids.length - 1, depth + 1));
+    if (collapsed.has(s.id)) return;
+    s.children.forEach((c, i) => walk(c, [...trail, !isLast], i === s.children.length - 1, depth + 1));
   };
-  if (!keep || keep.has(root.id)) walk(root, [], true, 0);
+  walk(root, [], true, 0);
   return rows;
 }
+
+/** The hop's label from its interaction ID ("1", "2a.1"), when the ID carries one. */
+const hopOf = (s: TraceSpan) => parseInteractionId(s.id)?.label;
+
+/** The span's name without the " · Branch X" suffix — the branch is shown on its own. */
+const pairOf = (s: TraceSpan) => s.name.replace(/ · Branch .+$/, "");
+
+const sentence = (s: string) => (s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : s);
 
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -305,16 +243,15 @@ interface TraceInspectorProps {
   trace: FlowTrace;
   openSpanId?: string;
   onClose: () => void;
+  /** Shown when the intent itself (the root) is selected. */
   rawData?: unknown;
-  /** Span id → the real Interaction it came from, when one exists — lets the
-   * "Raw data" tab show exactly what the interaction drawer shows instead
-   * of a generic trace/block blob. */
+  /** Span id → the real Interaction it came from, when one exists — its raw data is shown as is. */
   interactionBySpanId?: Record<string, Interaction>;
   /** What each row is called in the UI ("span", "interaction", …). */
   noun?: { one: string; many: string };
 }
 
-type Tab = "preview" | "metadata" | "raw";
+type View = "tree" | "json";
 
 export function TraceInspector({
   trace,
@@ -326,11 +263,8 @@ export function TraceInspector({
 }: TraceInspectorProps) {
   const One = noun.one[0].toUpperCase() + noun.one.slice(1);
   const [selId, setSelId] = useState(openSpanId || trace.trace.id);
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [tab, setTab] = useState<Tab>("preview");
-  const [mode, setMode] = useState<"formatted" | "json">("formatted");
+  const [view, setView] = useState<View>("tree");
   const { copied, copy } = useCopy();
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -343,16 +277,12 @@ export function TraceInspector({
   }
 
   const all = useMemo(() => preorder(trace.trace), [trace]);
-  const keep = useMemo(() => searchVisible(trace.trace, query, filter), [trace, query, filter]);
-  const rows = useMemo(() => visibleRows(trace.trace, collapsed, keep), [trace, collapsed, keep]);
+  const rows = useMemo(() => visibleRows(trace.trace, collapsed), [trace, collapsed]);
   const descendants = useMemo(() => descendantCounts(trace.trace), [trace]);
-  const filterCounts = useMemo(
-    () => Object.fromEntries(FILTERS.map((f) => [f.id, all.filter(f.test).length])) as Record<Filter, number>,
-    [all],
-  );
-  const blockedCount = filterCounts.blocked;
+  const blockedCount = useMemo(() => all.filter((s) => s.status === "blocked").length, [all]);
 
   const sel = trace.spanById[selId] || trace.trace;
+  const isRootSel = sel === trace.trace;
 
   // Ancestors of the selection, so the route from the root down to it can be traced in the tree.
   const pathIds = new Set<string>();
@@ -361,7 +291,7 @@ export function TraceInspector({
   const sKind = spanKind(sel);
   const sColor = KIND_COLOR[sKind] || "#5F73A0";
 
-  // Step through what's on screen, so J/K never lands on a collapsed or filtered-out span.
+  // Step through what's on screen, so J/K never lands on a collapsed span.
   const move = (delta: number) => {
     const i = rows.findIndex((r) => r.span.id === sel.id);
     const next = rows[Math.max(0, Math.min(rows.length - 1, (i < 0 ? 0 : i) + delta))];
@@ -395,22 +325,12 @@ export function TraceInspector({
   const expandAll = () => setCollapsed(new Set());
   const collapseAll = () => setCollapsed(new Set(all.filter((s) => s !== trace.trace && s.children.length > 0).map((s) => s.id)));
 
-  // The selected span's own interaction, when it has one — same JSON shape
-  // as the interaction drawer's Raw data panel. Falls back to the generic
-  // trace/block payload for synthetic spans (root, provenance seal, …).
+  // The selected interaction's raw data exactly as received. The root shows what the caller
+  // passed for the intent as a whole.
   const matchedInteraction = interactionBySpanId?.[selId];
-  const rawValue = matchedInteraction ? interactionRawData(matchedInteraction) : (rawData ?? trace.trace);
-
-  const chips: { label: string; value: string; dark?: boolean; copyable?: boolean }[] = [
-    { label: "Type", value: sel.label },
-    { label: One, value: sel.id, copyable: true },
-    { label: "Session", value: trace.sessionId, dark: true, copyable: true },
-    { label: "User", value: trace.userId, dark: true },
-    { label: "Env", value: trace.env },
-  ];
-  if (sel.model) chips.push({ label: "Model", value: sel.model });
-  if (typeof sel.metadata.blockIndex === "number") chips.push({ label: "Block", value: `#${sel.metadata.blockIndex}` });
-  if (sel.signature) chips.push({ label: "Signature", value: sel.signature, dark: true, copyable: true });
+  const rawValue = matchedInteraction ? interactionRawData(matchedInteraction) : rawData;
+  const hasRaw = rawValue !== undefined;
+  const rawText = useMemo(() => (hasRaw ? JSON.stringify(rawValue, null, 2) : ""), [rawValue, hasRaw]);
 
   return createPortal(
     <div className="ti-overlay" onMouseDown={onClose}>
@@ -421,18 +341,9 @@ export function TraceInspector({
           <span className="ti-top-chip"><Icon name="flow" size={14} />Envelope</span>
           <div className="ti-top-title">
             {/* The root is the container, not an item, so it's left out of the count. */}
-            <span className="nm">{sel === trace.trace ? "Overview" : `${One} ${selIndex} of ${all.length - 1}`}</span>
-            <span className="id">{trace.traceId}</span>
+            <span className="nm">{isRootSel ? "Whole intent" : `${One} ${selIndex} of ${all.length - 1}`}</span>
           </div>
           <div className="ti-top-actions">
-            <button
-              type="button"
-              className="ti-icon-btn"
-              title={copied === "raw" ? "Copied" : "Copy raw data"}
-              onClick={() => copy("raw", JSON.stringify(rawValue, null, 2))}
-            >
-              <Icon name={copied === "raw" ? "check" : "copy"} size={15} />
-            </button>
             <button type="button" className="ti-nav-btn" title={`Previous ${noun.one} (K)`} onClick={() => move(-1)}>
               <span className="arrow">↑</span><kbd>K</kbd>
             </button>
@@ -450,58 +361,27 @@ export function TraceInspector({
           {/* ── LEFT: hierarchy ── */}
           <aside className="ti-tree">
             <div className="ti-tree-tools">
-              <label className="ti-search">
-                <Icon name="search" size={14} />
-                <input
-                  placeholder={`Search ${noun.many}`}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                {query && (
-                  <button type="button" className="ti-search-clear" onClick={() => setQuery("")} aria-label="Clear search">
-                    <Icon name="close" size={11} />
-                  </button>
-                )}
-              </label>
-              <button type="button" className="ti-icon-btn sm" title="Expand all" onClick={expandAll} disabled={!!keep}>
+              <span className="ti-tree-count">{all.length - 1} {noun.many}</span>
+              <button type="button" className="ti-icon-btn sm" title="Expand all" onClick={expandAll}>
                 <Icon name="chevronDown" size={14} />
               </button>
-              <button type="button" className="ti-icon-btn sm" title="Collapse all" onClick={collapseAll} disabled={!!keep}>
+              <button type="button" className="ti-icon-btn sm" title="Collapse all" onClick={collapseAll}>
                 <Icon name="chevron" size={14} />
               </button>
             </div>
 
-            <div className="ti-filters" role="group" aria-label={`Filter ${noun.many}`}>
-              {FILTERS.filter((f) => f.id === "all" || filterCounts[f.id] > 0).map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  className={`ti-filter ${filter === f.id ? "active" : ""} ${f.id === "blocked" ? "blk" : ""}`}
-                  onClick={() => setFilter(f.id)}
-                  aria-pressed={filter === f.id}
-                >
-                  {f.label}
-                  <span className="n">{filterCounts[f.id]}</span>
-                </button>
-              ))}
-            </div>
-
             <div className="ti-tree-list" ref={listRef}>
-              {rows.length === 0 && (
-                <div className="ti-tree-empty">
-                  No {noun.many} match{query ? ` “${query}”` : ""}{filter !== "all" ? ` in ${FILTERS.find((f) => f.id === filter)!.label.toLowerCase()}` : ""}.
-                </div>
-              )}
               {rows.map(({ span, guides }) => {
                 const k = spanKind(span);
                 const color = KIND_COLOR[k] || "#5F73A0";
                 const depth = guides.length;
                 const isRoot = depth === 0;
                 const hasKids = span.children.length > 0;
-                const isClosed = !keep && collapsed.has(span.id);
+                const isClosed = collapsed.has(span.id);
                 const blocked = span.status === "blocked";
                 const isSel = span.id === sel.id;
                 const onPath = pathIds.has(span.id);
+                const hop = hopOf(span);
                 return (
                   <div
                     key={span.id}
@@ -523,23 +403,21 @@ export function TraceInspector({
                       <Icon name={KIND_ICON[k] ?? "flow"} size={isRoot ? 14 : 12} />
                     </span>
                     <span className="ti-node-main">
-                      <span className="ti-name">{span.name}</span>
+                      <span className="ti-name">{isRoot ? span.name : pairOf(span)}</span>
                       <span className="ti-span-info">
                         {isRoot ? (
-                          <span className="si-label">{span.label} · {all.length - 1} {noun.many}</span>
+                          <span className="si-label">Intent, {all.length - 1} {noun.many}</span>
                         ) : (
                           <>
-                            <span className="si-level" style={{ color: levelColor(depth - 1), background: alpha(levelColor(depth - 1), 0.1) }}>
-                              L{depth}
-                            </span>
-                            <span className={`si-label ${blocked ? "blk" : ""}`}>{blocked ? "Blocked" : span.label}</span>
+                            {hop && <span className="si-hop">{hop}</span>}
+                            <span className={`si-label ${blocked ? "blk" : ""}`}>{blocked ? "Blocked" : sentence(span.label)}</span>
                             {hasKids && !isClosed && <span className="si-count">{span.children.length} nested</span>}
                           </>
                         )}
                       </span>
                     </span>
                     {isRoot && (
-                      <span className={`ti-root-status ${span.status}`}>{span.status === "blocked" ? "HALTED" : "OK"}</span>
+                      <span className={`ti-root-status ${span.status}`}>{span.status === "blocked" ? "Threat found" : "Clean"}</span>
                     )}
                     {isClosed && <span className="ti-hidden-pill">+{descendants.get(span.id)}</span>}
                     {hasKids && !isRoot && (
@@ -547,7 +425,6 @@ export function TraceInspector({
                         type="button"
                         className={`ti-caret ${isClosed ? "closed" : ""}`}
                         onClick={(e) => { e.stopPropagation(); toggle(span.id); }}
-                        disabled={!!keep}
                         aria-label={isClosed ? "Expand" : "Collapse"}
                       >
                         <Icon name="chevronDown" size={14} />
@@ -565,104 +442,56 @@ export function TraceInspector({
             </div>
           </aside>
 
-          {/* ── RIGHT: raw data for the selected span ── */}
+          {/* ── RIGHT: the selected envelope, as received ── */}
           <section className="ti-detail">
-            <div className="ti-detail-head">
+            <header className="ti-detail-head">
               <span className="ti-d-kind" style={{ color: sColor, background: `${sColor}14` }}>
                 <Icon name={KIND_ICON[sKind] ?? "flow"} size={16} />
               </span>
               <div className="ti-d-title">
-                <div className="nm">{sel.name}</div>
-                <div className="sub">{sel.label}{sel.children.length > 0 ? ` · ${sel.children.length} nested` : ""}</div>
+                <div className="nm">{isRootSel ? sel.name : pairOf(sel)}</div>
               </div>
               <span className={`ti-d-status ${sel.status}`}>
-                <span className="d" />{sel.status === "blocked" ? "BLOCKED" : "OK"}
+                <span className="d" />
+                {isRootSel ? (sel.status === "blocked" ? "Threat found" : "Clean") : sel.status === "blocked" ? "Blocked" : "Allowed"}
               </span>
-            </div>
+            </header>
 
-            <div className="ti-chips">
-              {chips.map((c) => (
-                <button
-                  type="button"
-                  key={c.label}
-                  className={`ti-chip ${c.dark ? "dark" : ""} ${c.copyable ? "copyable" : ""}`}
-                  onClick={c.copyable ? () => copy(c.label, c.value) : undefined}
-                  title={c.copyable ? (copied === c.label ? "Copied" : `Copy ${c.label.toLowerCase()}`) : c.value}
-                  tabIndex={c.copyable ? 0 : -1}
-                >
-                  <b>{c.label}:</b>
-                  <span>{truncateMiddle(c.value, 34)}</span>
-                  {c.copyable && <Icon name={copied === c.label ? "check" : "copy"} size={11} />}
-                </button>
-              ))}
-            </div>
+            {!isRootSel && (
+              <button
+                type="button"
+                className="ti-id"
+                onClick={() => copy("id", sel.id)}
+                title={copied === "id" ? "Copied" : `Copy ${noun.one} ID`}
+              >
+                <span className="k">{One} ID</span>
+                <span className="v">{sel.id}</span>
+                <Icon name={copied === "id" ? "check" : "copy"} size={12} />
+              </button>
+            )}
 
-            <div className="ti-tabs">
-              {(["preview", "metadata", "raw"] as Tab[]).map((t) => (
-                <button key={t} type="button" className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-                  {t === "preview" ? "Preview" : t === "metadata" ? "Metadata" : "Raw data"}
-                </button>
-              ))}
-              {tab === "preview" && (
-                <div className="ti-seg" role="group" aria-label="Payload format">
-                  <button type="button" className={mode === "formatted" ? "active" : ""} onClick={() => setMode("formatted")}>Formatted</button>
-                  <button type="button" className={mode === "json" ? "active" : ""} onClick={() => setMode("json")}>JSON</button>
-                </div>
+            <div className="ti-raw-bar">
+              {hasRaw && (
+                <>
+                  <div className="ti-seg" role="group" aria-label="Raw data view">
+                    <button type="button" className={view === "tree" ? "active" : ""} aria-pressed={view === "tree"} onClick={() => setView("tree")}>Tree</button>
+                    <button type="button" className={view === "json" ? "active" : ""} aria-pressed={view === "json"} onClick={() => setView("json")}>JSON</button>
+                  </div>
+                  <button type="button" className="ti-copy" onClick={() => copy("raw", rawText)}>
+                    <Icon name={copied === "raw" ? "check" : "copy"} size={12} />{copied === "raw" ? "Copied" : "Copy"}
+                  </button>
+                </>
               )}
             </div>
 
             <div className="ti-d-scroll">
-              {tab === "preview" && (
-                <>
-                  <div className="ti-payload">
-                    <div className="ti-payload-head">
-                      <span className="lbl">Input</span>
-                      {sel.input && (
-                        <button type="button" className="ti-copy" onClick={() => copy("input", sel.input)}>
-                          <Icon name={copied === "input" ? "check" : "copy"} size={12} />{copied === "input" ? "Copied" : "Copy"}
-                        </button>
-                      )}
-                    </div>
-                    {sel.input ? <Payload raw={sel.input} mode={mode} /> : <div className="ti-none">No input recorded for this span.</div>}
-                  </div>
-                  <div className={`ti-payload out ${sel.status === "blocked" ? "blk" : ""}`}>
-                    <div className="ti-payload-head">
-                      <span className="lbl">Output</span>
-                      {sel.output && (
-                        <button type="button" className="ti-copy" onClick={() => copy("output", sel.output)}>
-                          <Icon name={copied === "output" ? "check" : "copy"} size={12} />{copied === "output" ? "Copied" : "Copy"}
-                        </button>
-                      )}
-                    </div>
-                    {sel.output ? <Payload raw={sel.output} mode={mode} /> : <div className="ti-none">No output recorded for this span.</div>}
-                  </div>
-                </>
-              )}
-
-              {tab === "metadata" && (
-                <div className="ti-payload">
-                  <div className="ti-payload-head">
-                    <span className="lbl">Metadata</span>
-                    <button type="button" className="ti-copy" onClick={() => copy("meta", JSON.stringify(sel.metadata, null, 2))}>
-                      <Icon name={copied === "meta" ? "check" : "copy"} size={12} />{copied === "meta" ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-                  <div className="ti-json">
-                    <JsonNode value={{ ...sel.metadata, parentId: sel.parentId, signature: sel.signature }} />
-                  </div>
-                </div>
-              )}
-
-              {tab === "raw" && (
-                <div className="ti-payload">
-                  <div className="ti-payload-head">
-                    <span className="lbl">{matchedInteraction ? "Interaction data" : "Envelope data"}</span>
-                    <button type="button" className="ti-copy" onClick={() => copy("raw", JSON.stringify(rawValue, null, 2))}>
-                      <Icon name={copied === "raw" ? "check" : "copy"} size={12} />{copied === "raw" ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-                  <div className="ti-json"><JsonNode value={rawValue} /></div>
-                </div>
+              {!hasRaw ? (
+                <div className="ti-none">No raw data was received for this {isRootSel ? "intent" : noun.one}.</div>
+              ) : view === "json" ? (
+                <JsonText text={rawText} />
+              ) : (
+                // Keyed by selection so each envelope opens with the default levels expanded.
+                <div className="ti-json" key={sel.id}><JsonNode value={rawValue} /></div>
               )}
             </div>
           </section>
