@@ -162,8 +162,6 @@ export const useAgentPolicyHistory = (id: string) =>
 export const useIntentDiagram = (id: string) =>
   useAsync<api.IntentDiagram | null>(() => api.fetchIntentDiagram(id), null, [id]);
 
-export const useIntentBlockData = (id: string) =>
-  useAsync<api.IntentBlock | null>(() => api.fetchIntentBlockData(id), null, [id]);
 
 export const useToolInfo = (nameOrDid: string, interactionsPage = 1, intentsPage = 1) =>
   useAsync<api.ToolDetailResult | null>(

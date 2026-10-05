@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { login as apiLogin, adminLogin as apiAdminLogin, adminRegister as apiAdminRegister, registerAdminMiddleware, registerUser as apiRegisterUser, type LoginResponse } from "../api/auth";
 import { getToken, setToken, setUnauthorizedHandler } from "../api/client";
 import { fetchUserProfile, fetchAdminProfile } from "../api/profile";
+import { clearIntentInfoCache } from "../data/api";
 
 const USER_KEY = "agentdna.user";
 const SESSION_START_KEY = "agentdna.sessionStart";
@@ -148,6 +149,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
 
   const logout = useCallback(() => {
+    // Cached API responses belong to this session; the next user must not see them.
+    clearIntentInfoCache();
     setToken(null);
     writeStoredUser(null);
     clearSessionStart();
@@ -157,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
+      clearIntentInfoCache();
       writeStoredUser(null);
       clearSessionStart();
       setUser(null);

@@ -54,7 +54,9 @@ export function initials(name: string): string {
  * Raw data panel and the Flow page's trace inspector so they never drift
  * apart and always show identical data for the same interaction.
  */
-export function interactionRawData(i: Interaction) {
+export function interactionRawData(i: Interaction): unknown {
+  // The agent's own envelope when the source sent it (/intent-info); else the mapped record.
+  if (i.raw !== undefined) return i.raw;
   return {
     id: i.id,
     blockType: i.blockType,

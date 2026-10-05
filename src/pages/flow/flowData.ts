@@ -12,7 +12,7 @@
  */
 
 import type { Intent, Interaction } from "../../types";
-import type { DiagramInteraction, IntentBlock, IntentDiagram } from "../../data/api";
+import type { DiagramInteraction, IntentDiagram } from "../../data/api";
 import type { useResolveName } from "../../context/DirectoryContext";
 import { branchName, compareInteractionIds, forkPosition, isOnPath, parentBranch, parseInteractionId } from "../../lib/interactionBranch";
 
@@ -695,6 +695,24 @@ export function flowForPath(flow: Flow, leaf: string | null): Flow {
   };
 }
 
+/**
+ * The intent's envelope as the agents sent it, for the Envelope inspector's root view. Each
+ * hop's `raw` nests every earlier envelope in `parent_envelope`, so the last hop of a path
+ * carries the whole chain: one envelope for a straight intent, one per branch end when it forked.
+ * `null` when no interaction has its raw envelope.
+ */
+export function intentEnvelope(interactions: Interaction[]): unknown {
+  const withRaw = sortInteractions(interactions).filter((ix) => ix.raw !== undefined);
+  if (withRaw.length === 0) return null;
+  // Last hop on each branch that nothing forks off (the trunk when there are no branches).
+  const lastByBranch = new Map<string, Interaction>();
+  for (const ix of withRaw) lastByBranch.set(parseInteractionId(ix.id)?.branch ?? "", ix);
+  const keys = [...lastByBranch.keys()];
+  const ends = keys.filter((k) => !keys.some((o) => o !== k && (k === "" || o.startsWith(`${k}.`))));
+  const raws = ends.map((k) => lastByBranch.get(k)!.raw);
+  return raws.length === 1 ? raws[0] : raws;
+}
+
 /** Interactions in branch-tree order, falling back to oldest first. */
 export function sortInteractions(interactions: Interaction[]): Interaction[] {
   return [...interactions]
@@ -977,135 +995,6 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     trace: flowTrace,
     branches: collectBranches(steps),
     rawDiagram: diagram,
-  };
-}
-
-// ---- Block-data-based trace builder (uses /intent-block-data) ----
-//
-// Outbound blocks push a new span onto the call stack.
-// Inbound blocks pop back to the matching agent, set its output, and — if
-// cbac_app is present — insert a tool child span first.
-
-export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): FlowTrace {
-  const sorted = [...blocks].sort((a, b) => a.block_index - b.block_index);
-
-  const allSpans: TraceSpan[] = [];
-  const mkSpan = (s: Omit<TraceSpan, "children">): TraceSpan => {
-    const sp: TraceSpan = { ...s, children: [] };
-    allSpans.push(sp);
-    return sp;
-  };
-
-  const halted = sorted.some((b) => b.threat_detected);
-  const traceStatus: TraceSpan["status"] = halted ? "blocked" : "ok";
-
-  const rootSpan = mkSpan({
-    id: `sp_${sanitize(intent.id)}_root`,
-    name: `Intent · ${intent.id.slice(-8)}`,
-    kind: "chain",
-    label: "TRACE",
-    status: traceStatus,
-        input: `Execute intent: ${intent.id}`,
-    output: halted ? "Intent halted: policy violation detected." : "Intent finished successfully.",
-    model: null,
-    parentId: null,
-    metadata: { intentId: intent.id, status: halted ? "halted" : "finished" },
-  });
-
-  // Stack of active frames: { did, span }
-  // The root frame is a sentinel so we never pop below the intent root.
-  const stack: Array<{ did: string; span: TraceSpan }> = [
-    { did: "__root__", span: rootSpan },
-  ];
-
-  let humanName = intent.initiator?.name || "User";
-
-  for (const block of sorted) {
-    if (block.direction === "outbound") {
-      const isHuman = block.block_type === "intent";
-      if (isHuman) humanName = block.agent_name || humanName;
-
-      const parent = stack[stack.length - 1].span;
-      const spanId = `sp_${sanitize(intent.id)}_${sanitize(block.id)}`;
-
-      const span = mkSpan({
-        id: spanId,
-        name: block.agent_name || block.agent_did.slice(-8),
-        kind: isHuman ? "human" : "agent",
-        label: isHuman ? "User" : "Agent",
-        status: block.threat_detected ? "blocked" : "ok",
-                input: block.message || "",
-        output: "",  // filled in when the matching inbound block arrives
-        model: isHuman ? null : "agent/reason-v2",
-        parentId: parent.id,
-        metadata: {
-          agentDid: block.agent_did,
-          blockType: block.block_type,
-          blockIndex: block.block_index,
-          ...(block.delegate_to ? { delegateTo: block.delegate_to } : {}),
-          ...(block.received_from ? { receivedFrom: block.received_from } : {}),
-        },
-        signature: block.signature || undefined,
-      });
-
-      parent.children.push(span);
-      stack.push({ did: block.agent_did, span });
-    } else {
-      // inbound — find the matching agent frame and fill its output
-      let frameIdx = stack.length - 1;
-      while (frameIdx > 0 && stack[frameIdx].did !== block.agent_did) {
-        frameIdx--;
-      }
-
-      if (frameIdx > 0) {
-        const frame = stack[frameIdx];
-
-        // If a tool was involved, add it as a child before closing this span
-        if (block.cbac_app) {
-          const toolSpanId = `sp_${sanitize(intent.id)}_tool_${sanitize(block.id)}`;
-          const toolSpan = mkSpan({
-            id: toolSpanId,
-            name: block.cbac_app,
-            kind: "tool",
-            label: "Tool",
-            status: block.threat_detected ? "blocked" : "ok",
-                        input: block.message || "",
-            output: block.response || "",
-            model: null,
-            parentId: frame.span.id,
-            metadata: {
-              cbacApp: block.cbac_app,
-              cbacDecision: block.cbac_decision,
-              trustIssues: block.trust_issues,
-              blockIndex: block.block_index,
-            },
-          });
-          frame.span.children.push(toolSpan);
-        }
-
-        // Fill the agent span's output and propagate threat upward if needed
-        frame.span.output = block.response || block.message || "";
-        if (block.threat_detected) frame.span.status = "blocked";
-
-        // Pop this frame and everything above it
-        stack.splice(frameIdx);
-      }
-    }
-  }
-
-  const spanById: Record<string, TraceSpan> = {};
-  for (const s of allSpans) spanById[s.id] = s;
-
-  return {
-    trace: rootSpan,
-    spanById,
-    traceId: `tr_${sanitize(intent.id).slice(-8)}`,
-    sessionId: `sess_${sanitize(intent.id).slice(-6)}`,
-    userId: humanName,
-    env: "prod",
-    totalTokensIn: 0,
-    totalTokensOut: 0,
-    totalCost: 0,
   };
 }
 

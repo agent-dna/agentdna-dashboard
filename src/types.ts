@@ -51,11 +51,11 @@ export interface Intent {
   signature?: string;
   /** Distinct apps/tools this intent's interactions touched. Only populated where explicitly computed (e.g. an agent's own intents list). */
   appsInteracted?: EntityRef[];
-  /** Human review state — separate from the pipeline `status` field. Defaults to "Ongoing" server-side. */
+  /** Human review state — separate from the pipeline `status` field. Defaults to "Unreviewed" server-side. */
   reviewStatus: IntentReviewStatus;
 }
 
-export type IntentReviewStatus = "Ongoing" | "Acknowledged" | "Flagged";
+export type IntentReviewStatus = "Unreviewed" | "Acknowledged" | "Flagged";
 
 export type EntityRef = Pick<Agent | Tool, "id" | "name">;
 
@@ -74,6 +74,11 @@ export interface Interaction {
   threatID?: string;
   /** Resolved threat message, when the caller already has it (e.g. from /threats-list) — skips the GET /threat-by-id lookup in the drawer. */
   message?: string;
+  /**
+   * The sender's original envelope for this hop, exactly as the agent sent it (from /intent-info's
+   * `rawData`; earlier envelopes nest in `parent_envelope`). Shown as the interaction's raw data.
+   */
+  raw?: unknown;
 }
 
 export interface TimeSeries {
@@ -127,6 +132,12 @@ export interface HomeMetrics {
   intentCount24hChange?: number;
   interactionsCount24hChange?: number;
   threatCount24hChange?: number;
+  /**
+   * Intents with a threat whose review status isn't "Acknowledged" (missing counts as Unreviewed);
+   * clean intents are never counted. Org-wide for admins, the user's visible intents otherwise.
+   * Ignores `page`. Drives the sidebar badge on Intents.
+   */
+  unacknowledgedTotal?: number;
 }
 
 export interface PublicMetrics {

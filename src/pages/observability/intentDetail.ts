@@ -1,4 +1,4 @@
-import { apiRequest } from "../../api/client";
+import { getIntentInfo } from "../../data/api";
 import type { ObsInteraction, ObsPathIntent } from "../../api/observability";
 import { compareInteractionIds, parseInteractionId } from "../../lib/interactionBranch";
 
@@ -17,7 +17,7 @@ interface IntentInfo {
   status?: string;
   reviewStatus?: string;
   threatDetected?: boolean;
-  interactions?: Partial<ObsInteraction>[];
+  interactions?: (Partial<ObsInteraction> & { rawData?: unknown })[];
 }
 
 /**
@@ -25,7 +25,8 @@ interface IntentInfo {
  * has no title, so `title` is the plane's card title, falling back to the triggering message.
  */
 export async function loadIntentDetail(intentID: string, title: string): Promise<ObsPathIntent | null> {
-  const i = await apiRequest<IntentInfo | null>("/intent-info", { query: { intentID } });
+  // The shared /intent-info cache: the intent page and flow page reuse this same response.
+  const i = (await getIntentInfo(intentID)) as unknown as IntentInfo | null;
   if (!i) return null;
   const interactions: ObsInteraction[] = (i.interactions ?? []).map((x) => ({
     interactionID: x.interactionID ?? "",
@@ -40,6 +41,7 @@ export async function loadIntentDetail(intentID: string, title: string): Promise
     threat: !!x.threat,
     threatID: x.threatID ?? "",
     time: x.time ?? "",
+    raw: x.rawData,
   })).sort((a, b) => compareInteractionIds(a.interactionID, b.interactionID));
   // Every branch shares the intent's first block, so its message is the intent's title.
   const first = interactions.find((x) => parseInteractionId(x.interactionID)?.path.join("-") === "1");

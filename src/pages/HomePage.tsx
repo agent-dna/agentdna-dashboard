@@ -28,12 +28,12 @@ const THREAT_ROW_STYLE: CSSProperties = {
 // Matches the pill styling used on the main Intents page (IntentsPage.tsx) so
 // review status looks identical everywhere it's shown.
 const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
-  Ongoing: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
+  Unreviewed: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
   Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
   Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
 };
 
-const REVIEW_STATUS_OPTIONS: IntentReviewStatus[] = ["Flagged", "Ongoing", "Acknowledged"];
+const REVIEW_STATUS_OPTIONS: IntentReviewStatus[] = ["Flagged", "Unreviewed", "Acknowledged"];
 const SEVERITY_OPTIONS: ThreatSeverity[] = ["Critical", "High", "Medium", "Low"];
 const SEVERITY_RANK: Record<ThreatSeverity, number> = { Critical: 4, High: 3, Medium: 2, Low: 1, Warning: 0 };
 const severityRank = (s: ThreatSeverity | null) => (s ? SEVERITY_RANK[s] : -1);
@@ -53,7 +53,7 @@ const TOP_THREATS_LIMIT = 5;
 
 const REVIEW_STATUS_ICON: Record<IntentReviewStatus, "flag" | "refresh" | "check"> = {
   Flagged: "flag",
-  Ongoing: "refresh",
+  Unreviewed: "refresh",
   Acknowledged: "check",
 };
 

@@ -247,6 +247,15 @@ const peerTips = (p: ObsAgentFlow["peers"][number]) => [
   plural(p.intentsCount, "shared intent"),
 ];
 
+/**
+ * Status of an intent card. The server's `outcome` only looks at user → agent and
+ * agent → app hops, so a threat on an agent → agent hop leaves it "allowed" while the
+ * intent still has flagged hops (`flags`) and its detail panel shows the threat.
+ * Any flagged hop makes the whole intent flagged.
+ */
+export const intentStatus = (it: ObsIntent): PlaneStatus =>
+  it.flags > 0 ? worst([it.outcome, "flagged"]) : it.outcome;
+
 const intentNode = (it: ObsIntent, k: number): PlaneNode => {
   const agentsNote = it.agents?.length ? `${plural(it.agents.length, "agent")} · ` : "";
   return {
@@ -254,9 +263,9 @@ const intentNode = (it: ObsIntent, k: number): PlaneNode => {
     t: "i",
     ref: it.intentID,
     name: it.intentTitle || it.intentID,
-    st: it.outcome,
+    st: intentStatus(it),
     meta:
-      it.outcome === "allowed"
+      intentStatus(it) === "allowed"
         ? `${agentsNote}${it.interactionsCount.toLocaleString()} ixns · ${ago(it.lastAt)}${ago(it.lastAt) === "just now" ? "" : " ago"}`
         : `${it.policy ?? "Needs review"} · ${plural(it.flags, "flag")}`,
     // The plane re-stacks whichever intents are showing, so this is only the default.
@@ -441,7 +450,7 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
           from: p,
           to: id,
           n: it.appCalls?.filter((c) => nodeId("p", c.appDID) === p).reduce((s, c) => s + c.count, 0) || it.interactionsCount,
-          st: it.outcome,
+          st: intentStatus(it),
           lastAt: it.lastAt,
           pol: it.policy ?? undefined,
         }),
@@ -450,7 +459,7 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
       const callers = appIds.flatMap((p) => [edges.get(`${a}>${p}`), r ? edges.get(`${r}>${p}`) : undefined]);
       // Keep the path the intent was picked through (user → agent → peer) lit as well.
       const path = [edges.get(`${u}>${a}`), r ? edges.get(`${a}>${r}`) : undefined];
-      addFlow([u, a, r, picked, id], [...path, ...es, ...callers], it.outcome, appIds.filter((p) => p !== picked));
+      addFlow([u, a, r, picked, id], [...path, ...es, ...callers], intentStatus(it), appIds.filter((p) => p !== picked));
     });
   }
 
@@ -622,13 +631,13 @@ export function buildAppPlaneModel({ graph, users, appFlow, agentUsers, intents 
         from: u,
         to: id,
         n: it.interactionsCount,
-        st: it.outcome,
+        st: intentStatus(it),
         lastAt: it.lastAt,
         pol: it.policy ?? undefined,
       });
       // Keep the path the intent was picked through (app → agent (→ peer) → user) lit as well.
       const path = r ? [edges.get(`${a}>${r}`), edges.get(`${r}>${u}`)] : [edges.get(`${a}>${u}`)];
-      addFlow([p, a, r, u, id], [edges.get(`${p}>${a}`), ...path, e], it.outcome);
+      addFlow([p, a, r, u, id], [edges.get(`${p}>${a}`), ...path, e], intentStatus(it));
     });
   }
 

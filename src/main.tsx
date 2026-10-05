@@ -23,7 +23,6 @@ import { DrawerProvider } from "./context/DrawerContext";
 import { TweaksProvider } from "./context/TweaksContext";
 import { AuthProvider } from "./context/AuthContext";
 import { DirectoryProvider } from "./context/DirectoryContext";
-import { IntentNumbersProvider } from "./context/IntentNumbersContext";
 import { IntentReviewProvider } from "./context/IntentReviewContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -32,8 +31,6 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <AuthProvider>
         <DirectoryProvider>
-        <IntentNumbersProvider>
-        <IntentReviewProvider>
         <TweaksProvider>
           <DrawerProvider>
             <Routes>
@@ -42,7 +39,10 @@ createRoot(document.getElementById("root")!).render(
               <Route
                 element={
                   <ProtectedRoute>
-                    <App />
+                    {/* Inside the guard so the sidebar's review count is only fetched once signed in. */}
+                    <IntentReviewProvider>
+                      <App />
+                    </IntentReviewProvider>
                   </ProtectedRoute>
                 }
               >
@@ -66,8 +66,6 @@ createRoot(document.getElementById("root")!).render(
             </Routes>
           </DrawerProvider>
         </TweaksProvider>
-        </IntentReviewProvider>
-        </IntentNumbersProvider>
         </DirectoryProvider>
       </AuthProvider>
     </BrowserRouter>

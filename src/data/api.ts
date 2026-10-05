@@ -2,6 +2,7 @@
 // Shapes defined in src/types.ts; API contracts in the middleware README.
 
 import { apiRequest } from "../api/client";
+import { compareInteractionIds } from "../lib/interactionBranch";
 import { getDirectorySnapshot, waitForDirectoryReady } from "./directoryCache";
 import type {
   Agent,
@@ -82,6 +83,8 @@ export interface ApiInteraction {
   blockType?: string;
   /** Non-empty only when `threat` is true — pass to GET /threat-by-id for the full message. */
   threatID?: string;
+  /** /intent-info only: the sender's original envelope for this hop (see `Interaction.raw`). */
+  rawData?: unknown;
 }
 
 function mapInteraction(i: ApiInteraction): Interaction {
@@ -98,6 +101,7 @@ function mapInteraction(i: ApiInteraction): Interaction {
     created: isoToMinutesAgo(i.time),
     blockType: i.blockType,
     threatID: i.threatID || undefined,
+    ...(i.rawData !== undefined ? { raw: i.rawData } : {}),
   };
 }
 
@@ -633,7 +637,7 @@ interface ApiIntent {
   agentsCount?: number;
   /** Distinct tools touched by this intent. */
   toolsCount?: number;
-  /** Human review state — separate from `status` (the pipeline state). Defaults to "Ongoing" server-side. */
+  /** Human review state — separate from `status` (the pipeline state). Defaults to "Unreviewed" server-side. */
   reviewStatus?: string;
 }
 
@@ -661,7 +665,8 @@ function stubAgent(did: string, name?: string): Agent {
 }
 
 function toReviewStatus(s: string | undefined): Intent["reviewStatus"] {
-  return s === "Acknowledged" || s === "Flagged" ? s : "Ongoing";
+  // Anything else is unreviewed, including a missing status and the legacy "Ongoing".
+  return s === "Acknowledged" || s === "Flagged" ? s : "Unreviewed";
 }
 
 function mapIntent(i: ApiIntent): Intent {
@@ -709,6 +714,7 @@ export async function updateIntentStatus(
     method: "POST",
     body: { intentID, status },
   });
+  invalidateIntentInfo(intentID);
   return { intentID: res.intentID, reviewStatus: toReviewStatus(res.reviewStatus) };
 }
 
@@ -816,13 +822,67 @@ export interface ApiIntentInfo {
   status: string;
   threatDetected: boolean;
   reviewStatus?: string;
+  agentsCount?: number;
+  toolsCount?: number;
+  interactionsCount?: number;
+  /** Every interaction of the intent, oldest first — never paged. */
   interactions?: ApiInteraction[];
+}
+
+/**
+ * One /intent-info response per intent, shared by everything that shows that intent (the
+ * intent page's header, participants, interactions table and threats; the flow page; the
+ * observability Intent Info tab), so opening an intent costs one call instead of one per
+ * consumer. Concurrent callers share the in-flight request.
+ *
+ * Held in memory only (this module's Map; a reload starts empty). Entries expire after
+ * INTENT_INFO_TTL_MS, are dropped when the intent's review status changes, and the whole cache
+ * is cleared on logout or a 401 so the next user never sees the previous user's responses.
+ * Each response carries every envelope, so it keeps at most INTENT_INFO_MAX intents, evicting
+ * the least recently used.
+ */
+const INTENT_INFO_TTL_MS = 15_000;
+const INTENT_INFO_MAX = 20;
+/** Insertion order is recency: a read moves its entry to the end, so the first key is the least recently used. */
+const intentInfoCache = new Map<string, { at: number; req: Promise<ApiIntentInfo> }>();
+
+/** GET /intent-info, through the shared cache. Rejects on failure (nothing is cached then). */
+export function getIntentInfo(id: string): Promise<ApiIntentInfo> {
+  const now = Date.now();
+  const hit = intentInfoCache.get(id);
+  if (hit && now - hit.at < INTENT_INFO_TTL_MS) {
+    intentInfoCache.delete(id);
+    intentInfoCache.set(id, hit);
+    return hit.req;
+  }
+  // Drop what has expired, then make room for this entry.
+  for (const [key, entry] of intentInfoCache) {
+    if (now - entry.at >= INTENT_INFO_TTL_MS) intentInfoCache.delete(key);
+  }
+  while (intentInfoCache.size >= INTENT_INFO_MAX) {
+    intentInfoCache.delete(intentInfoCache.keys().next().value!);
+  }
+  const req = apiRequest<ApiIntentInfo>("/intent-info", { query: { intentID: id } });
+  intentInfoCache.set(id, { at: now, req });
+  req.catch(() => {
+    if (intentInfoCache.get(id)?.req === req) intentInfoCache.delete(id);
+  });
+  return req;
+}
+
+/** Forget a cached /intent-info so the next read refetches (after its review status changes). */
+export function invalidateIntentInfo(id: string) {
+  intentInfoCache.delete(id);
+}
+
+/** Forget every cached /intent-info — on logout or a 401, so nothing outlives the session. */
+export function clearIntentInfoCache() {
+  intentInfoCache.clear();
 }
 
 export async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null> {
   try {
-    const res = await apiRequest<ApiIntentInfo>("/intent-info", { query: { intentID: id } });
-    return res;
+    return await getIntentInfo(id);
   } catch (e) {
     console.warn(`[GET /intent-info?intentID=${id}] failed`, e);
     return null;
@@ -830,18 +890,10 @@ export async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null>
 }
 
 export async function fetchIntent(id: string): Promise<Intent | null> {
-  const [r, firstPage] = await Promise.all([
-    fetchIntentInfo(id),
-    fetchIntentInteractionsPaged(id, 1),
-  ]);
+  const r = await fetchIntentInfo(id);
   if (!r) return null;
-  
-  // Collect all interactions across pages to derive participant counts.
-  const allInteractions = [...firstPage.interactions];
-  for (let p = 2; p <= firstPage.totalPages; p++) {
-    const page = await fetchIntentInteractionsPaged(id, p);
-    allInteractions.push(...page.interactions);
-  }
+  // /intent-info carries every interaction, so participant counts come from it directly.
+  const allInteractions = intentInfoInteractions(r);
 
   // "Owner" is the sender of the intent's very first interaction, not the
   // top-level initiatorDID/initiatorName — those two can disagree (e.g. the
@@ -883,7 +935,7 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     threatDetected: r.threatDetected,
     agentsCount: agentDids.size,
     toolsCount: toolDids.size,
-    interactionsCount: firstPage.total,
+    interactionsCount: r.interactionsCount ?? allInteractions.length,
     reviewStatus: r.reviewStatus,
   });
 }
@@ -917,7 +969,7 @@ export async function fetchAgentInteractions(id: string, page = 1): Promise<Inte
 async function enrichIntentApps(intent: Intent): Promise<Intent> {
   try {
     const [firstPage] = await Promise.all([
-      fetchIntentInteractionsPaged(intent.id, 1),
+      fetchIntentInteractionsListPage(intent.id, 1),
       // See directoryCache.ts — without this, a request racing ahead of
       // DirectoryProvider's initial load misclassifies tools as agents via
       // the DID-prefix fallback, silently dropping them from "apps
@@ -1101,10 +1153,17 @@ export async function fetchToolAgentScores(toolDID: string): Promise<ToolAgentSc
   return (res.agents || []).map(mapToolAgentScore);
 }
 
+/** An /intent-info response's interactions, mapped. Its rows carry no intentID of their own. */
+function intentInfoInteractions(r: ApiIntentInfo): Interaction[] {
+  return (r.interactions || []).map((i) => mapInteraction({ ...i, intentID: i.intentID || r.intentID }));
+}
+
 export async function fetchIntentInteractions(id: string): Promise<Interaction[]> {
   const r = await fetchIntentInfo(id);
-  return (r?.interactions || []).map(mapInteraction);
+  return r ? intentInfoInteractions(r) : [];
 }
+
+const INTENT_INTERACTIONS_PAGE_SIZE = 10;
 
 export interface PagedIntentInteractionsResult {
   interactions: Interaction[];
@@ -1113,7 +1172,25 @@ export interface PagedIntentInteractionsResult {
   page: number;
 }
 
+/**
+ * One page of an intent's interactions, in branch-tree order. Sliced in the browser from the
+ * shared /intent-info (which returns them all), so paging the table makes no further calls.
+ */
 export async function fetchIntentInteractionsPaged(
+  intentId: string,
+  page = 1,
+): Promise<PagedIntentInteractionsResult> {
+  const all = [...(await fetchIntentInteractions(intentId))].sort((a, b) => compareInteractionIds(a.id, b.id));
+  const totalPages = Math.max(1, Math.ceil(all.length / INTENT_INTERACTIONS_PAGE_SIZE));
+  const start = (page - 1) * INTENT_INTERACTIONS_PAGE_SIZE;
+  return { interactions: all.slice(start, start + INTENT_INTERACTIONS_PAGE_SIZE), total: all.length, totalPages, page };
+}
+
+/**
+ * First page of /interactions-list for an intent — only for list rows (enrichIntentApps), where
+ * pulling a whole /intent-info (with every envelope) per row would cost far more.
+ */
+async function fetchIntentInteractionsListPage(
   intentId: string,
   page = 1,
 ): Promise<PagedIntentInteractionsResult> {
@@ -1133,17 +1210,9 @@ export async function fetchIntentInteractionsPaged(
 }
 
 export async function fetchIntentParticipants(id: string): Promise<IntentParticipant[]> {
-  const [intentInfo, firstPage] = await Promise.all([
-    fetchIntentInfo(id),
-    fetchIntentInteractionsPaged(id, 1),
-  ]);
+  const intentInfo = await fetchIntentInfo(id);
   const initiatorDID = (intentInfo?.initiatorDID ?? "").trim().toLowerCase();
-  const allInteractions = [...firstPage.interactions];
-  for (let p = 2; p <= firstPage.totalPages; p++) {
-    const page = await fetchIntentInteractionsPaged(id, p);
-    allInteractions.push(...page.interactions);
-  }
-  const interactions = allInteractions;
+  const interactions = intentInfo ? intentInfoInteractions(intentInfo) : [];
   const map = new Map<string, IntentParticipant>();
   for (const r of interactions) {
     const sides: { ref: { id: string; name: string }; type: "agent" | "tool" }[] = [
@@ -1177,49 +1246,6 @@ export async function fetchLogs(_kind: "agent" | "intent", _id: string): Promise
   return [];
 }
 
-export interface IntentBlock {
-  id: string;
-  block_index: number;
-  agent_did: string;
-  agent_name: string;
-  direction: string;
-  block_type: "trigger" | "delegate" | "tool_call" | "execute" | "response" | "verify" | string;
-  message: string;
-  response: string;
-  delegate_to: string;
-  received_from: string;
-  cbac_app: string;
-  cbac_decision: string;
-  threat_detected: boolean;
-  trust_issues: string[];
-  signature: string;
-  created_at: string;
-  parent_block: IntentBlock | null;
-}
-
-/** Walk the parent_block chain and return blocks ordered oldest → newest. */
-export function flattenIntentBlocks(root: IntentBlock): IntentBlock[] {
-  const chain: IntentBlock[] = [];
-  let cur: IntentBlock | null = root;
-  while (cur) {
-    chain.push(cur);
-    cur = cur.parent_block;
-  }
-  return chain.reverse();
-}
-
-export async function fetchIntentBlockData(intentId: string): Promise<IntentBlock | null> {
-  try {
-    // apiRequest already unwraps { status, data } and returns the inner object directly.
-    const res = await apiRequest<IntentBlock>("/intent-block-data", {
-      query: { intent_id: intentId },
-    });
-    return res ?? null;
-  } catch (e) {
-    console.warn(`[GET /intent-block-data?intent_id=${intentId}] failed`, e);
-    return null;
-  }
-}
 
 export interface DiagramBasicInfo {
   intentID: string;

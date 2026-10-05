@@ -23,10 +23,10 @@ import { IntentIdChip } from "../context/IntentNumbersContext";
 import { branchName, compareInteractionIds, parseInteractionId } from "../lib/interactionBranch";
 import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
 
-const REVIEW_STATUSES: IntentReviewStatus[] = ["Ongoing", "Acknowledged", "Flagged"];
+const REVIEW_STATUSES: IntentReviewStatus[] = ["Unreviewed", "Acknowledged", "Flagged"];
 
 const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
-  Ongoing: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
+  Unreviewed: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
   Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
   Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
 };

@@ -43,15 +43,28 @@ export function getDirectorySnapshot(): Map<string, DirectoryEntry> {
 // of racing it.
 let ready = false;
 let resolveReady: (() => void) | null = null;
-const readyPromise = new Promise<void>((resolve) => {
+let readyPromise = new Promise<void>((resolve) => {
   resolveReady = resolve;
 });
 
-/** Called once by DirectoryProvider after its initial load settles (success or caught-empty). */
+/** Called by DirectoryProvider once a session's directory load settles (success or caught-empty). */
 export function markDirectoryReady() {
   if (ready) return;
   ready = true;
   resolveReady?.();
+}
+
+/**
+ * Back to "not loaded" with an empty snapshot — when the signed-in user changes or signs out,
+ * so the next session classifies against its own directory, never the previous user's.
+ */
+export function resetDirectory() {
+  snapshot = new Map();
+  if (!ready) return;
+  ready = false;
+  readyPromise = new Promise<void>((resolve) => {
+    resolveReady = resolve;
+  });
 }
 
 /**

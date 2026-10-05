@@ -183,6 +183,8 @@ export interface ObsInteraction {
   threat: boolean;
   threatID: string;
   time: string;
+  /** The sender's original envelope (from /intent-info's `rawData`), when the source has it. */
+  raw?: unknown;
 }
 
 /** The intent on a path row. The detail fields come back when the paths call is filtered by `intentID`. */

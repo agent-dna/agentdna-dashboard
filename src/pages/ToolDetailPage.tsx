@@ -19,7 +19,7 @@ type Tab = "interactions" | "intents" | "agents";
 // Matches the pill styling used on the main Intents page (IntentsPage.tsx) so
 // review status looks identical everywhere it's shown.
 const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
-  Ongoing: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
+  Unreviewed: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
   Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
   Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
 };

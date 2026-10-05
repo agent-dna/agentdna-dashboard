@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon";
 import { TraceInspector } from "../../components/TraceInspector";
-import { useIntent, useIntentBlockData, useIntentInteractions } from "../../data/hooks";
+import { useIntent, useIntentInteractions } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
 import { FlowCanvas } from "./FlowCanvas";
-import { buildFlowFromIntent, buildInteractionTrace, buildTraceFromBlocks, flowForPath, groupParallelRounds, type Flow, type FlowBranch, type FlowNode } from "./flowData";
-import { fetchIntents, flattenIntentBlocks } from "../../data/api";
+import { buildFlowFromIntent, buildInteractionTrace, flowForPath, intentEnvelope, groupParallelRounds, type Flow, type FlowBranch, type FlowNode } from "./flowData";
+import { fetchIntents } from "../../data/api";
 import type { Intent, Interaction } from "../../types";
 
 const STEP_MS = 2000;
@@ -50,7 +50,8 @@ export function FlowPage() {
 
   const { data: intent } = useIntent(activeId);
   const { data: interactions } = useIntentInteractions(activeId);
-  const { data: blocks } = useIntentBlockData(activeId);
+  // The agents' own envelope chain, from /intent-info's rawData (the same response as above).
+  const envelope = useMemo(() => intentEnvelope(interactions), [interactions]);
 
   const flow: Flow | null = useMemo(() => {
     if (!intent) return null;
@@ -59,13 +60,8 @@ export function FlowPage() {
     // classifies participants against the org directory (agent/user/tool)
     // instead of just assuming "intent initiator = human, everyone else =
     // agent" the way the /intent-diagram-based builder used to.
-    const base = buildFlowFromIntent({ intent, interactions, resolve });
-    if (blocks) {
-      const flat = flattenIntentBlocks(blocks);
-      if (flat.length > 0) base.trace = buildTraceFromBlocks(intent, flat);
-    }
-    return base;
-  }, [intent, interactions, blocks, resolve]);
+    return buildFlowFromIntent({ intent, interactions, resolve });
+  }, [intent, interactions, resolve]);
 
   // Which path through the branch tree plays: null = every branch, else a leaf branch key
   // (the trunk plus the branches down to it). Resets when the intent changes.
@@ -331,7 +327,7 @@ export function FlowPage() {
               </div>
 
               {/* Step JSON data card */}
-              <StepDataCard flow={view} step={step} />
+              <StepDataCard flow={view} step={step} interactionById={interactionBySpanId} />
             </>
           )}
           {!flow && (
@@ -363,7 +359,7 @@ export function FlowPage() {
           trace={interactionTrace}
           openSpanId={inspectSpanId}
           onClose={() => setInspectSpanId(null)}
-          rawData={blocks}
+          rawData={envelope ?? undefined}
           interactionBySpanId={interactionBySpanId}
           noun={{ one: "interaction", many: "interactions" }}
         />
@@ -372,21 +368,32 @@ export function FlowPage() {
   );
 }
 
-function StepDataCard({ flow, step }: { flow: Flow; step: number }) {
+function StepDataCard({ flow, step, interactionById }: { flow: Flow; step: number; interactionById: Record<string, Interaction> }) {
   const s = flow.steps[step];
   if (!s) return null;
   const span = flow.trace.spanById[s.spanId];
   const from = flow.nodeById[s.from];
   const to = flow.nodeById[s.to];
+  // This hop's own envelope as the agent sent it. Its history is in the Envelope inspector, so
+  // the nested parent envelopes are folded to a count here to keep the card about this hop.
+  const raw = s.interactionID ? interactionById[s.interactionID]?.raw : undefined;
+  const envelope =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (({ parent_envelope, ...rest }: Record<string, unknown>) => ({
+          ...rest,
+          ...(Array.isArray(parent_envelope) && parent_envelope.length > 0
+            ? { parent_envelope: `${parent_envelope.length} earlier envelope${parent_envelope.length === 1 ? "" : "s"} — see Envelope` }
+            : {}),
+        }))(raw as Record<string, unknown>)
+      : raw;
 
   const data: Record<string, unknown> = {
     ...(s.label ? { hop: s.label } : {}),
     ...(s.branch ? { branch: flow.branches.find((b) => b.key === s.branch)?.name ?? s.branch } : {}),
     from: from?.name || s.from,
     to: to?.name || s.to,
-    direction: s.dir,
     verdict: s.verdict,
-    checks: s.checks,
+    ...(envelope !== undefined ? { envelope } : {}),
     ...(span?.input ? { input: tryParse(span.input) } : {}),
     ...(span?.output ? { output: tryParse(span.output) } : {}),
     ...(span?.model ? { model: span.model } : {}),

@@ -147,6 +147,7 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
       threat: s.threat,
       created: minutesAgo(t),
       threatID: s.threatID || undefined,
+      raw: s.raw,
     };
     openDrawer("interaction", ix);
   };
