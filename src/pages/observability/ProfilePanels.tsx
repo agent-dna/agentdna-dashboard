@@ -13,6 +13,8 @@ import {
   LayoutGrid,
   Link2,
   Shield,
+  ShieldCheck,
+  ShieldOff,
   Star,
   TrendingUp,
   UserRound,
@@ -20,7 +22,9 @@ import {
 } from "lucide-react";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useDrawer } from "../../context/DrawerContext";
-import { useAgent, useAgentInteractions, useToolAgentScores, useToolInfo, useUserInfo } from "../../data/hooks";
+import { useAuth } from "../../context/AuthContext";
+import { RevokeAgentModal } from "../../components/forms/RevokeAgentModal";
+import { useAgent, useAgentInteractions, useToolAgentScores, useToolInfoByDidOrName, useUserInfo } from "../../data/hooks";
 import { AppIcon } from "../../components/AppIcon";
 import { timeAgo } from "../../lib/format";
 import type { Interaction } from "../../types";
@@ -123,11 +127,14 @@ export function UserInfoPanel({ did, name }: { did: string; name: string }) {
 
 export function AgentInfoPanel({ did, name, nameOf }: { did: string; name: string; nameOf: (did: string) => string | undefined }) {
   const navigate = useNavigate();
-  const { data: agent, loading } = useAgent(did);
+  const { data: agent, loading, refetch } = useAgent(did);
   const { data: interactions } = useAgentInteractions(did);
   const openPath = `/agents/${encodeURIComponent(did)}`;
   const deployer = agent?.owner ? agent.ownerName || nameOf(agent.owner) || shortId(agent.owner) : "—";
   const [showPolicy, setShowPolicy] = useState(false);
+  // Revoking is admin-only, as on the agent page; a revoked agent can be whitelisted again.
+  const isAdmin = !!useAuth().user?.is_admin;
+  const [revokeOpen, setRevokeOpen] = useState(false);
 
   return (
     <div className="ip-pf">
@@ -137,11 +144,36 @@ export function AgentInfoPanel({ did, name, nameOf }: { did: string; name: strin
         chip={agent && (agent.revoked ? <StatusChip tone="threat">Revoked</StatusChip> : <StatusChip tone="safe">Approved</StatusChip>)}
         sub={agent ? [`Deployed by ${deployer}`, agent.env].filter(Boolean).join(" · ") : undefined}
         action={
-          <button type="button" className="btn primary ip-pf-open" onClick={() => navigate(openPath)}>
-            Open agent <ExternalLink size={14} />
-          </button>
+          <div className="ip-pf-actions">
+            {isAdmin && agent && (
+              <button
+                type="button"
+                className={`btn ${agent.revoked ? "safe" : "danger"} ip-pf-open`}
+                onClick={() => setRevokeOpen(true)}
+              >
+                {agent.revoked ? <ShieldCheck size={15} /> : <ShieldOff size={15} />}
+                {agent.revoked ? "Whitelist agent" : "Revoke agent"}
+              </button>
+            )}
+            <button type="button" className="btn primary ip-pf-open" onClick={() => navigate(openPath)}>
+              Open agent <ExternalLink size={14} />
+            </button>
+          </div>
         }
       />
+      {isAdmin && agent && (
+        <RevokeAgentModal
+          open={revokeOpen}
+          agentDID={did}
+          agentName={agent.name || name}
+          mode={agent.revoked ? "whitelist" : "revoke"}
+          onClose={() => setRevokeOpen(false)}
+          onSuccess={() => {
+            setRevokeOpen(false);
+            refetch();
+          }}
+        />
+      )}
       {!agent ? (
         <div className="ip-empty">{loading ? "Loading agent…" : "Couldn't load this agent's details."}</div>
       ) : (
@@ -224,11 +256,12 @@ const scoreTone = (n: number) => (n >= 80 ? "safe" : n >= 50 ? "warn" : "threat"
 
 export function AppInfoPanel({ did, name }: { did: string; name: string }) {
   const navigate = useNavigate();
-  const { data, loading } = useToolInfo(did);
+  const { data, loading } = useToolInfoByDidOrName(did, name);
   const t = data?.tool;
   const { data: agents, loading: agentsLoading } = useToolAgentScores(t?.id);
   const title = t?.name || name;
-  const openPath = `/tools/${encodeURIComponent(did)}`;
+  // The app page looks apps up by name (as the Agents & Apps table links to it).
+  const openPath = `/tools/${encodeURIComponent(t?.name || name || did)}`;
 
   return (
     <div className="ip-pf">

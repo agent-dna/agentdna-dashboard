@@ -171,6 +171,9 @@ export const useToolInfo = (nameOrDid: string, interactionsPage = 1, intentsPage
   );
 
 // Waits for a resolved toolDID; the backend only matches on the DID, not the tool name.
+/** /tool-info for an app known by DID, falling back to its name (see fetchToolInfoByDidOrName). */
+export const useToolInfoByDidOrName = (did: string, name?: string) =>
+  useAsync<api.ToolDetailResult | null>(() => api.fetchToolInfoByDidOrName(did, name), null, [did, name]);
 export const useToolAgentScores = (toolDID: string | undefined) =>
   useAsync<api.ToolAgentScore[]>(
     () => (toolDID ? api.fetchToolAgentScores(toolDID) : Promise.resolve([])),

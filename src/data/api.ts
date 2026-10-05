@@ -647,6 +647,10 @@ interface ApiIntent {
   agentsCount?: number;
   /** Distinct tools touched by this intent. */
   toolsCount?: number;
+  /** DIDs of the apps the intent called; [] when it used none. */
+  appDIDs?: string[];
+  /** The same apps with their names. */
+  apps?: { did: string; name?: string }[];
   /** Human review state — separate from `status` (the pipeline state). Defaults to "Unreviewed" server-side. */
   reviewStatus?: string;
 }
@@ -679,6 +683,17 @@ function toReviewStatus(s: string | undefined): Intent["reviewStatus"] {
   return s === "Acknowledged" || s === "Flagged" ? s : "Unreviewed";
 }
 
+/**
+ * The apps an intent called, named from `apps`; a DID in `appDIDs` with no entry there is kept
+ * with an empty name, so the row still shows that an app was used.
+ */
+function intentApps(i: ApiIntent): { id: string; name: string }[] {
+  const named = (i.apps ?? []).filter((a) => a.did).map((a) => ({ id: a.did, name: a.name?.trim() || "" }));
+  const seen = new Set(named.map((a) => a.id));
+  const unnamed = (i.appDIDs ?? []).filter((d) => d && !seen.has(d)).map((d) => ({ id: d, name: "" }));
+  return [...named, ...unnamed];
+}
+
 function mapIntent(i: ApiIntent): Intent {
   // Runtime is the gap between startedAt and endedAt (if ended), in ms.
   let runtime = 0;
@@ -702,6 +717,7 @@ function mapIntent(i: ApiIntent): Intent {
     score: 0,
     status: i.threatDetected ? "threat" : "safe",
     reviewStatus: toReviewStatus(i.reviewStatus),
+    ...(i.apps || i.appDIDs ? { appsInteracted: intentApps(i) } : {}),
   };
 }
 
@@ -1607,9 +1623,11 @@ export async function fetchToolInfo(
   nameOrDid: string,
   interactionsPage = 1,
   intentsPage = 1,
+  /** Force the lookup key; by default a "bafy…"/"did:" value is a DID and anything else a name. */
+  by?: "did" | "name",
 ): Promise<ToolDetailResult | null> {
   try {
-    const isDid = nameOrDid.startsWith("bafy") || nameOrDid.includes("did:");
+    const isDid = by ? by === "did" : nameOrDid.startsWith("bafy") || nameOrDid.includes("did:");
     const query: Record<string, string | number> = {
       interactionsPage,
       intentsPage,
@@ -1638,4 +1656,15 @@ export async function fetchToolInfo(
   } catch {
     return null;
   }
+}
+
+/**
+ * An app's /tool-info by DID, falling back to its name. Callers that only hold the DID (the
+ * observability plane) get nothing back when /tool-info can't resolve it, while lookups by name
+ * (the app page's) work, so try the name the caller knows before giving up.
+ */
+export async function fetchToolInfoByDidOrName(did: string, name?: string): Promise<ToolDetailResult | null> {
+  const byDid = did ? await fetchToolInfo(did, 1, 1, "did") : null;
+  if (byDid) return byDid;
+  return name && name !== did ? fetchToolInfo(name, 1, 1, "name") : null;
 }

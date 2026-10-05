@@ -504,9 +504,9 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false, playba
         <div className="grid-dots" />
 
         <div className="canvas-top">
-          <div className={`canvas-badge ${flow.status === "halted" ? "halted" : ""}`}>
+          <div className="canvas-badge">
             <span className="lv" />
-            {flow.status === "halted" ? "POLICY HALT" : "LIVE TRACE"} · {flow.nodes.filter((n) => n.kind !== "provenance").length} nodes · {steps.length} hops
+            LIVE TRACE · {flow.nodes.filter((n) => n.kind !== "provenance").length} nodes · {steps.length} hops
             {flow.branches.length > 0 && ` · ${flow.branches.length} branches`}
           </div>
           <div className="canvas-legends">
@@ -787,20 +787,6 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false, playba
             </span>
             <span className="cb-node">{nb(cur.to)}</span>
           </span>
-          <span className="cb-checks">
-            {(
-              [
-                ["I", "identity"],
-                ["T", "trust"],
-                ["S", "scope"],
-              ] as const
-            ).map(([ltr, k]) => (
-              <span key={k} className={`cb-chk ${cur.checks[k] ? "" : "fail"}`} title={k}>
-                {ltr}
-              </span>
-            ))}
-          </span>
-          <span className="cb-lat">{cur.latency}ms</span>
           <span className={`cb-verdict ${cur.verdict}`}>{cur.verdict.toUpperCase()}</span>
         </div>
       )}

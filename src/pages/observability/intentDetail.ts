@@ -64,3 +64,29 @@ export async function loadIntentDetail(intentID: string, title: string): Promise
     interactions,
   };
 }
+
+/**
+ * Threat hops per intent, from `/intent-info` — the one source that marks every hop. The
+ * observability endpoints work out `outcome` and `flags` from user → agent and agent → app
+ * hops only, so an intent blocked elsewhere (agent → agent, or at the executor) comes back
+ * "allowed" with no flags. Only intents with at least one threat are in the result.
+ * Goes through the shared /intent-info cache, a few at a time; an intent that fails to load is
+ * left out rather than failing the rest.
+ */
+export async function threatHopCounts(intentIDs: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const queue = [...new Set(intentIDs)];
+  const worker = async () => {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      try {
+        const i = (await getIntentInfo(id)) as unknown as IntentInfo | null;
+        const n = (i?.interactions ?? []).filter((x) => x.threat).length;
+        if (n > 0 || i?.threatDetected) out.set(id, Math.max(n, 1));
+      } catch {
+        /* leave this intent as the server reported it */
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+  return out;
+}

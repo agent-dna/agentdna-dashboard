@@ -32,6 +32,7 @@ import {
   listY,
   buildAppPlaneModel,
   buildPlaneModel,
+  intentStatus,
   nodeId,
   usersFromPaths,
   refOf,
@@ -43,6 +44,7 @@ import {
   type PlaneNode,
   type PlaneStatus,
 } from "./planeModel";
+import { threatHopCounts } from "./intentDetail";
 
 /**
  * Observability · Interaction plane.
@@ -167,8 +169,6 @@ export function InteractionPlane() {
   const userMode = mode === "user";
   const { order: ORDER, columns: COLUMNS } = LAYOUTS[mode];
   const [chain, setChain] = useState<Chain>({});
-  const [hovered, setHovered] = useState<string | null>(null);
-  const [traceMode, setTraceMode] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [hoverEdge, setHoverEdge] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
@@ -274,6 +274,24 @@ export function InteractionPlane() {
     showIntents && `intents:${pickedUser}:${pickedAgent}:${pickedPeer ?? ""}:${pickedApp}`,
     () => fetchObsIntents(REST, pickedUser!, pickedAgent!, { peerDID: pickedPeer ?? undefined, appDID: pickedApp! }),
   );
+  // The server reports an intent blocked on an agent → agent or executor hop as "allowed" with
+  // no flags, so check the ones that look clean against /intent-info and count their threat hops.
+  const cleanIntentIds = useMemo(
+    () => (intents.data?.intentsList ?? []).filter((it) => intentStatus(it) === "allowed").map((it) => it.intentID),
+    [intents.data],
+  );
+  const intentThreats = useObsQuery(
+    cleanIntentIds.length > 0 && `intent-threats:${cleanIntentIds.join(",")}`,
+    () => threatHopCounts(cleanIntentIds),
+  );
+  const intentsList = useMemo(
+    () =>
+      intents.data?.intentsList.map((it) => {
+        const n = intentThreats.data?.get(it.intentID);
+        return n ? { ...it, flags: Math.max(it.flags, n) } : it;
+      }) ?? [],
+    [intents.data, intentThreats.data],
+  );
 
   const model = useMemo(() => {
     if (!graph.data) return null;
@@ -284,7 +302,7 @@ export function InteractionPlane() {
         users,
         appFlow: appFlow.data ? { base: appFlow.data, narrowed: pickedPeer ? appPeerFlow.data : null } : null,
         agentUsers: pickedPeer ? null : appAgentUsers,
-        intents: picks ? { ...picks, peerDID: pickedPeer, list: intents.data!.intentsList } : null,
+        intents: picks ? { ...picks, peerDID: pickedPeer, list: intentsList } : null,
       });
     }
     return buildPlaneModel({
@@ -292,7 +310,7 @@ export function InteractionPlane() {
       users,
       userFlow: userFlow.data,
       agentFlow: agentFlow.data ? { base: agentFlow.data, narrowed: pickedPeer ? peerFlow.data : null } : null,
-      intents: picks ? { ...picks, peerDID: pickedPeer, list: intents.data!.intentsList } : null,
+      intents: picks ? { ...picks, peerDID: pickedPeer, list: intentsList } : null,
     });
   }, [
     graph.data,
@@ -305,6 +323,7 @@ export function InteractionPlane() {
     appPeerFlow.data,
     appAgentUsers,
     intents.data,
+    intentsList,
     showIntents,
     pickedUser,
     pickedAgent,
@@ -315,7 +334,6 @@ export function InteractionPlane() {
   /** Detail-box callbacks, stable so the box skips re-rendering when only the plane changes. */
   const onDetailChain = useCallback((next: Chain) => {
     setChain(next);
-    setHovered(null);
   }, []);
   const onClearTrace = useCallback(() => onDetailChain({}), [onDetailChain]);
   const planeH = model?.height ?? 760;
@@ -343,12 +361,11 @@ export function InteractionPlane() {
     return () => ro.disconnect();
   }, []);
 
-  // Esc clears the current flow (selection and any hover preview).
+  // Esc clears the current flow.
   useEffect(() => {
     const onKey = (ev: globalThis.KeyboardEvent) => {
       if (ev.key !== "Escape") return;
       setChain({});
-      setHovered(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -357,7 +374,6 @@ export function InteractionPlane() {
   /* ---------- Selection ---------- */
 
   const FLOWS = useMemo(() => model?.flows ?? [], [model]);
-  const preview = traceMode && hovered && NODES[hovered] ? hovered : null;
   const chainIds = ORDER.map((c) => chain[c]).filter((x): x is string => !!x);
   const hasChain = chainIds.length > 0;
   /** Deepest selected layer; the layer after it is what gets revealed. */
@@ -370,11 +386,10 @@ export function InteractionPlane() {
 
   /** Paths the canvas highlights. */
   const activeFlows = useMemo(() => {
-    if (preview) return filtered.filter((f) => f.n.includes(preview));
     return filtered.filter((f) => matchesChain(f, chain, ORDER));
-  }, [filtered, preview, chain, ORDER]);
+  }, [filtered, chain, ORDER]);
 
-  const hasFocus = !!preview || hasChain;
+  const hasFocus = hasChain;
   const emphasis = hasFocus || filter !== "all";
   /** Intents are the last column in both layouts. */
   const visibleIntents = useMemo(() => {
@@ -384,10 +399,10 @@ export function InteractionPlane() {
     return ids;
   }, [filtered, chain, showIntents, ORDER]);
 
-  // A hover preview shows whole paths; a chain reveals one layer past its deepest pick,
+  // With nothing picked every layer shows; a chain reveals one layer past its deepest pick,
   // except that picking the first column + agent reveals the peers and the column after them together.
   const revealTo =
-    preview || !hasChain
+    !hasChain
       ? ORDER.length - 1
       : Math.max(depth + 1, (userMode ? pickedUser : pickedApp) && pickedAgent ? 3 : 0);
   const revealed = (id: string) => ORDER.indexOf(columnOf(id)) <= revealTo;
@@ -404,7 +419,7 @@ export function InteractionPlane() {
   }, [activeFlows, revealTo]);
 
   const visibility = (lit: boolean): Visibility => (!emphasis ? "normal" : lit ? (hasFocus ? "lit" : "normal") : "muted");
-  const isPicked = (id: string) => (preview ? id === preview : chainIds.includes(id));
+  const isPicked = (id: string) => chainIds.includes(id);
 
   /**
    * Clicking a node sets its layer in the chain and clears every layer after it. Earlier
@@ -445,8 +460,6 @@ export function InteractionPlane() {
 
   const nodeHandlers = (id: string) => ({
     onClick: () => pick(id),
-    onMouseEnter: () => traceMode && setHovered(id),
-    onMouseLeave: () => setHovered(null),
   });
 
   /** Highlight styling shared by every node card. Position is added by the caller. */
@@ -584,7 +597,6 @@ export function InteractionPlane() {
     );
     if (hit) {
       setChain({ [hit.t]: hit.id });
-      setHovered(null);
       if (hit.t === "u") revealUser(hit.y);
       if (hit.t === "a") revealAgent(hit.y);
       if (hit.t === "r") revealPeer(hit.y);
@@ -599,7 +611,6 @@ export function InteractionPlane() {
         if (!u) return setSearchMiss(true);
         setFoundUsers((cur) => (cur.some((x) => x.userDID === u.userDID) ? cur : [...cur, u]));
         setChain({ u: nodeId("u", u.userDID) });
-        setHovered(null);
         requestAnimationFrame(() => {
           const el = userListRef.current;
           el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
@@ -663,7 +674,6 @@ export function InteractionPlane() {
                     setMode(m.key);
                     setAppScroll(0);
                     setChain({});
-                    setHovered(null);
                   }}
                 >
                   {m.label}
@@ -681,17 +691,6 @@ export function InteractionPlane() {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              className={`btn${traceMode ? " primary" : ""}`}
-              onClick={() => {
-                setTraceMode((v) => !v);
-                setHovered(null);
-              }}
-            >
-              <Icon name="activity" size={15} />
-              Trace interaction
-            </button>
           </div>
         </header>
 
@@ -1010,7 +1009,6 @@ export function InteractionPlane() {
         mode={mode}
         order={ORDER}
         chain={chain}
-        preview={preview}
         filter={filter}
         nodes={model?.nodes ?? null}
         scope={REST}
