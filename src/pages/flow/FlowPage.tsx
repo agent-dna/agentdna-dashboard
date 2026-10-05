@@ -374,31 +374,24 @@ function StepDataCard({ flow, step, interactionById }: { flow: Flow; step: numbe
   const span = flow.trace.spanById[s.spanId];
   const from = flow.nodeById[s.from];
   const to = flow.nodeById[s.to];
-  // This hop's own envelope as the agent sent it. Its history is in the Envelope inspector, so
-  // the nested parent envelopes are folded to a count here to keep the card about this hop.
+  // This hop's rawData from /intent-info, exactly as the agent sent it — nested parent
+  // envelopes included, nothing added or folded. Only a hop without rawData falls back to a
+  // summary built from the flow.
   const raw = s.interactionID ? interactionById[s.interactionID]?.raw : undefined;
-  const envelope =
-    raw && typeof raw === "object" && !Array.isArray(raw)
-      ? (({ parent_envelope, ...rest }: Record<string, unknown>) => ({
-          ...rest,
-          ...(Array.isArray(parent_envelope) && parent_envelope.length > 0
-            ? { parent_envelope: `${parent_envelope.length} earlier envelope${parent_envelope.length === 1 ? "" : "s"} — see Envelope` }
-            : {}),
-        }))(raw as Record<string, unknown>)
-      : raw;
-
-  const data: Record<string, unknown> = {
-    ...(s.label ? { hop: s.label } : {}),
-    ...(s.branch ? { branch: flow.branches.find((b) => b.key === s.branch)?.name ?? s.branch } : {}),
-    from: from?.name || s.from,
-    to: to?.name || s.to,
-    verdict: s.verdict,
-    ...(envelope !== undefined ? { envelope } : {}),
-    ...(span?.input ? { input: tryParse(span.input) } : {}),
-    ...(span?.output ? { output: tryParse(span.output) } : {}),
-    ...(span?.model ? { model: span.model } : {}),
-    ...(span?.metadata && Object.keys(span.metadata).length > 0 ? { metadata: span.metadata } : {}),
-  };
+  const data: unknown =
+    raw !== undefined
+      ? raw
+      : {
+          ...(s.label ? { hop: s.label } : {}),
+          ...(s.branch ? { branch: flow.branches.find((b) => b.key === s.branch)?.name ?? s.branch } : {}),
+          from: from?.name || s.from,
+          to: to?.name || s.to,
+          verdict: s.verdict,
+          ...(span?.input ? { input: tryParse(span.input) } : {}),
+          ...(span?.output ? { output: tryParse(span.output) } : {}),
+          ...(span?.model ? { model: span.model } : {}),
+          ...(span?.metadata && Object.keys(span.metadata).length > 0 ? { metadata: span.metadata } : {}),
+        };
 
   return (
     <div style={{
