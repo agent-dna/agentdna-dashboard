@@ -7,12 +7,12 @@ import { useResolveName } from "../../context/DirectoryContext";
 import { FlowCanvas } from "./FlowCanvas";
 import { buildFlowFromIntent, buildInteractionTrace, flowForPath, intentEnvelope, groupParallelRounds, type Flow, type FlowBranch, type FlowNode } from "./flowData";
 import { fetchIntents } from "../../data/api";
+import { branchTone } from "./branchPalette";
 import type { Intent, Interaction } from "../../types";
 
 const STEP_MS = 2000;
-/** One colour per branch, by `FlowBranch.color`; the trunk stays neutral. */
-const BRANCH_COLORS = ["#7c3aed", "#0891b2", "#db2777", "#ea580c", "#16a34a", "#ca8a04"];
-const branchColor = (b?: FlowBranch) => (b ? BRANCH_COLORS[b.color % BRANCH_COLORS.length] : "#94a3b8");
+/** One colour per branch (shared with the canvas's lanes); the trunk stays neutral. */
+const branchColor = (b?: FlowBranch) => branchTone(b).ui;
 const STORAGE_KEY_STEP = "flow.step";
 
 export function FlowPage() {
