@@ -2749,3 +2749,28 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .canvas-legends { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .canvas-legend.lanes { flex-wrap: wrap; justify-content: flex-end; max-width: 420px; }
 .canvas-legend .lg .ln { width: 16px; height: 3px; border-radius: 2px; }
+
+/* Flow canvas playback: hold/resume toggle and the countdown to the next beat. */
+.canvas-bar { position: relative; }
+.canvas-bar .cb-play {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 30px; height: 30px; padding: 0 9px; border-radius: 8px;
+  border: 1px solid rgba(180,205,255,0.22); background: rgba(255,255,255,0.06);
+  color: #CFE0FF; font: 600 12px var(--font-body); cursor: pointer;
+  transition: background 120ms, border-color 120ms, color 120ms;
+}
+.canvas-bar .cb-play:hover { background: rgba(255,255,255,0.12); border-color: rgba(180,205,255,0.4); }
+.canvas-bar .cb-play:focus-visible { outline: 2px solid #60A5FA; outline-offset: 2px; }
+.canvas-bar .cb-play.held { padding: 0 12px 0 10px; color: #08132A; background: #60A5FA; border-color: #60A5FA; }
+.canvas-bar .cb-play.held:hover { background: #93C5FD; border-color: #93C5FD; }
+.canvas-bar .cb-countdown {
+  position: absolute; left: 0; right: 0; top: -1px; height: 2px;
+  background: rgba(96,165,250,0.75); transform-origin: left center;
+  animation: cb-countdown linear forwards; pointer-events: none;
+}
+@keyframes cb-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .canvas-bar .cb-countdown { display: none; } }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}

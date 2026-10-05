@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { Flow, FlowNode } from "./flowData";
 import { BRANCH_TONES, TRUNK_TONE, withAlpha } from "./branchPalette";
+import { Icon } from "../../components/Icon";
 
 
 /** Keyword → icon for known app/tool integrations (matched against the node name). */
@@ -265,9 +266,39 @@ interface FlowCanvasProps {
   activeSteps?: number[];
   /** The closing beat: the envelope travelling into the provenance layer. */
   sealActive?: boolean;
+  /** Hold/resume control shown in the bottom bar. */
+  playback?: {
+    held: boolean;
+    onToggle: () => void;
+    /** How long each beat dwells, for the countdown line. */
+    beatMs: number;
+    /** False when there is a single beat, so there is nothing to play through. */
+    canPlay: boolean;
+  };
 }
 
-export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: FlowCanvasProps) {
+/** Hold/resume toggle, plus a line along the bar's top that runs down to the next beat. */
+function PlaybackToggle({ playback, beatKey }: { playback: NonNullable<FlowCanvasProps["playback"]>; beatKey: string }) {
+  if (!playback.canPlay) return null;
+  const { held, onToggle, beatMs } = playback;
+  return (
+    <>
+      {!held && <span key={beatKey} className="cb-countdown" style={{ animationDuration: `${beatMs}ms` }} aria-hidden />}
+      <button
+        type="button"
+        className={`cb-play ${held ? "held" : ""}`}
+        onClick={onToggle}
+        aria-pressed={held}
+        title={held ? "Resume playback (Space)" : "Hold on this hop (Space)"}
+      >
+        <Icon name={held ? "play" : "pause"} size={12} />
+        {held ? "Resume" : <span className="sr-only">Hold</span>}
+      </button>
+    </>
+  );
+}
+
+export function FlowCanvas({ flow, step, activeSteps, sealActive = false, playback }: FlowCanvasProps) {
   const ref = useRef<HTMLDivElement>(null);
   const { w, h } = useElementSize(ref);
   const steps = flow.steps;
@@ -733,6 +764,7 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
 
       {sealActive && (
         <div className="canvas-bar">
+          {playback && <PlaybackToggle playback={playback} beatKey="seal" />}
           <span className="cb-num">{String(steps.length + 1).padStart(2, "0")}</span>
           <span className="cb-pair">
             <span className="cb-node">{nb(flow.sealEdges[0]?.from ?? "")}</span>
@@ -744,6 +776,7 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
 
       {cur && (
         <div className={`canvas-bar ${cur.verdict === "blocked" ? "blk" : ""}`}>
+          {playback && <PlaybackToggle playback={playback} beatKey={`step-${step}`} />}
           <span className="cb-num" title={cur.branch ? `Hop ${cur.label} on ${flow.branches.find((b) => b.key === cur.branch)?.name ?? cur.branch}` : undefined}>
             {cur.label ?? String(step + 1).padStart(2, "0")}
           </span>

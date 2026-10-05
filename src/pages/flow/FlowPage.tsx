@@ -114,6 +114,11 @@ export function FlowPage() {
     return Number.isFinite(n) && n >= 0 ? n : 0;
   });
   const [inspectSpanId, setInspectSpanId] = useState<string | null>(null);
+  /** Playback is held on the current hop: clicking a hop, stepping with the arrow keys, or the bar's toggle. */
+  const [held, setHeld] = useState(false);
+
+  // A newly opened intent plays from the start.
+  useEffect(() => setHeld(false), [activeId]);
 
   // Clamp step when flow changes
   useEffect(() => {
@@ -130,17 +135,46 @@ export function FlowPage() {
   const sealActive = roundSteps.includes(SEAL_STEP);
   const activeSteps = roundSteps.filter((i) => i < N);
 
-  // Auto-advance a round at a time, looping back to the first.
-  // Re-armed on every `step` change, so clicking a hop restarts the dwell
-  // from there rather than cutting it short.
+  // Auto-advance a round at a time, looping back to the first, unless held.
+  // Re-armed on every `step` change, so resuming plays the full dwell on the
+  // current hop before moving on.
   useEffect(() => {
-    if (rounds.length <= 1) return;
+    if (held || rounds.length <= 1) return;
     const t = window.setTimeout(() => {
       const next = rounds[(activeRound + 1) % rounds.length];
       if (next) setStep(next[0]);
     }, STEP_MS);
     return () => clearTimeout(t);
-  }, [step, activeRound, rounds]);
+  }, [step, activeRound, rounds, held]);
+
+  /** Move a round back or forward (wrapping) and hold there. */
+  const stepBy = (delta: 1 | -1) => {
+    if (rounds.length === 0) return;
+    const next = rounds[(activeRound + delta + rounds.length) % rounds.length];
+    if (next) setStep(next[0]);
+    setHeld(true);
+  };
+
+  // Space holds/resumes; ← → step a hop and hold. Not while typing or while the inspector is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (inspectSpanId !== null || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName))) return;
+      if (e.key === " ") {
+        e.preventDefault();
+        setHeld((h) => !h);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepBy(1);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepBy(-1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const stepsRef = useRef<HTMLDivElement>(null);
 
@@ -155,8 +189,10 @@ export function FlowPage() {
     }
   }, [step]);
 
+  // Clicking a hop holds playback on it; the bar's toggle (or Space) resumes from there.
   const jump = (i: number) => {
     setStep(i);
+    setHeld(true);
   };
 
   return (
@@ -344,6 +380,7 @@ export function FlowPage() {
             step={Math.min(step, Math.max(0, N - 1))}
             activeSteps={activeSteps}
             sealActive={sealActive}
+            playback={{ held, onToggle: () => setHeld((h) => !h), beatMs: STEP_MS, canPlay: rounds.length > 1 }}
           />
         ) : (
           <div className="flow-canvas">
