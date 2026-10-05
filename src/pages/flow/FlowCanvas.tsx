@@ -18,7 +18,6 @@ import {
 import type { Flow, FlowNode } from "./flowData";
 import { BRANCH_TONES, TRUNK_TONE, withAlpha } from "./branchPalette";
 
-const NODE_DOT = { human: "#1E3A8A", agent: "#2563EB", tool: "#0EA5E9" } as const;
 
 /** Keyword → icon for known app/tool integrations (matched against the node name). */
 const APP_ICON_RULES: [RegExp, LucideIcon][] = [
@@ -480,20 +479,6 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
             {flow.branches.length > 0 && ` · ${flow.branches.length} branches`}
           </div>
           <div className="canvas-legends">
-            <div className="canvas-legend">
-              <span className="lg">
-                <span className="sw human" style={{ background: NODE_DOT.human }} />
-                Operator
-              </span>
-              <span className="lg">
-                <span className="sw" style={{ background: NODE_DOT.agent }} />
-                Agent
-              </span>
-              <span className="lg">
-                <span className="sw" style={{ background: NODE_DOT.tool }} />
-                App
-              </span>
-            </div>
             {laneBranches.length > 0 && (
               <div className="canvas-legend lanes">
                 {lanes.some((l) => l.tone == null && l.firstStep !== -1) && (

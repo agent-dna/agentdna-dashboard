@@ -1015,8 +1015,6 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   backdrop-filter: blur(8px); pointer-events: none;
 }
 .canvas-legend .lg { display: inline-flex; align-items: center; gap: 6px; font: 500 11px var(--font-body); color: #A9BEE6; }
-.canvas-legend .lg .sw { width: 9px; height: 9px; border-radius: 3px; }
-.canvas-legend .lg .sw.human { border-radius: 50%; }
 
 /* Slim active-step bar */
 .canvas-bar {
@@ -1051,7 +1049,6 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .flow-canvas.compact .flow-node.active .nv { transform: scale(1.1); }
 .flow-canvas.compact .canvas-bar { gap: 9px; padding: 0 12px; }
 .flow-canvas.compact .canvas-bar .cb-node { max-width: 88px; }
-.flow-canvas.compact .canvas-legend .lg:nth-child(n+3) { display: none; }
 
 /* ---- Graph nodes (avatar + label beneath) ---- */
 .flow-node {
