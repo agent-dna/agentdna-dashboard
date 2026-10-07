@@ -85,6 +85,8 @@ export interface ApiInteraction {
   threatID?: string;
   /** /intent-info only: the sender's original envelope for this hop (see `Interaction.raw`). */
   rawData?: unknown;
+  /** What the sender sent in this hop, when the endpoint includes it. */
+  message?: string;
 }
 
 function mapInteraction(i: ApiInteraction): Interaction {
@@ -102,6 +104,7 @@ function mapInteraction(i: ApiInteraction): Interaction {
     blockType: i.blockType,
     threatID: i.threatID || undefined,
     ...(i.rawData !== undefined ? { raw: i.rawData } : {}),
+    ...(i.message ? { payload: i.message } : {}),
   };
 }
 
@@ -1436,6 +1439,7 @@ function mapToolInteraction(i: ApiToolInteraction): Interaction {
     threat: !!i.threat,
     created: isoToMinutesAgo(i.time),
     threatID: i.threatID || undefined,
+    ...(i.message ? { payload: i.message } : {}),
   };
 }
 

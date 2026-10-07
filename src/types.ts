@@ -74,6 +74,8 @@ export interface Interaction {
   threatID?: string;
   /** Resolved threat message, when the caller already has it (e.g. from /threats-list) — skips the GET /threat-by-id lookup in the drawer. */
   message?: string;
+  /** What the sender sent in this hop (the endpoint's `message`), shown as the drawer's Message. */
+  payload?: string;
   /**
    * The sender's original envelope for this hop, exactly as the agent sent it (from /intent-info's
    * `rawData`; earlier envelopes nest in `parent_envelope`). Shown as the interaction's raw data.

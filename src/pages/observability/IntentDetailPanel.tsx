@@ -148,6 +148,7 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
       created: minutesAgo(t),
       threatID: s.threatID || undefined,
       raw: s.raw,
+      ...(s.message ? { payload: s.message } : {}),
     };
     openDrawer("interaction", ix);
   };
@@ -229,7 +230,7 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
         ) : (
           <ol className="ix-chain">
             {shown.map(([s, k]) => (
-              <Step key={s.interactionID || k} s={s} n={k + 1} start={start} name={name} onOpen={() => openStep(s)} hideMessage={intent.titleFull || intent.title} />
+              <Step key={s.interactionID || k} s={s} n={k + 1} start={start} name={name} onOpen={() => openStep(s)} />
             ))}
           </ol>
         )}
@@ -287,15 +288,12 @@ function Step({
   start,
   name,
   onOpen,
-  hideMessage,
 }: {
   s: ObsInteraction;
   n: number;
   start: number | null;
   name: (did: string, given?: string) => string;
   onOpen: () => void;
-  /** Hidden when it repeats the intent's title (the trigger's message usually does). */
-  hideMessage?: string;
 }) {
   const t = ms(s.time);
   const offset = t != null && start != null ? (t - start) / 1000 : null;
@@ -324,7 +322,8 @@ function Step({
               </span>
             )}
           </span>
-          {s.message && s.message !== hideMessage && (
+          {/* Every hop shows its payload, the trigger included. */}
+          {s.message && (
             <span className={`ix-msg${isHash(s.message) ? " hash" : ""}`} title={s.message}>
               {isHash(s.message) ? `Payload hash ${shortId(s.message)}` : s.message}
             </span>

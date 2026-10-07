@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../Icon";
-import { EntityCell } from "../EntityCell";
 import { DrawerSection } from "./DrawerSection";
 import { useDrawer } from "../../context/DrawerContext";
 import { useResolveName } from "../../context/DirectoryContext";
@@ -26,6 +25,9 @@ export function InteractionDetail({ interaction: i }: Props) {
     i.threat && !i.message ? i.threatID : undefined,
   );
   const threatMessage = i.message || threatDetail?.message;
+  // What was sent in this hop: the envelope's own payload when we have it, else the endpoint's message.
+  const rawPayload = (i.raw as { payload?: unknown } | undefined)?.payload;
+  const payload = typeof rawPayload === "string" ? rawPayload : i.payload ?? i.message;
 
   const openIntent = () => {
     if (!i.intent?.id) return;
@@ -89,91 +91,24 @@ export function InteractionDetail({ interaction: i }: Props) {
       </div>
       <div className="drawer-body">
         <DrawerSection title="Flow">
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              background: "var(--bg-2)",
-              border: "1px solid var(--line)",
-              borderRadius: 10,
-              padding: 16,
-            }}
-          >
+          <div className={`ixd-route ${i.threat ? "blocked" : ""}`}>
+            <Party role="From" name={initiator.name} kind={initiator.kind} did={i.initiator.id} />
             {isSelfInteraction ? (
-              <div
-                style={{
-                  border: "1px solid var(--accent)",
-                  borderRadius: 8,
-                  padding: "10px 10px 12px",
-                  background: "rgba(37,99,235,0.06)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "var(--accent)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.08em",
-                    marginBottom: 6,
-                    fontWeight: 600,
-                  }}
-                >
-                  Initiator &amp; Target
-                </div>
-                <EntityCell name={initiator.name} paletteIx={initiator.name.charCodeAt(0)} />
-              </div>
+              <div className="ixd-self">Sent to itself</div>
             ) : (
               <>
-                <div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "var(--fg-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                      marginBottom: 6,
-                      fontWeight: 600,
-                    }}
-                  >
-                    Initiator
-                  </div>
-                  <EntityCell name={initiator.name} paletteIx={initiator.name.charCodeAt(0)} />
+                <div className="ixd-rail">
+                  <span className="line" aria-hidden />
+                  {i.blockType && <span className="hop">{capitalize(i.blockType)}</span>}
                 </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    color: "var(--accent)",
-                    paddingLeft: 12,
-                  }}
-                >
-                  <Icon name="arrowRight" size={16} style={{ transform: "rotate(90deg)" }} />
-                  {/* <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>
-                    {fmtRuntime(i.runtime)}
-                  </span> */}
-                </div>
-
-                <div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "var(--fg-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                      marginBottom: 6,
-                      fontWeight: 600,
-                    }}
-                  >
-                    Target · {targetKind === "tool" ? "app" : targetKind}
-                  </div>
-                  <EntityCell name={target.name} paletteIx={(target.name.charCodeAt(2) || 0)} />
-                </div>
+                <Party role="To" name={target.name} kind={targetKind} did={i.target.id} />
               </>
             )}
           </div>
+        </DrawerSection>
+
+        <DrawerSection title="Message">
+          {payload ? <Payload text={payload} /> : <div className="ixd-none">No message was recorded for this interaction.</div>}
         </DrawerSection>
 
         <DrawerSection title="Metadata">
@@ -330,6 +265,90 @@ export function InteractionDetail({ interaction: i }: Props) {
       </div>
     </>
   );
+}
+
+const KIND_LABEL: Record<string, string> = { agent: "Agent", tool: "App", user: "User" };
+const KIND_ICON = { agent: "agents", tool: "apps", user: "user" } as const;
+
+const capitalize = (v: string) => (v ? v[0].toUpperCase() + v.slice(1) : v);
+
+/** One end of the hop: what it is, which end, and its name, with the DID on hover. */
+function Party({ role, name, kind, did }: { role: string; name: string; kind?: string; did: string }) {
+  const k = kind === "agent" || kind === "tool" || kind === "user" ? kind : undefined;
+  return (
+    <div className="ixd-party" title={did}>
+      <span className={`ixd-av ${k ?? "unknown"}`} aria-hidden>
+        {k ? <Icon name={KIND_ICON[k]} size={16} /> : (name.trim()[0] || "?").toUpperCase()}
+      </span>
+      <div className="ixd-party-text">
+        <div className="ixd-role">
+          {role}
+          {k && <span className="ixd-kind">{KIND_LABEL[k]}</span>}
+        </div>
+        <div className="ixd-name">{name}</div>
+      </div>
+    </div>
+  );
+}
+
+/** `tools/call` payloads name the tool they call; surface it so the request reads at a glance. */
+function toolCallName(v: unknown): string | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as { method?: unknown; params?: { name?: unknown } };
+  return o.method === "tools/call" && typeof o.params?.name === "string" ? o.params.name : null;
+}
+
+/**
+ * The hop's message. JSON can be read formatted or exactly as received (what Copy copies);
+ * anything else is shown as received.
+ */
+function Payload({ text }: { text: string }) {
+  const parsed = (() => {
+    const t = text.trim();
+    if (!(t.startsWith("{") || t.startsWith("["))) return undefined;
+    try { return JSON.parse(t) as unknown; } catch { return undefined; }
+  })();
+  const isJson = parsed !== undefined;
+  const [view, setView] = useState<"formatted" | "exact">("formatted");
+  const tool = toolCallName(parsed);
+  const shown = isJson && view === "formatted" ? JSON.stringify(parsed, null, 2) : text;
+  return (
+    <div className="ixd-msg">
+      <div className="ixd-msg-head">
+        <span className="ixd-msg-kind">
+          {tool ? (
+            <>Tool call <code>{tool}</code></>
+          ) : isJson ? "JSON" : "Text"}
+        </span>
+        {isJson && (
+          <div className="ixd-seg" role="group" aria-label="Message view">
+            <button type="button" className={view === "formatted" ? "on" : ""} aria-pressed={view === "formatted"} onClick={() => setView("formatted")}>Formatted</button>
+            <button type="button" className={view === "exact" ? "on" : ""} aria-pressed={view === "exact"} onClick={() => setView("exact")}>Exact</button>
+          </div>
+        )}
+        <CopyButton text={text} />
+      </div>
+      {isJson && view === "formatted" ? (
+        <pre className="ixd-msg-body json" dangerouslySetInnerHTML={{ __html: colorizeLight(shown) }} />
+      ) : (
+        <pre className="ixd-msg-body">{shown}</pre>
+      )}
+    </div>
+  );
+}
+
+/** Light-theme JSON colouring: wraps tokens in classed spans, text unchanged (HTML-escaped). */
+function colorizeLight(json: string): string {
+  return json
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, (m) => {
+      if (/^"/.test(m)) return /:$/.test(m) ? `<span class="k">${m}</span>` : `<span class="s">${m}</span>`;
+      if (/true|false/.test(m)) return `<span class="b">${m}</span>`;
+      if (/null/.test(m)) return `<span class="n">${m}</span>`;
+      return `<span class="num">${m}</span>`;
+    });
 }
 
 function truncateId(id: string): string {

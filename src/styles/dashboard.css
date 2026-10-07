@@ -2731,3 +2731,48 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   display: inline-grid; place-items: center;
   background: var(--bg-3); color: var(--fg-muted); border: 1px solid var(--line);
 }
+
+/* ============ Interaction drawer: route and message ============ */
+.ixd-route { --rail: var(--accent); padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-1); }
+.ixd-route.blocked { --rail: var(--threat); }
+.ixd-party { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ixd-av {
+  width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center;
+  border: 1px solid var(--line); background: var(--bg-2); color: var(--fg-dim); font: 700 13px var(--font-display);
+}
+.ixd-av.agent { background: rgba(37,99,235,0.08); border-color: rgba(37,99,235,0.2); color: var(--accent); }
+.ixd-av.tool { background: rgba(14,165,233,0.10); border-color: rgba(14,165,233,0.24); color: #0369A1; }
+.ixd-av.user { background: rgba(10,34,64,0.07); border-color: rgba(10,34,64,0.16); color: var(--accent-2); }
+.ixd-party-text { min-width: 0; flex: 1; }
+.ixd-role { display: flex; align-items: center; gap: 6px; font: 500 12px var(--font-body); color: var(--fg-muted); }
+.ixd-kind { padding: 0 6px; border-radius: 4px; line-height: 17px; font-weight: 600; font-size: 11px; color: var(--fg-dim); background: var(--bg-2); }
+.ixd-name { margin-top: 1px; font: 600 14.5px var(--font-body); color: var(--fg); overflow-wrap: anywhere; }
+
+/* The rail between the two ends: the hop itself, coloured by its verdict, labelled with its type. */
+.ixd-rail { position: relative; display: flex; align-items: center; min-height: 34px; padding-left: 52px; }
+.ixd-rail .line { position: absolute; left: 18px; top: 4px; bottom: 6px; width: 2px; border-radius: 2px; background: var(--rail); opacity: 0.6; }
+.ixd-rail .line::after {
+  content: ""; position: absolute; left: 50%; bottom: -4px; transform: translateX(-50%);
+  border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--rail);
+}
+.ixd-rail .hop { font: 600 11.5px var(--font-body); color: var(--rail); }
+.ixd-self { margin: 8px 0 0 50px; font: 500 12.5px var(--font-body); color: var(--fg-muted); }
+
+.ixd-msg { border-radius: 12px; border: 1px solid var(--line); background: var(--bg-1); overflow: hidden; }
+.ixd-msg-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--line); background: var(--bg-0); }
+.ixd-msg-kind { flex: 1; min-width: 0; font: 600 12.5px var(--font-body); color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ixd-msg-kind code { margin-left: 4px; padding: 1px 6px; border-radius: 5px; font: 600 12px var(--font-mono); color: var(--accent); background: rgba(37,99,235,0.08); }
+.ixd-seg { display: inline-flex; padding: 2px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-2); flex-shrink: 0; }
+.ixd-seg button { padding: 3px 9px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; font: 600 11.5px var(--font-body); color: var(--fg-muted); }
+.ixd-seg button.on { background: var(--bg-1); color: var(--fg); box-shadow: 0 1px 2px rgba(15,32,70,0.10); }
+.ixd-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ixd-msg-body {
+  margin: 0; padding: 12px 14px; max-height: 280px; overflow: auto;
+  font: 400 12.5px/1.6 var(--font-mono); color: var(--fg); white-space: pre-wrap; word-break: break-word;
+}
+.ixd-msg-body.json .k { color: #1E3A8A; }
+.ixd-msg-body.json .s { color: #0F172A; }
+.ixd-msg-body.json .num { color: #047857; }
+.ixd-msg-body.json .b { color: #C2410C; }
+.ixd-msg-body.json .n { color: #94A3B8; }
+.ixd-none { font: 500 13px var(--font-body); color: var(--fg-muted); }
