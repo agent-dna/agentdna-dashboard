@@ -101,7 +101,7 @@ export function EntityDetail({ entity, kind }: EntityDetailProps) {
             <div style={{ flex: 1 }}>
               <ScoreBar value={entity.score} />
               <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 8 }}>
-                Composite of behavioral consistency, policy compliance, and threat signal density over the last 30 days.
+                Composite of behavioral consistency, policy compliance, and incident signal density over the last 30 days.
               </div>
             </div>
           </div>
@@ -119,7 +119,7 @@ export function EntityDetail({ entity, kind }: EntityDetailProps) {
             </div>
             <div className="card" style={{ padding: "14px 16px" }}>
               <div style={{ fontSize: 11, color: "var(--fg-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Threats
+                Incidents
               </div>
               <div
                 style={{

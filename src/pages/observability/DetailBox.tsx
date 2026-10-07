@@ -341,7 +341,7 @@ function PathHops({ row, status, order, onOpen }: { row: ObsPath; status: PlaneS
         <span className="ip-hops-title" style={{ color: row.intent ? undefined : "var(--fg-faint)" }} title={row.intent?.titleFull ?? row.intent?.title}>
           {title}
         </span>
-        {code && status !== "allowed" && <span className="ip-mono ip-faint" title={row.policy ?? "Threat code"}>{code}</span>}
+        {code && status !== "allowed" && <span className="ip-mono ip-faint" title={row.policy ?? "Incident code"}>{code}</span>}
         <span className="ip-hops-meta">
           <span className="ip-mono">{fmt(row.interactionsCount)} interactions</span>
           {onOpen && <span className="ip-hops-open">Details →</span>}

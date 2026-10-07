@@ -67,7 +67,7 @@ export function LandingPage() {
     { label: "Users",        value: metrics ? fmt(metrics.totalUsers)         : "—", trend: "+6.1%",  up: true  },
     { label: "Interactions", value: metrics ? fmt(metrics.totalInteractions)  : "—", trend: "+18.9%", up: true  },
     { label: "Intents",      value: metrics ? fmt(metrics.totalIntents)       : "—", trend: "+4.2%",  up: true  },
-    { label: "Threats",      value: metrics ? fmt(metrics.totalThreats)       : "—", trend: "9.3%",   up: false },
+    { label: "Incidents",    value: metrics ? fmt(metrics.totalThreats)       : "—", trend: "9.3%",   up: false },
   ];
 
   if (user) {
@@ -197,7 +197,7 @@ export function LandingPage() {
             AI agent <span style={{ color:"#7FB0FF" }}>observability</span> &amp; security.
           </h1>
           <p style={sub}>
-            Real-time monitoring, intent analytics, and autonomous threat detection
+            Real-time monitoring, intent analytics, and autonomous incident detection
             for every agent in your fleet.
           </p>
         </div>

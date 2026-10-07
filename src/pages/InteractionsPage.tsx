@@ -37,7 +37,7 @@ export function InteractionsPage() {
           <div className="filters">
             <div className="seg">
               <button className={filter === "all" ? "active" : ""} onClick={() => { setFilter("all"); setPage(1); }}>All</button>
-              <button className={filter === "threats" ? "active" : ""} onClick={() => { setFilter("threats"); setPage(1); }}>Threats</button>
+              <button className={filter === "threats" ? "active" : ""} onClick={() => { setFilter("threats"); setPage(1); }}>Incidents</button>
               <button className={filter === "safe" ? "active" : ""} onClick={() => { setFilter("safe"); setPage(1); }}>Safe</button>
             </div>
           </div>

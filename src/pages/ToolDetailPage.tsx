@@ -218,7 +218,7 @@ export function ToolDetailPage() {
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--fg)" }}>{tool.totalInteractions.toLocaleString()}</div>
               </div>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--fg-muted)", marginBottom: 4 }}>Threats</div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--fg-muted)", marginBottom: 4 }}>Incidents</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: tool.totalThreats > 0 ? "var(--threat)" : "var(--fg)" }}>{tool.totalThreats.toLocaleString()}</div>
               </div>
               <div>

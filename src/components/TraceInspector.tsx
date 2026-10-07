@@ -417,7 +417,7 @@ export function TraceInspector({
                       </span>
                     </span>
                     {isRoot && (
-                      <span className={`ti-root-status ${span.status}`}>{span.status === "blocked" ? "Threat found" : "Clean"}</span>
+                      <span className={`ti-root-status ${span.status}`}>{span.status === "blocked" ? "Incident found" : "Clean"}</span>
                     )}
                     {isClosed && <span className="ti-hidden-pill">+{descendants.get(span.id)}</span>}
                     {hasKids && !isRoot && (
@@ -453,7 +453,7 @@ export function TraceInspector({
               </div>
               <span className={`ti-d-status ${sel.status}`}>
                 <span className="d" />
-                {isRootSel ? (sel.status === "blocked" ? "Threat found" : "Clean") : sel.status === "blocked" ? "Blocked" : "Allowed"}
+                {isRootSel ? (sel.status === "blocked" ? "Incident found" : "Clean") : sel.status === "blocked" ? "Blocked" : "Allowed"}
               </span>
             </header>
 

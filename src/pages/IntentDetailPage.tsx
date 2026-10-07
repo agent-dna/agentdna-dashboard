@@ -328,7 +328,7 @@ export function IntentDetailPage() {
                 }
               />
               <InfoStat
-                label="Threat detected"
+                label="Incident detected"
                 value={
                   <span style={{ color: threatCount > 0 ? "var(--threat)" : "var(--fg)", fontWeight: 600 }}>
                     {threatCount}
@@ -412,11 +412,11 @@ export function IntentDetailPage() {
             <div className="it-threats-head">
               <Icon name="shield" size={15} />
               <span>
-                {threatCount} threat{threatCount === 1 ? "" : "s"} detected in this intent
+                {threatCount} incident{threatCount === 1 ? "" : "s"} detected in this intent
               </span>
             </div>
             {threatsLoading ? (
-              <div className="it-threats-note">Loading threat details…</div>
+              <div className="it-threats-note">Loading incident details…</div>
             ) : threatsError ? (
               <div className="it-threats-note">Couldn't load threat details: {threatsError.message}</div>
             ) : (
@@ -437,7 +437,7 @@ export function IntentDetailPage() {
         <MetricTile label="Interactions" value={interactions.length} icon="activity" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Agents touched" value={intent.agentsInteracted} icon="agents" sparkColor="#0EA5E9" spark={[]} />
         <MetricTile label="Apps touched" value={intent.toolsInteracted} icon="box" sparkColor="#0A2240" spark={[]} />
-        <MetricTile label="Threats" value={threatCount} icon="shield" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Incidents" value={threatCount} icon="shield" sparkColor="#DC2626" spark={[]} />
       </div>
 
       {/* Tabbed table */}
@@ -518,7 +518,7 @@ function ThreatRow({ t }: { t: IntentThreat }) {
   return (
     <li className="it-threat">
       <div className="it-threat-top">
-        <span className="it-threat-title">{d ? titleOrUnknown(d.title) : "Threat"}</span>
+        <span className="it-threat-title">{d ? titleOrUnknown(d.title) : "Incident"}</span>
         {d && <span className="it-threat-code">code {d.threatCode}</span>}
         <span className="it-threat-hop" title={t.interactionID}>
           {pos && <b>#{pos.label}</b>} {pos?.branch ? `${branchName(pos.branch)} · ` : ""}{hop}
@@ -536,7 +536,7 @@ function ThreatRow({ t }: { t: IntentThreat }) {
           )}
         </>
       ) : (
-        !d && <div className="it-threat-desc">{t.error ?? "No details for this threat."}</div>
+        !d && <div className="it-threat-desc">{t.error ?? "No details for this incident."}</div>
       )}
     </li>
   );

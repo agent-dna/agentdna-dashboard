@@ -27,7 +27,7 @@ function TopAgentsByThreats() {
         alignItems: "center",
         justifyContent: "space-between",
       }}>
-        <span style={{ fontWeight: 600, fontSize: 13, color: "var(--fg)" }}>Top agents by threats</span>
+        <span style={{ fontWeight: 600, fontSize: 13, color: "var(--fg)" }}>Top agents by incidents</span>
         {totalPages > 1 && (
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             <button
@@ -55,7 +55,7 @@ function TopAgentsByThreats() {
 
       {slice.length === 0 ? (
         <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--fg-muted)", fontSize: 13 }}>
-          No agents with threats
+          No agents with incidents
         </div>
       ) : (
         <div style={{ flex: 1 }}>
@@ -112,13 +112,13 @@ export function AlertsPage() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Threats</h1>
-          <div className="sub">{threats.length} threat-flagged interactions in the last 7 days</div>
+          <h1>Incidents</h1>
+          <div className="sub">{threats.length} incident-flagged interactions in the last 7 days</div>
         </div>
       </div>
 
       <div className="metrics">
-        <MetricTile label="Threats" value={threats.length} icon="alerts" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Incidents" value={threats.length} icon="alerts" sparkColor="#DC2626" spark={[]} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16, alignItems: "start" }}>
@@ -130,7 +130,7 @@ export function AlertsPage() {
           </div>
           <LedgerTable
             rows={threats}
-            emptyText="No threats"
+            emptyText="No incidents"
             onView={(r) => openDrawer("interaction", r)}
           />
         </div>

@@ -344,7 +344,7 @@ export function AgentDetailPage() {
           sparkColor="#0EA5E9"
           spark={[]}
         />
-        <MetricTile label="Threats" value={agent.threats} icon="shield" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Incidents" value={agent.threats} icon="shield" sparkColor="#DC2626" spark={[]} />
         <MetricTile label="Intents handled" value={intents.length} icon="intents" sparkColor="#0A2240" spark={[]} />
       </div>
 

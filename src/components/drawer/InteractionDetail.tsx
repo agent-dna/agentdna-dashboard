@@ -80,7 +80,7 @@ export function InteractionDetail({ interaction: i }: Props) {
             <span style={{ fontFamily: "var(--font-mono)" }}>{truncateId(i.id)}</span>
             {i.threat && (
               <span className="chip threat">
-                <span className="dot-status threat" /> threat
+                <span className="dot-status threat" /> incident
               </span>
             )}
           </div>
@@ -127,7 +127,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                 <div className="v" style={{ fontFamily: "var(--font-mono)" }}>{i.blockType}</div>
               </>
             )}
-            <div className="k">Threat detected</div>
+            <div className="k">Incident detected</div>
             <div className="v" style={{ color: i.threat ? "var(--threat)" : "var(--safe)" }}>
               {i.threat ? "true" : "false"}
             </div>
@@ -135,7 +135,7 @@ export function InteractionDetail({ interaction: i }: Props) {
               <>
                 {(threatLoading || threatDetail) && (
                   <>
-                    <div className="k">Threat</div>
+                    <div className="k">Incident</div>
                     <div className="v">
                       {threatLoading ? (
                         <span style={{ color: "var(--fg-muted)" }}>Loading…</span>
@@ -152,18 +152,18 @@ export function InteractionDetail({ interaction: i }: Props) {
                 )}
                 {threatMessage ? (
                   <>
-                    <div className="k">Threat message</div>
+                    <div className="k">Incident message</div>
                     <div className="v" style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{threatMessage}</div>
                   </>
                 ) : !threatLoading && (
                   <>
-                    <div className="k">Threat message</div>
+                    <div className="k">Incident message</div>
                     <div className="v" style={{ color: "var(--fg-muted)" }}>
                       {!i.threatID
-                        ? "This interaction has no threatID from the endpoint it was loaded from."
+                        ? "This interaction has no incident ID from the endpoint it was loaded from."
                         : threatError
                         ? `Failed to load: ${threatError.message}`
-                        : "No message returned for this threat."}
+                        : "No message returned for this incident."}
                     </div>
                   </>
                 )}
@@ -227,7 +227,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                 <div className="dot" />
                 <div className="line" />
                 <div className="body">
-                  <div className="nm">Threat detected</div>
+                  <div className="nm">Incident detected</div>
                   <div className="desc">{threatMessage || "Interaction flagged for review"}</div>
                 </div>
               </div>

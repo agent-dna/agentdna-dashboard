@@ -71,7 +71,7 @@ export function exportIntentPdf({ intent, interactions, participants }: ExportAr
     ["Interactions", String(ix)],
     ["Agents touched", String(intent.agentsInteracted)],
     ["Apps touched", String(intent.toolsInteracted)],
-    ["Threats", String(intent.threats), intent.threats > 0 ? THREAT : NAVY],
+    ["Incidents", String(intent.threats), intent.threats > 0 ? THREAT : NAVY],
     ["Reliability", reliability == null ? "—" : `${reliability} / 100`],
   ]);
 

@@ -80,7 +80,7 @@ export function AgentsToolsPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       align: "right",
       width: "11%",
       sortFn: (a, b) => a.threats - b.threats,
@@ -160,7 +160,7 @@ export function AgentsToolsPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       align: "right",
       width: "13%",
       sortFn: (a, b) => a.threats - b.threats,
@@ -233,7 +233,7 @@ export function AgentsToolsPage() {
           sparkColor="#0EA5E9"
           spark={[]}
         />
-        <MetricTile label="Total Threats" value={noAgents ? 0 : m.totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Total Incidents" value={noAgents ? 0 : m.totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
       </div>
 
       {noAgents ? (
@@ -367,7 +367,7 @@ function ReliabilityBar({ interactions, threats }: { interactions: number; threa
   return (
     <div
       className={`at-rel ${band}`}
-      title={`${clean.toLocaleString()} of ${interactions.toLocaleString()} interactions passed without a threat`}
+      title={`${clean.toLocaleString()} of ${interactions.toLocaleString()} interactions passed without an incident`}
     >
       <div className="at-rel-track">
         <div className="at-rel-fill" style={{ width: `${Math.min(100, pct)}%` }} />

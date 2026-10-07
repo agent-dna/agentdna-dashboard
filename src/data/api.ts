@@ -391,11 +391,11 @@ export async function fetchIntentThreats(intentId: string): Promise<IntentThreat
         time: ix.time,
         threatID: ix.threatID || "",
       };
-      if (!ix.threatID) return { ...base, detail: null, error: "No threat ID on this interaction" };
+      if (!ix.threatID) return { ...base, detail: null, error: "No incident ID on this interaction" };
       try {
         return { ...base, detail: await fetchThreatByID(ix.threatID) };
       } catch (e) {
-        return { ...base, detail: null, error: e instanceof Error ? e.message : "Failed to load threat details" };
+        return { ...base, detail: null, error: e instanceof Error ? e.message : "Failed to load incident details" };
       }
     }),
   );

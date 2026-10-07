@@ -73,7 +73,7 @@ export function exportAgentPdf({ agent, interactions, intents, history }: Export
   kv([
     ["Reliability", reliability == null ? "—" : `${reliability} / 100`],
     ["Interactions", agent.interactions.toLocaleString()],
-    ["Threats", String(agent.threats), agent.threats > 0 ? THREAT : NAVY],
+    ["Incidents", String(agent.threats), agent.threats > 0 ? THREAT : NAVY],
     ["Intents handled", String(intents.length)],
   ]);
 

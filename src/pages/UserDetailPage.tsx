@@ -309,7 +309,7 @@ export function UserDetailPage() {
       {/* Metric tiles */}
       <div className="metrics">
         <MetricTile label="Interactions" value={user.totalInteractions.toLocaleString()} icon="activity" sparkColor="#0EA5E9" spark={[]} />
-        <MetricTile label="Threats" value={user.totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Incidents" value={user.totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
         <MetricTile label="Intents" value={user.totalIntents.toLocaleString()} icon="intents" sparkColor="#0A2240" spark={[]} />
         <MetricTile label="Agents Deployed" value={user.totalAgentsDeployed} icon="box" sparkColor="#2563EB" spark={[]} />
       </div>
@@ -325,7 +325,7 @@ export function UserDetailPage() {
               tabs={[
                 { key: "interactions", label: "Interactions", count: interactionsTotal },
                 { key: "intents", label: "Intents", count: intentsTotal },
-                { key: "threats", label: "Threats", count: threatsTotal },
+                { key: "threats", label: "Incidents", count: threatsTotal },
                 { key: "agents", label: "Agents Deployed", count: agentsTotal },
               ]}
             />
@@ -362,7 +362,7 @@ export function UserDetailPage() {
         {tab === "threats" && (
           <LedgerTable
             rows={threats}
-            emptyText="No threats detected."
+            emptyText="No incidents detected."
             onView={(r) => openDrawer("interaction", r)}
           />
         )}

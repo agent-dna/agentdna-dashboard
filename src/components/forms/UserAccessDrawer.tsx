@@ -116,7 +116,7 @@ export function UserAccessDrawer({ user, onClose, onChanged }: Props) {
             <div className="v">{user.createdAt ? new Date(user.createdAt).toLocaleString() : "—"}</div>
             <div className="k">Intents</div>
             <div className="v">{user.totalIntents}</div>
-            <div className="k">Threats</div>
+            <div className="k">Incidents</div>
             <div className="v" style={{ color: user.totalThreats > 0 ? "var(--threat)" : "var(--fg)" }}>
               {user.totalThreats}
             </div>

@@ -198,7 +198,7 @@ export function IntentsPage() {
         <MetricTile label="Total Intent" value={total} icon="intents" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Agents Engaged" value={totalAgents} icon="agents" sparkColor="#0EA5E9" spark={[]} />
         <MetricTile label="Apps Engaged" value={totalTools} icon="box" sparkColor="#0A2240" spark={[]} />
-        <MetricTile label="Threats Flagged" value={totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Incidents Flagged" value={totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
       </div>
 
       <div className="card">
@@ -209,7 +209,7 @@ export function IntentsPage() {
                 All
               </button>
               <button className={filter === "threats" ? "active" : ""} onClick={() => setFilter("threats")}>
-                With threats
+                With incidents
               </button>
               <button className={filter === "safe" ? "active" : ""} onClick={() => setFilter("safe")}>
                 Safe

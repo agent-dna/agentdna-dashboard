@@ -71,7 +71,7 @@ export function UserInfoPanel({ did, name }: { did: string; name: string }) {
     icon: FileText,
     text: <>Executed intent “{it.name}”</>,
     tone: it.threats > 0 ? "threat" : "safe",
-    label: it.threats > 0 ? "Threat" : "Allowed",
+    label: it.threats > 0 ? "Incident" : "Allowed",
   }));
 
   return (
@@ -95,7 +95,7 @@ export function UserInfoPanel({ did, name }: { did: string; name: string }) {
           <div className="ip-pf-stats ip-pf-stats-4">
             <Stat icon={Activity} value={count(u.totalIntents)} label="Intents" />
             <Stat icon={Link2} value={count(u.totalInteractions)} label="Interactions" />
-            <Stat icon={Shield} value={count(u.totalThreats)} label="Threats" />
+            <Stat icon={Shield} value={count(u.totalThreats)} label="Incidents" />
             <Stat icon={Layers} value={count(u.totalAgentsDeployed)} label="Agents deployed" />
           </div>
 
@@ -181,7 +181,7 @@ export function AgentInfoPanel({ did, name, nameOf }: { did: string; name: strin
           <div className="ip-pf-stats">
             <Stat icon={Star} value={String(agent.score)} label="Score" />
             <Stat icon={TrendingUp} value={count(agent.interactions)} label="Interactions" />
-            <Stat icon={Shield} value={count(agent.threats)} label="Threats" />
+            <Stat icon={Shield} value={count(agent.threats)} label="Incidents" />
             <Stat icon={LayoutGrid} value={count(agent.connected)} label="Apps used" />
             <Stat icon={CalendarDays} value={ago(agent.created)} label="Created" />
           </div>
@@ -269,7 +269,7 @@ export function AppInfoPanel({ did, name }: { did: string; name: string }) {
         avatar={<AppIcon name={title} size={72} />}
         bare
         title={title}
-        chip={t && t.totalThreats > 0 && <StatusChip tone="threat">{count(t.totalThreats)} threats</StatusChip>}
+        chip={t && t.totalThreats > 0 && <StatusChip tone="threat">{count(t.totalThreats)} incidents</StatusChip>}
         sub="Application details and the agents that use it"
         action={
           <button type="button" className="btn primary ip-pf-open" onClick={() => navigate(openPath)}>
@@ -389,7 +389,7 @@ function RecentInteractions({
                   </span>
                 </span>
                 <span className="ip-pf-ix-side">
-                  <span className={`chip ${ix.threat ? "threat" : "safe"} ip-pf-act-pill`}>{ix.threat ? "Threat" : "Allowed"}</span>
+                  <span className={`chip ${ix.threat ? "threat" : "safe"} ip-pf-act-pill`}>{ix.threat ? "Incident" : "Allowed"}</span>
                   <span className="ip-pf-ix-time">{ago(ix.created)}</span>
                 </span>
               </button>

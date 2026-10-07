@@ -1673,7 +1673,7 @@ export function HomePage() {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 2 }}>Critical</div>
                   <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
-                    Immediate action required. Threats that pose severe security risks such as data exfiltration, privilege escalation, or system compromise.
+                    Immediate action required. Incidents that pose severe security risks such as data exfiltration, privilege escalation, or system compromise.
                   </div>
                 </div>
               </div>
@@ -1723,7 +1723,7 @@ export function HomePage() {
         intro={<>Every recorded call between two participants in your org — agent to agent, or agent to app. Each hop of an intent counts as one interaction.</>}
         rows={[
           { color: SAFE_COLOR, label: "Safe", text: "Interactions that passed identity, trust and scope checks — the total minus flagged ones." },
-          { color: INCIDENT_COLOR, label: "Incidents", text: "Interactions where a threat was detected or policy blocked the call." },
+          { color: INCIDENT_COLOR, label: "Incidents", text: "Interactions where an incident was detected or policy blocked the call." },
         ]}
         tip={<>Open <strong>Interactions</strong> in the sidebar for the full log, or click any incident in the Security events table to jump to the flagged ones.</>}
       />
@@ -1756,8 +1756,8 @@ export function HomePage() {
         title="Intents Metric"
         intro={<>Tasks a user handed to your agents. One intent covers the whole chain of work it sets off, however many agents and apps it touches.</>}
         rows={[
-          { color: SAFE_COLOR, label: "Safe", text: "Intents that ran with no threat detected along the way." },
-          { color: INCIDENT_COLOR, label: "Blocked", text: "Intents halted by a policy violation or a detected threat before they finished." },
+          { color: SAFE_COLOR, label: "Safe", text: "Intents that ran with no incident detected along the way." },
+          { color: INCIDENT_COLOR, label: "Blocked", text: "Intents halted by a policy violation or a detected incident before they finished." },
         ]}
         tip={<>Open <strong>Intents</strong> to review each one, or click an intent to replay its flow hop by hop.</>}
       />
