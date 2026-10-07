@@ -277,13 +277,27 @@ export function IntentDetailPage() {
                     </div>
                   );
                 })()}
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6,
-                  fontFamily: "var(--font-mono)", fontSize: 11.5,
-                  color: "var(--fg-faint)", fontWeight: 600,
-                }}>
-                  Saved on Provenance Layer
-                </span>
+                {/* The intent's record on the provenance layer, keyed by the intent ID. */}
+                <a
+                  href={`https://testnetexplorer.rubix.net/nft-explorer?token=${encodeURIComponent(intent.id)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    marginTop: 6,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11.5,
+                    color: "var(--accent)",
+                    textDecoration: "none",
+                    fontWeight: 600,
+                  }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
+                >
+                  View on Provenance Layer ↗
+                </a>
               </div>
               <InfoStat
                 label="Intent ID"

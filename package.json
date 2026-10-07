@@ -7,14 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "video": "remotion studio",
-    "video:render": "remotion render AgentDnaOverview"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@react-three/fiber": "^9.7.0",
-    "@remotion/cli": "^4.0.527",
-    "@remotion/player": "^4.0.527",
     "@tailwindcss/vite": "^4.2.3",
     "@types/cytoscape": "^3.21.9",
     "@xyflow/react": "^12.11.6",
@@ -26,16 +21,13 @@
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.10.1",
     "recharts": "^3.5.1",
-    "remotion": "^4.0.527",
-    "tailwindcss": "^4.2.3",
-    "three": "^0.186.0"
+    "tailwindcss": "^4.2.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
-    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^5.1.1",
     "dotenv": "^17.2.3",
     "eslint": "^9.39.1",
