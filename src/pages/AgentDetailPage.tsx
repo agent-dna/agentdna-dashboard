@@ -14,7 +14,7 @@ import { useAgent, useAgentInteractions, useAgentIntents, /* useAgentTools, */ u
 // import type { AgentToolLink } from "../data/api";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
-import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { useResolveName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { initials, timeAgo, /* timeAgoLong, */ capitalizeFirst } from "../lib/format";
 import { LedgerTable } from "../components/LedgerTable";
@@ -115,7 +115,7 @@ export function AgentDetailPage() {
       key: "initiator",
       label: "Initiator",
       render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(resolveDisplayName(resolve, r.initiator))}</span>
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(resolve(r.initiator.id, r.initiator.name).name)}</span>
       ),
     },
     {
@@ -134,7 +134,7 @@ export function AgentDetailPage() {
         return (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {apps.slice(0, 3).map((app) => (
-              <AppIcon key={app.id} name={resolveDisplayName(resolve, app)} size={20} />
+              <AppIcon key={app.id} name={resolve(app.id, app.name).name} size={20} />
             ))}
             {apps.length > 3 && (
               <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>+{apps.length - 3}</span>
@@ -292,7 +292,31 @@ export function AgentDetailPage() {
                 paddingTop: 16,
               }}
             >
-              <InfoStat label="Owner" value={resolve(agent.owner).name} />
+              {/* /agent-info sends the deployer's name; the directory and a short DID are fallbacks. The
+                  deployer is always a user, so it links to their page even when the directory lacks them. */}
+              <InfoStat
+                label="Owner"
+                value={
+                  agent.owner ? (
+                    <a
+                      href={`/users/${encodeURIComponent(agent.owner)}`}
+                      title={`Open ${agent.ownerName || "owner"}'s page`}
+                      onClick={(e) => {
+                        // Let modified clicks (new tab, etc.) behave natively.
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                        e.preventDefault();
+                        navigate(`/users/${encodeURIComponent(agent.owner)}`);
+                      }}
+                      className="owner-link"
+                    >
+                      {agent.ownerName || resolve(agent.owner).name}
+                      <Icon name="arrowUpRight" size={13} />
+                    </a>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
               <InfoStat label="Environment" value={agent.env} />
               <InfoStat label="Created" value={timeAgo(agent.created)} />
               <InfoStat label="Interacted apps" value={agent.connected} mono />

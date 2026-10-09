@@ -35,6 +35,8 @@ import {
   intentStatus,
   nodeId,
   usersFromPaths,
+  mergeUsersByEmail,
+  mergeFlowUsers,
   refOf,
   type ListColumn,
   type PlaneColumn,
@@ -214,10 +216,12 @@ export function InteractionPlane() {
 
   const usersTotal = userPages[0]?.total ?? 0;
   const hasMoreUsers = userPages.length > 0 && userPages.length < (userPages[0]?.totalPages ?? 0);
-  const users = useMemo(() => {
+  // One card per person: DIDs that share an email merge into the first one listed (mergeUsersByEmail).
+  const { users, canonUser } = useMemo(() => {
     const listed = userPages.flatMap((p) => p.usersList);
     const seen = new Set(listed.map((u) => u.userDID));
-    return [...listed, ...foundUsers.filter((u) => !seen.has(u.userDID))];
+    const merged = mergeUsersByEmail([...listed, ...foundUsers.filter((u) => !seen.has(u.userDID))]);
+    return { users: merged.users, canonUser: (did: string) => merged.canon.get(did) ?? did };
   }, [userPages, foundUsers]);
 
   // A pick only counts once the columns it depends on are picked; before that it just highlights.
@@ -253,8 +257,13 @@ export function InteractionPlane() {
     () => fetchObsPaths(REST, { appDID: pickedApp!, agentDID: pickedAgent! }, 200),
   );
   const appAgentUsers = useMemo(
-    () => (appAgentPaths.data ? usersFromPaths(appAgentPaths.data.pathsList, users) : null),
-    [appAgentPaths.data, users],
+    () => (appAgentPaths.data ? usersFromPaths(appAgentPaths.data.pathsList, users, canonUser) : null),
+    [appAgentPaths.data, users, canonUser],
+  );
+  /** The picked peer's users, with each person's DIDs folded into one row. */
+  const appPeerFlowData = useMemo(
+    () => (appPeerFlow.data ? { ...appPeerFlow.data, users: mergeFlowUsers(appPeerFlow.data.users, canonUser) } : null),
+    [appPeerFlow.data, canonUser],
   );
   /** The call that fills the peer column in the current mode. */
   const peersQuery = userMode ? agentFlow : appFlow;
@@ -262,7 +271,7 @@ export function InteractionPlane() {
   const flowUsers = userMode
     ? null
     : pickedPeer
-      ? appPeerFlow.data && { list: appPeerFlow.data.users, total: appPeerFlow.data.usersTotal }
+      ? appPeerFlowData && { list: appPeerFlowData.users, total: appPeerFlowData.usersTotal }
       : pickedAgent && appFlow.data && appAgentUsers && { list: appAgentUsers, total: appAgentUsers.length };
 
   /**
@@ -300,7 +309,7 @@ export function InteractionPlane() {
       return buildAppPlaneModel({
         graph: graph.data,
         users,
-        appFlow: appFlow.data ? { base: appFlow.data, narrowed: pickedPeer ? appPeerFlow.data : null } : null,
+        appFlow: appFlow.data ? { base: appFlow.data, narrowed: pickedPeer ? appPeerFlowData : null } : null,
         agentUsers: pickedPeer ? null : appAgentUsers,
         intents: picks ? { ...picks, peerDID: pickedPeer, list: intentsList } : null,
       });
@@ -320,7 +329,7 @@ export function InteractionPlane() {
     agentFlow.data,
     peerFlow.data,
     appFlow.data,
-    appPeerFlow.data,
+    appPeerFlowData,
     appAgentUsers,
     intents.data,
     intentsList,
@@ -1011,6 +1020,7 @@ export function InteractionPlane() {
         chain={chain}
         filter={filter}
         nodes={model?.nodes ?? null}
+        canonUser={canonUser}
         scope={REST}
         onChain={onDetailChain}
         onClearTrace={onClearTrace}

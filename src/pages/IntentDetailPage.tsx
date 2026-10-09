@@ -7,7 +7,7 @@ import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell } from "../components/EntityCell";
 import { EntityLink } from "../components/EntityLink";
 import { entityPath } from "../lib/entityLinks";
-import { useResolveName, resolveDisplayName, shortDid } from "../context/DirectoryContext";
+import { useResolveName, shortDid } from "../context/DirectoryContext";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
 import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useIntentThreats } from "../data/hooks";
@@ -44,7 +44,7 @@ export function IntentDetailPage() {
    * initiator's full DID (not the "did:abc…1234" short form, and never a bare "—").
    */
   function ownerLabel(initiator: { id: string; name: string }): { text: string; isDid: boolean } {
-    const resolved = resolveDisplayName(resolve, initiator);
+    const resolved = resolve(initiator.id, initiator.name).name;
     const unresolved = !resolved || resolved === "—" || resolved === shortDid(initiator.id);
     if (unresolved && initiator.id) return { text: initiator.id, isDid: true };
     return { text: resolved || "—", isDid: false };

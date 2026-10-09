@@ -8,9 +8,11 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, adminOnly }: ProtectedRouteProps) {
-  const { user } = useAuth();
+  const { user, ready } = useAuth();
   const location = useLocation();
 
+  // Until GET /session answers we don't know yet; redirecting now would bounce a signed-in user.
+  if (!ready) return null;
   if (!user) {
     return <Navigate to="/" state={{ from: location }} replace />;
   }

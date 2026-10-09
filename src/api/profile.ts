@@ -3,8 +3,10 @@ import { apiRequest } from "./client";
 export interface UserProfile {
   name: string;
   email: string;
-  /** Empty until the account is linked; the server sends "none" for an unlinked user. */
-  did: string;
+  /** Older responses: the single DID; "none" for an unlinked user. */
+  did?: string;
+  /** Every DID the user holds. Empty until the account is linked. */
+  dids?: string[];
   apiKey: string;
   organizationID: string;
   createdAt: string;
@@ -58,8 +60,8 @@ export function updateUserProfile(body: UpdateProfileBody): Promise<null> {
 export const MIN_PASSWORD_LENGTH = 8;
 
 /**
- * Regular (non-admin) users: POST /update-password — sets a new password for the user in the token.
- * Admins use `adminUpdatePassword` in api/auth.ts (admin server) instead.
+ * POST /update-password — users and admins: sets a new password for whoever is signed in (the
+ * middleware forwards admins' to the admin server). Every other device's session ends; this one stays.
  * Only the new password is sent: the server does not ask for or verify the current one.
  * Success carries no `data`; failures reject with ApiError carrying the server's message
  * (e.g. "password must be at least 8 characters", "account not found").

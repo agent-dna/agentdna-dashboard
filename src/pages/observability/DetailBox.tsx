@@ -26,6 +26,8 @@ interface DetailBoxProps {
   filter: Filter;
   /** The plane's nodes, for names; `null` until the plane has loaded. */
   nodes: Record<string, PlaneNode> | null;
+  /** A user DID's card DID: a person's DIDs share one card on the plane (see mergeUsersByEmail). */
+  canonUser?: (did: string) => string;
   scope: ObsScope;
   onChain: (chain: Chain) => void;
   onClearTrace: () => void;
@@ -68,7 +70,7 @@ const TAB_OF: Record<PlaneColumn, TabKey> = { u: "user", a: "agent", r: "agent",
 const fmt = (n: number) => (n < 1000 ? String(n) : `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`);
 const tint = (st: PlaneStatus, alpha: string) => STATUS_TINT[st].replace(".12", alpha);
 
-export const DetailBox = memo(function DetailBox({ mode, order, chain, filter, nodes, scope, onChain, onClearTrace }: DetailBoxProps) {
+export const DetailBox = memo(function DetailBox({ mode, order, chain, filter, nodes, canonUser, scope, onChain, onClearTrace }: DetailBoxProps) {
   const NODES = nodes ?? {};
   const userMode = mode === "user";
   const chainIds = order.map((c) => chain[c]).filter((x): x is string => !!x);
@@ -113,7 +115,10 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, filter, n
     loadIntentDetail(pickedIntent!, NODES[chain.i!]?.name ?? pickedIntent!),
   );
   const nameOf = (did: string) => (["u", "a", "p"] as const).map((t) => NODES[nodeId(t, did)]?.name).find(Boolean);
-  const rows = paths.data?.pathsList ?? [];
+  // Each row's user as their plane card, so opening a path lands on the person's one card.
+  const rows = (paths.data?.pathsList ?? []).map((r) =>
+    canonUser && r.user?.did && canonUser(r.user.did) !== r.user.did ? { ...r, user: { ...r.user, did: canonUser(r.user.did) } } : r,
+  );
   /**
    * A row's status. The server's path `outcome` only looks at user → agent and agent → app
    * hops, so an intent blocked on an agent → agent hop comes back "allowed". Take the worst of

@@ -3,7 +3,6 @@ import { Icon } from "../components/Icon";
 import { useAuth } from "../context/AuthContext";
 import { fetchTokenUsage, type TokenUsage } from "../api/keys";
 import { fetchUserProfile, fetchAdminProfile, updatePassword, MIN_PASSWORD_LENGTH, type UserProfile, type AdminProfile } from "../api/profile";
-import { adminUpdatePassword, adminUsernameFromToken } from "../api/auth";
 import { ApiError } from "../api/client";
 
 function maskKey(key: string) {
@@ -11,8 +10,6 @@ function maskKey(key: string) {
   if (key.length <= 8) return "•".repeat(key.length);
   return key.slice(0, 4) + "•".repeat(Math.min(key.length - 8, 20)) + key.slice(-4);
 }
-
-const SUPPORT_EMAIL = "support@agentdna.ai";
 
 export function ProfilePage() {
   const { user, patchUser } = useAuth();
@@ -23,9 +20,6 @@ export function ProfilePage() {
 
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [didCopied, setDidCopied] = useState(false);
-  const [msgSubject, setMsgSubject] = useState("");
-  const [msgBody, setMsgBody] = useState("");
   const [usage, setUsage] = useState<TokenUsage | null>(null);
   const [usageLoading, setUsageLoading] = useState(true);
 
@@ -66,10 +60,11 @@ export function ProfilePage() {
   const displayEmail = activeProfile?.email || user?.email || "—";
   const displayOrg = activeProfile?.organizationID || user?.org_id || (isAdmin ? "AGENT_DNA_BETA" : "");
   const displayRole = isAdmin ? "Administrator" : "User";
-  // The server sends "none" for a user whose DID isn't linked yet; the JWT claim is the fallback.
-  const rawDid = activeProfile?.did || user?.did || "";
-  const hasDid = !!rawDid && rawDid !== "none";
-  const displayDid = hasDid ? rawDid : "Not linked yet";
+  // Users get `dids` (every DID they hold); admins and older responses a single `did`, where the
+  // server sends "none" when nothing is linked yet. The session's DID is the last fallback.
+  const listedDids = (profile?.dids ?? []).filter((d) => d && d !== "none");
+  const singleDid = activeProfile?.did || user?.did || "";
+  const dids = listedDids.length > 0 ? listedDids : singleDid && singleDid !== "none" ? [singleDid] : [];
 
   function formatDate(dateStr: string) {
     try { return new Date(dateStr).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); }
@@ -89,29 +84,15 @@ export function ProfilePage() {
     catch { /* clipboard unavailable */ }
   }
 
-  async function handleCopyDid() {
-    if (!hasDid) return;
-    try { await navigator.clipboard.writeText(rawDid); setDidCopied(true); window.setTimeout(() => setDidCopied(false), 2000); }
-    catch { /* clipboard unavailable */ }
-  }
-
-  function sendMessage() {
-    const sub = encodeURIComponent(msgSubject.trim() || "Support request");
-    const body = encodeURIComponent(msgBody.trim());
-    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${sub}&body=${body}`;
-  }
 
   async function handlePasswordChange() {
     if (!pwNew.trim()) { setPwError("New password cannot be empty."); return; }
     if (pwNew.length < MIN_PASSWORD_LENGTH) { setPwError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`); return; }
     if (pwNew !== pwConfirm) { setPwError("New passwords do not match."); return; }
-    // Admins change it on the admin server, keyed by the username they log in with.
-    const adminUsername = isAdmin ? adminUsernameFromToken() || adminProfile?.name?.trim() : null;
-    if (isAdmin && !adminUsername) { setPwError("Couldn't determine your admin username — please sign in again."); return; }
     setPwSaving(true); setPwError(null);
     try {
-      if (isAdmin) await adminUpdatePassword(adminUsername!, pwNew);
-      else await updatePassword(pwNew);
+      // Users and admins alike: the backend knows who is signed in (and forwards admins' to the admin server).
+      await updatePassword(pwNew);
       setPwOpen(false); setPwNew(""); setPwConfirm("");
       setPwSuccess(true); window.setTimeout(() => setPwSuccess(false), 4000);
     } catch (err) {
@@ -189,22 +170,9 @@ export function ProfilePage() {
                 {displayRole}
               </AccountDetailCell>
 
-              {/* DID — full width, since it's far longer than the other values */}
-              <AccountDetailCell
-                label="DID"
-                fullWidth
-                mono
-                action={hasDid && !profileLoading ? (
-                  <button
-                    onClick={handleCopyDid}
-                    title="Copy DID"
-                    style={{ background: "none", border: "none", cursor: "pointer", color: didCopied ? "var(--safe)" : "var(--fg-muted)", padding: 4, display: "flex", flexShrink: 0 }}
-                  >
-                    <Icon name={didCopied ? "check" : "copy"} size={15} />
-                  </button>
-                ) : null}
-              >
-                {profileLoading ? "—" : displayDid}
+              {/* DIDs — full width, since they're far longer than the other values */}
+              <AccountDetailCell label={dids.length > 1 ? `DIDs (${dids.length})` : "DID"} fullWidth>
+                {profileLoading ? "—" : <DidList dids={dids} primary={user?.did} />}
               </AccountDetailCell>
             </div>
           </div>
@@ -393,34 +361,6 @@ export function ProfilePage() {
               ))}
             </div>
           </div>
-
-          {/* Contact support */}
-          <div className="card" style={{ padding: 24 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--fg)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Contact support
-            </div>
-            <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginBottom: 18 }}>
-              Having trouble? Drop us a message and we'll get back to you.
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>Subject</label>
-                <input type="text" placeholder="Brief description of your issue" value={msgSubject} onChange={(e) => setMsgSubject(e.target.value)} style={fieldInputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>Message</label>
-                <textarea placeholder="Describe your issue in detail…" value={msgBody} onChange={(e) => setMsgBody(e.target.value)} rows={5}
-                  style={{ ...fieldInputStyle, resize: "vertical", lineHeight: 1.6 }} />
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button className="btn primary" onClick={sendMessage} disabled={!msgBody.trim()} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <Icon name="arrowUpRight" size={14} />
-                  Send message
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -443,9 +383,62 @@ function AccountDetailCell({ label, children, fullWidth = false, mono = false, a
         {label}
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontSize: mono ? 12.5 : 13.5, fontWeight: 500, color: "var(--fg)", wordBreak: "break-all", fontFamily: mono ? "var(--font-mono)" : undefined }}>{children}</span>
+        <div style={{ flex: 1, minWidth: 0, fontSize: mono ? 12.5 : 13.5, fontWeight: 500, color: "var(--fg)", wordBreak: "break-all", fontFamily: mono ? "var(--font-mono)" : undefined }}>{children}</div>
         {action}
       </div>
+    </div>
+  );
+}
+
+/** DIDs shown before "Show more". */
+const DIDS_SHOWN = 2;
+
+/**
+ * Every DID the account holds, the primary (the session's) first. Two show at once; the rest
+ * open with "Show more". Each has its own copy button.
+ */
+function DidList({ dids, primary }: { dids: string[]; primary?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  if (dids.length === 0) return <span style={{ color: "var(--fg-muted)" }}>Not linked yet</span>;
+
+  const ordered = primary && dids.includes(primary) ? [primary, ...dids.filter((d) => d !== primary)] : dids;
+  const shown = expanded ? ordered : ordered.slice(0, DIDS_SHOWN);
+  const hidden = ordered.length - DIDS_SHOWN;
+
+  const copy = async (did: string) => {
+    try {
+      await navigator.clipboard.writeText(did);
+      setCopied(did);
+      window.setTimeout(() => setCopied((c) => (c === did ? null : c)), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  return (
+    <div className="did-list">
+      <ul>
+        {shown.map((did) => (
+          <li key={did}>
+            <span className="did-v">{did}</span>
+            {did === primary && ordered.length > 1 && <span className="did-primary">Primary</span>}
+            <button
+              type="button"
+              className={`did-copy ${copied === did ? "done" : ""}`}
+              onClick={() => copy(did)}
+              title={copied === did ? "Copied" : "Copy DID"}
+              aria-label={copied === did ? "Copied" : "Copy DID"}
+            >
+              <Icon name={copied === did ? "check" : "copy"} size={14} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 && (
+        <button type="button" className="did-more" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+          {expanded ? "Show less" : `Show ${hidden} more`}
+          <Icon name="chevronDown" size={13} style={{ transform: expanded ? "rotate(180deg)" : undefined }} />
+        </button>
+      )}
     </div>
   );
 }
@@ -460,16 +453,6 @@ const pillStyle: CSSProperties = {
   background: "rgba(37,99,235,0.07)",
   color: "var(--accent)",
   border: "1px solid rgba(37,99,235,0.15)",
-};
-
-const labelStyle: CSSProperties = {
-  fontSize: 10.5,
-  fontWeight: 700,
-  color: "var(--fg-muted)",
-  textTransform: "uppercase",
-  letterSpacing: "0.07em",
-  display: "block",
-  marginBottom: 5,
 };
 
 const fieldInputStyle: CSSProperties = {

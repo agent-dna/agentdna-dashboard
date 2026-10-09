@@ -75,7 +75,7 @@ export function EntityDetail({ entity, kind }: EntityDetailProps) {
             {isAgent && (
               <>
                 <div className="k">Owner</div>
-                <div className="v">{agent.owner}</div>
+                <div className="v" title={agent.owner}>{agent.ownerName || agent.owner || "—"}</div>
                 <div className="k">Environment</div>
                 <div className="v">{agent.env}</div>
               </>

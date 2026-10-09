@@ -265,6 +265,8 @@ export function HomePage() {
     });
   }, [dayCount]);
 
+  // No agents of their own yet: the page still shows (they can be part of other people's intents),
+  // but the agents/apps volume card asks them to deploy one instead of listing an empty ranking.
   const isEmpty = !homeState.loading && metrics.agentCount === 0;
 
   const intentCols: DataTableColumn<Intent>[] = [
@@ -539,67 +541,6 @@ export function HomePage() {
     URL.revokeObjectURL(url);
   }
 
-  if (isEmpty) {
-    return (
-      <div className="page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", gap: 0 }}>
-        <div
-          style={{
-            maxWidth: 460,
-            width: "100%",
-            textAlign: "center",
-            padding: "48px 40px",
-            background: "var(--surface)",
-            border: "1.5px dashed var(--line-strong)",
-            borderRadius: 16,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 16,
-          }}
-        >
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 14,
-              background: "linear-gradient(135deg, rgba(37,99,235,0.12), rgba(10,34,64,0.10))",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: 4,
-            }}
-          >
-            <Icon name="agents" size={26} style={{ color: "var(--accent)" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--fg)", marginBottom: 8 }}>
-              No agents deployed yet
-            </div>
-            <div style={{ fontSize: 14, color: "var(--fg-muted)", lineHeight: 1.6 }}>
-              Deploy your first agent to start monitoring interactions, detecting incidents, and tracking intents in real time.
-            </div>
-          </div>
-          <button
-            className="btn primary"
-            style={{ marginTop: 8, padding: "10px 24px", fontSize: 14, fontWeight: 600 }}
-            onClick={() => navigate("/profile")}
-          >
-            <Icon name="key" size={15} />
-            Deploy your first agent
-          </button>
-          <div style={{ fontSize: 12, color: "var(--fg-faint)", marginTop: 4 }}>
-            You can also browse existing{" "}
-            <span
-              style={{ color: "var(--accent)", cursor: "pointer", textDecoration: "underline" }}
-              onClick={() => navigate("/agents")}
-            >
-              Agents & Apps
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // Calculate critical/high severity threat counts
   const criticalThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "Critical").reduce((sum, t) => sum + t.count, 0);
@@ -1415,8 +1356,10 @@ export function HomePage() {
             </div>
           </div>
 
+          {isEmpty && <DeployFirstAgent dark={volumeTab === "apps"} onDeploy={() => navigate("/profile")} />}
+
           {/* Agents view */}
-          {volumeTab === "agents" && (
+          {!isEmpty && volumeTab === "agents" && (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 24px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)" }}>
                 {["#", "AGENT", "IXNS", ""].map((h, i) => (
@@ -1474,7 +1417,7 @@ export function HomePage() {
           )}
 
           {/* Apps view — matches TopAppsList dark design */}
-          {volumeTab === "apps" && (
+          {!isEmpty && volumeTab === "apps" && (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "36px 22px 1fr 76px 72px 24px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
                 {["#", "", "APP", "IXNS", "INCIDENTS", ""].map((h, i) => (
@@ -1765,3 +1708,33 @@ export function HomePage() {
   );
 }
 
+/** In the volume card when the user has no agents yet: there is nothing to rank until one is deployed. */
+function DeployFirstAgent({ dark, onDeploy }: { dark: boolean; onDeploy: () => void }) {
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 12, padding: "36px 28px" }}>
+      <div
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 12,
+          display: "grid",
+          placeItems: "center",
+          background: dark ? "rgba(255,255,255,0.08)" : "rgba(37,99,235,0.08)",
+          color: dark ? "#A8BDF5" : "var(--accent)",
+        }}
+      >
+        <Icon name="agents" size={22} />
+      </div>
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: dark ? "#fff" : "var(--fg)", marginBottom: 4 }}>No agents deployed yet</div>
+        <div style={{ fontSize: 13, lineHeight: 1.55, color: dark ? "rgba(255,255,255,0.55)" : "var(--fg-muted)", maxWidth: 300 }}>
+          Deploy your first agent to see your agents and the apps they use ranked by volume here.
+        </div>
+      </div>
+      <button className="btn primary" style={{ marginTop: 4 }} onClick={onDeploy}>
+        <Icon name="key" size={14} />
+        Deploy your first agent
+      </button>
+    </div>
+  );
+}

@@ -6,27 +6,19 @@ const BASE = (
   import.meta.env.VITE_API_BASE_URL ||
   ""
 ).replace(/\/$/, "");
-const DEV_TOKEN: string | undefined = import.meta.env.VITE_DEV_TOKEN;
 
-const TOKEN_KEY = "agentdna.token";
+/*
+ * Auth is a session cookie (`agentdna_session`, HttpOnly) the backend sets on login. The
+ * browser stores and sends it; JavaScript never sees it. So every request goes out with
+ * `credentials: "include"` and no Authorization header, and only an HTTP 401 means the
+ * session is gone.
+ */
 
-export function getToken(): string | null {
-  try {
-    const stored = localStorage.getItem(TOKEN_KEY);
-    if (stored) return stored;
-  } catch {
-    // fall through to dev token
-  }
-  return DEV_TOKEN || null;
-}
-
-export function setToken(token: string | null) {
-  try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // ignore
-  }
+// Leftovers from the JWT era: drop them so no token or decoded identity lingers in storage.
+try {
+  for (const k of ["agentdna.token", "agentdna.user", "agentdna.sessionStart"]) localStorage.removeItem(k);
+} catch {
+  // storage unavailable — nothing to clean
 }
 
 export interface ApiResponse<T> {
@@ -47,7 +39,9 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   query?: Record<string, string | number | undefined | null>;
+  /** Documents whether the endpoint needs a session; the cookie is sent either way. */
   auth?: boolean;
+  /** A 401 here doesn't sign the user out (e.g. the boot-time session check handles it itself). */
   skipLogoutOn401?: boolean;
 }
 
@@ -57,7 +51,7 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 }
 
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, query, auth = true, skipLogoutOn401 = false } = opts;
+  const { method = "GET", body, query, skipLogoutOn401 = false } = opts;
 
   if (!BASE) {
     throw new ApiError(
@@ -76,11 +70,6 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   const headers: Record<string, string> = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
-  if (auth) {
-    const token = getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
-
   const reqStartedAt = performance.now();
   console.log(`[REQUEST ${method} ${url.pathname}${url.search}] sent at ${new Date().toISOString()}`, body ?? {});
 
@@ -89,6 +78,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     res = await fetch(url.toString(), {
       method,
       headers,
+      credentials: "include",
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (networkErr) {
@@ -107,11 +97,12 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
 
   if (res.status === 401) {
     console.warn(`[REQUEST ${method} ${url.pathname}${url.search}] 401 after ${elapsed.toFixed(0)}ms`);
-    if (!skipLogoutOn401) {
-      setToken(null);
-      if (onUnauthorized) onUnauthorized();
-    }
-    throw new ApiError("Unauthorized", 401);
+    const message = await res
+      .json()
+      .then((p: { message?: string }) => p?.message)
+      .catch(() => undefined);
+    if (!skipLogoutOn401 && onUnauthorized) onUnauthorized();
+    throw new ApiError(message || "Unauthorized", 401);
   }
 
   let payload: ApiResponse<T> | null = null;
@@ -139,7 +130,7 @@ export async function apiUpload<T>(
   formData: FormData,
   opts: { method?: string; auth?: boolean } = {},
 ): Promise<T> {
-  const { method = "POST", auth = true } = opts;
+  const { method = "POST" } = opts;
 
   if (!BASE) {
     throw new ApiError(
@@ -150,15 +141,9 @@ export async function apiUpload<T>(
 
   const headers: Record<string, string> = { Accept: "application/json" };
   // Do NOT set Content-Type; the browser sets multipart/form-data with the boundary.
-  if (auth) {
-    const token = getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
-
-  const res = await fetch(BASE + path, { method, headers, body: formData });
+  const res = await fetch(BASE + path, { method, headers, credentials: "include", body: formData });
 
   if (res.status === 401) {
-    setToken(null);
     if (onUnauthorized) onUnauthorized();
     throw new ApiError("Unauthorized", 401);
   }

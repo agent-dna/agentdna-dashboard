@@ -8,6 +8,7 @@ import { UsersTab } from "./requests/UsersTab";
 import { useAuth } from "../context/AuthContext";
 import { useResolveName } from "../context/DirectoryContext";
 import { ApiError } from "../api/client";
+import { fetchUserInfo } from "../data/api";
 import {
   listAccessRequestsForOrg,
   listAccessRequestsForUser,
@@ -63,6 +64,20 @@ export function RequestsPage() {
   const isAdmin = !!user?.is_admin;
   const resolve = useResolveName();
   const navigate = useNavigate();
+
+  // A user can hold several DIDs, so "created by me" checks all of them, not just the primary.
+  // Admins can edit any pending request, so only regular users need the list.
+  const [myDids, setMyDids] = useState<string[]>([]);
+  useEffect(() => {
+    if (!user?.did || isAdmin) return;
+    let live = true;
+    fetchUserInfo(user.did)
+      .then((r) => live && r && setMyDids(r.user.dids))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [user?.did, isAdmin]);
 
   const [tab, setTab] = useState<TabKey>("creation");
   const [page, setPage] = useState(1);
@@ -230,7 +245,7 @@ export function RequestsPage() {
               creatorMono = !hit.kind;
             }
 
-            const isCreator = r.creatorDID === user?.did;
+            const isCreator = !!r.creatorDID && (r.creatorDID === user?.did || myDids.includes(r.creatorDID));
             const canEdit = tab === "creation" && r.status === "pending" && (isCreator || isAdmin);
             const canApprove = isAdmin && r.status === "pending" && (tab === "creation" || tab === "access-org");
 

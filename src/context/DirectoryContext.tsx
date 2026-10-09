@@ -34,9 +34,9 @@ const Ctx = createContext<DirectoryContextValue | null>(null);
  * source of truth for agent-vs-tool classification in api.ts.
  */
 export function DirectoryProvider({ children }: { children: ReactNode }) {
-  const { user, token } = useAuth();
-  // Who the directory is for. Not the token itself, so a token refresh doesn't reload it.
-  const session = user && token ? `${user.org_id}:${user.did}:${user.is_admin ? "admin" : "user"}` : null;
+  const { user } = useAuth();
+  // Who the directory is for: it reloads when someone else signs in and empties on sign-out.
+  const session = user ? `${user.org_id}:${user.did}:${user.is_admin ? "admin" : "user"}` : null;
   /** The last load, tagged with the session it was made for; another session's load is never shown. */
   const [loaded, setLoaded] = useState<{ session: string; agents: Agent[]; tools: Tool[]; users: OrgUser[] } | null>(null);
   const current = loaded && loaded.session === session ? loaded : null;
@@ -124,30 +124,22 @@ export function shortDid(did: string): string {
   return did.length > 24 ? `${did.slice(0, 12)}…${did.slice(-6)}` : did;
 }
 
-/** Look up a DID, falling back to a shortened version if not in directory. */
-export function useResolveName(): (did: string) => { name: string; kind?: "agent" | "tool" | "user" } {
+/**
+ * Look up a DID, falling back to a shortened version if not in directory.
+ *
+ * Pass `backendName` when an endpoint already sent a display name (e.g. an intent's
+ * initiatorName): it wins when it's a real name. The list endpoints (/intent-list,
+ * /agent-intents, /intent-info, …) only sometimes resolve one server-side — when they
+ * don't, the mapper fills it with the same shortened-DID fallback `shortDid` produces
+ * here, so that case falls through to the directory (which covers the whole org).
+ */
+export function useResolveName(): (did: string, backendName?: string) => { name: string; kind?: "agent" | "tool" | "user" } {
   const map = useDirectory();
-  return (did: string) => {
+  return (did: string, backendName?: string) => {
     const hit = map.get(did);
+    const given = backendName?.trim();
+    if (given && given !== shortDid(did)) return { name: given, kind: hit?.kind };
     if (hit) return hit;
     return { name: shortDid(did) };
   };
-}
-
-/**
- * Best display name for an { id, name } entity (e.g. an intent's initiator).
- *
- * The list endpoints (/intent-list, /agent-intents, /intent-info, …) only
- * sometimes resolve a display name server-side — when they don't, the mapper
- * fills `name` with the same shortened-DID fallback `shortDid` produces here,
- * so a naive `entity.name || "—"` still shows a DID. Try the directory (which
- * covers the whole org, not just what one endpoint joined) before giving up.
- */
-export function resolveDisplayName(
-  resolve: (did: string) => { name: string; kind?: "agent" | "tool" | "user" },
-  entity: { id: string; name: string },
-): string {
-  const backendName = entity.name?.trim();
-  if (backendName && backendName !== shortDid(entity.id)) return backendName;
-  return resolve(entity.id).name;
 }

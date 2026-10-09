@@ -1002,6 +1002,9 @@ export async function fetchAgentInteractions(id: string, page = 1): Promise<Inte
  * the intent detail page uses — so every intent table agrees with it.
  */
 async function enrichIntentApps(intent: Intent): Promise<Intent> {
+  // The endpoint already said which apps the intent used (`apps` / `appDIDs`): trust it. Guessing
+  // from participants misreads agents the directory doesn't know as apps.
+  if (intent.appsInteracted) return intent;
   try {
     const [firstPage] = await Promise.all([
       fetchIntentInteractionsListPage(intent.id, 1),
@@ -1505,7 +1508,10 @@ function mapUserIntent(i: ApiUserIntent): Intent {
 
 interface ApiUserInfo {
   user: {
+    /** The user's primary DID (any of their DIDs is accepted as `userID`). */
     userID: string;
+    /** Every DID the user holds, oldest first. */
+    dids?: string[];
     userName: string;
     displayName?: string;
     createdAt: string;
@@ -1534,7 +1540,10 @@ interface ApiUserInfo {
 }
 
 export interface UserDetail {
+  /** Primary DID. */
   userID: string;
+  /** Every DID the user holds, oldest first (at least the primary). */
+  dids: string[];
   userName: string;
   displayName?: string;
   createdMinsAgo: number;    // minutes since createdAt
@@ -1587,6 +1596,7 @@ export async function fetchUserInfo(
     return {
       user: {
         userID: u.userID,
+        dids: u.dids?.length ? u.dids : [u.userID],
         userName: u.userName,
         displayName: u.displayName,
         createdMinsAgo: isoToMinutesAgo(u.createdAt),

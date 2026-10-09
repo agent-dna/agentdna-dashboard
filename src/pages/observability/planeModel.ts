@@ -490,11 +490,12 @@ interface AppBuildInput {
  * `/observability-app-flow` only lists users once a peer is picked, and an agent that worked
  * on the app alone has no peers, so the paths call fills the user column instead.
  */
-export function usersFromPaths(paths: ObsPath[], known: ObsUser[]): ObsAppFlowUser[] {
+export function usersFromPaths(paths: ObsPath[], known: ObsUser[], canonUser: (did: string) => string = (d) => d): ObsAppFlowUser[] {
   const byDid = new Map(known.map((u) => [u.userDID, u]));
   const out = new Map<string, ObsAppFlowUser & { intents: Set<string> }>();
   for (const row of paths) {
-    const did = row.user?.did;
+    // A person's other DIDs roll up into their one card.
+    const did = row.user?.did ? canonUser(row.user.did) : "";
     if (!did) continue;
     let u = out.get(did);
     if (!u) {
@@ -530,6 +531,76 @@ export function usersFromPaths(paths: ObsPath[], known: ObsUser[]): ObsAppFlowUs
   return [...out.values()]
     .map(({ intents, ...u }) => ({ ...u, intentsCount: intents.size }))
     .sort((x, y) => y.count - x.count);
+}
+
+/* ---------- One card per person ---------- */
+//
+// A person can hold several DIDs (one per registration), all under the same email. The user
+// layer shows them as one card, keyed by the first of their DIDs listed; their other DIDs map to it.
+
+/** Grouping key: the email (case and spacing ignored), or the DID itself when there is no email. */
+const personKey = (did: string, email: string | undefined) => email?.trim().toLowerCase() || `did:${did}`;
+
+/** Adds `b`'s hops into `a` (counts summed, worst outcome, latest time, policies combined). */
+function addRollup<T extends ObsHopRollup>(a: T, b: ObsHopRollup): T {
+  return {
+    ...a,
+    count: a.count + b.count,
+    allowed: a.allowed + b.allowed,
+    elevated: a.elevated + b.elevated,
+    flagged: a.flagged + b.flagged,
+    outcome: worst([a.outcome, b.outcome]),
+    lastAt: b.lastAt > a.lastAt ? b.lastAt : a.lastAt,
+    policies: [...new Set([...a.policies, ...b.policies])],
+  };
+}
+
+/**
+ * Users with the same email, one card each. Returns the merged list (in first-seen order) and
+ * each DID's card DID. A merged card's agent lines are its DIDs' lines, summed per agent.
+ */
+export function mergeUsersByEmail(users: ObsUser[]): { users: ObsUser[]; canon: Map<string, string> } {
+  const byKey = new Map<string, ObsUser>();
+  const canon = new Map<string, string>();
+  for (const u of users) {
+    const key = personKey(u.userDID, u.email);
+    const card = byKey.get(key);
+    if (!card) {
+      byKey.set(key, u);
+      canon.set(u.userDID, u.userDID);
+      continue;
+    }
+    canon.set(u.userDID, card.userDID);
+    const edges = new Map(card.agentEdges.map((e) => [e.to, e]));
+    for (const e of u.agentEdges) {
+      const had = edges.get(e.to);
+      edges.set(e.to, had ? addRollup(had, e) : { ...e, from: card.userDID });
+    }
+    byKey.set(key, {
+      ...card,
+      signed: card.signed || u.signed,
+      lastActiveAt: u.lastActiveAt > card.lastActiveAt ? u.lastActiveAt : card.lastActiveAt,
+      agentEdges: [...edges.values()],
+    });
+  }
+  return { users: [...byKey.values()], canon };
+}
+
+/** An app-first user list with each person's DIDs folded into one row (see mergeUsersByEmail). */
+export function mergeFlowUsers(list: ObsAppFlowUser[], canonUser: (did: string) => string): ObsAppFlowUser[] {
+  const byKey = new Map<string, ObsAppFlowUser>();
+  for (const u of list) {
+    const did = canonUser(u.userDID);
+    const key = personKey(did, u.email);
+    const card = byKey.get(key);
+    byKey.set(
+      key,
+      card
+        ? { ...addRollup(card, u), intentsCount: card.intentsCount + u.intentsCount }
+        : { ...u, userDID: did },
+    );
+  }
+  return [...byKey.values()];
 }
 
 /** App-first plane: App → Agent → Peer agents → User → Intent. Flow `n` follows that order. */

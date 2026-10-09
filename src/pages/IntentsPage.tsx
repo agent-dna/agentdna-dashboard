@@ -10,7 +10,7 @@ import { ApiError } from "../api/client";
 
 import { timeAgo } from "../lib/format";
 import { IntentIdChip } from "../context/IntentNumbersContext";
-import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { useResolveName } from "../context/DirectoryContext";
 import { useIntentReview } from "../context/IntentReviewContext";
 import { ThreatPill } from "../components/ThreatPill";
 import { AppIcon } from "../components/AppIcon";
@@ -29,7 +29,8 @@ export function IntentsPage() {
   const { refetch: refetchIntentReview } = useIntentReview();
   const [acking, setAcking] = useState(false);
   const [ackError, setAckError] = useState<string | null>(null);
-  const intentsState = useIntentsPaged(page);
+  // /intent-list as is: it names each intent's apps and counts its interactions, so no per-row calls.
+  const intentsState = useIntentsPaged(page, { enrich: false });
   const { data: paged } = intentsState;
   const { data: agentsApps } = useAgentsAppsMetrics();
   const intents = paged.items;
@@ -89,7 +90,7 @@ export function IntentsPage() {
       sortFn: (a, b) => a.initiator.name.localeCompare(b.initiator.name),
       render: (r) => (
         <span style={{ fontSize: 12.5, color: "var(--fg)", fontWeight: 600 }}>
-          {resolveDisplayName(resolve, r.initiator)}
+          {resolve(r.initiator.id, r.initiator.name).name}
         </span>
       ),
     },
@@ -111,9 +112,14 @@ export function IntentsPage() {
         }
         return (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {apps.slice(0, 3).map((app) => (
-              <AppIcon key={app.id} name={resolveDisplayName(resolve, app)} size={20} />
-            ))}
+            {apps.slice(0, 3).map((app) => {
+              const name = resolve(app.id, app.name).name;
+              return (
+                <span key={app.id} title={name} style={{ display: "inline-flex" }}>
+                  <AppIcon name={name} size={20} />
+                </span>
+              );
+            })}
             {apps.length > 3 && (
               <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>+{apps.length - 3}</span>
             )}

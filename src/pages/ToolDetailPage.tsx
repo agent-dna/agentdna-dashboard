@@ -8,7 +8,7 @@ import { LedgerTable } from "../components/LedgerTable";
 import { Pagination } from "../components/Pagination";
 import { useToolInfo, useToolAgentScores } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
-import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { useResolveName } from "../context/DirectoryContext";
 import { timeAgo } from "../lib/format";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { Intent, IntentReviewStatus } from "../types";
@@ -80,7 +80,7 @@ export function ToolDetailPage() {
       sortFn: (a, b) => a.initiator.name.localeCompare(b.initiator.name),
       render: (r) => (
         <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>
-          {resolveDisplayName(resolve, r.initiator)}
+          {resolve(r.initiator.id, r.initiator.name).name}
         </span>
       ),
     },
