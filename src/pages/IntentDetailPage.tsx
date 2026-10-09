@@ -273,7 +273,25 @@ export function IntentDetailPage() {
                         lineHeight: owner.isDid ? 1.45 : undefined,
                       }}
                     >
-                      {owner.text}
+                      {/* The initiator is always a user, so it links to their page — same as the agent page's owner. */}
+                      {intent.initiator.id ? (
+                        <a
+                          href={`/users/${encodeURIComponent(intent.initiator.id)}`}
+                          title={owner.isDid ? owner.text : `Open ${owner.text}'s page`}
+                          onClick={(e) => {
+                            // Let modified clicks (new tab, etc.) behave natively.
+                            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                            e.preventDefault();
+                            navigate(`/users/${encodeURIComponent(intent.initiator.id)}`);
+                          }}
+                          className="owner-link owner-link--ink"
+                        >
+                          {owner.text}
+                          <Icon name="arrowUpRight" size={13} />
+                        </a>
+                      ) : (
+                        owner.text
+                      )}
                     </div>
                   );
                 })()}

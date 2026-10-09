@@ -2789,6 +2789,9 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .owner-link:hover { text-decoration-color: currentColor; }
 .owner-link:hover svg { opacity: 1; transform: translate(1px, -1px); }
 .owner-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+/* Intent page: the owner link reads in the body ink, not the accent. */
+.owner-link.owner-link--ink { color: var(--fg); text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); }
+.owner-link.owner-link--ink:hover { text-decoration-color: currentColor; }
 @media (prefers-reduced-motion: reduce) { .owner-link svg { transition: none; } .owner-link:hover svg { transform: none; } }
 
 /* Profile: the account's DIDs, two at a time. */
@@ -2817,3 +2820,25 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .did-list .did-copy:focus-visible, .did-list .did-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 .did-list .did-more svg { transition: transform 150ms; }
 @media (prefers-reduced-motion: reduce) { .did-list .did-more svg { transition: none; } }
+
+/* User page: the user's DIDs under their name — the primary, then the rest behind a down arrow. */
+.user-dids { margin-bottom: 16px; }
+.user-dids-head, .user-dids-rest li { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.user-dids .did-v { min-width: 0; font: 400 13px/1.5 var(--font-mono); color: var(--fg-muted); word-break: break-all; }
+.user-dids .did-copy {
+  flex-shrink: 0; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
+  border: 0; background: none; cursor: pointer; color: var(--fg-faint);
+}
+.user-dids .did-copy:hover { background: var(--bg-2); color: var(--fg); }
+.user-dids .did-copy.done { color: var(--safe); }
+.user-dids-toggle {
+  flex-shrink: 0; margin-left: 4px; display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 6px 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: none; cursor: pointer;
+  font: 600 12px var(--font-body); color: var(--fg-muted); white-space: nowrap;
+}
+.user-dids-toggle:hover { color: var(--fg); border-color: var(--fg-faint); }
+.user-dids-toggle svg { transition: transform 150ms; }
+.user-dids-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.user-dids-rest { list-style: none; margin: 6px 0 0; padding: 2px 0 2px 12px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.user-dids .did-copy:focus-visible, .user-dids-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .user-dids-toggle svg { transition: none; } }

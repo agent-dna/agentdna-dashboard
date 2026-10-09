@@ -278,10 +278,8 @@ export function UserDetailPage() {
               <span className="chip info" style={{ fontSize: 10.5, padding: "2px 7px" }}>user</span>
             </div>
 
-            {/* User ID */}
-            <div style={{ color: "var(--fg-muted)", fontSize: 13, fontFamily: "var(--font-mono)", marginBottom: 16 }}>
-              {user.userID}
-            </div>
+            {/* Every DID the user holds: the primary shows, the rest open from the arrow. */}
+            <UserDids dids={user.dids} primary={user.userID} />
 
             {/* Info grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
@@ -416,6 +414,65 @@ export function UserDetailPage() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The user's DIDs under their name. The primary is always shown; when they hold more, a down
+ * arrow opens the rest below it. Each DID has its own copy button.
+ */
+function UserDids({ dids, primary }: { dids: string[]; primary: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const others = dids.filter((d) => d && d !== primary);
+
+  const copy = async (did: string) => {
+    try {
+      await navigator.clipboard.writeText(did);
+      setCopied(did);
+      window.setTimeout(() => setCopied((c) => (c === did ? null : c)), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const row = (did: string) => (
+    <>
+      <span className="did-v">{did}</span>
+      <button
+        type="button"
+        className={`did-copy ${copied === did ? "done" : ""}`}
+        onClick={() => copy(did)}
+        title={copied === did ? "Copied" : "Copy DID"}
+        aria-label={copied === did ? "Copied" : "Copy DID"}
+      >
+        <Icon name={copied === did ? "check" : "copy"} size={13} />
+      </button>
+    </>
+  );
+
+  return (
+    <div className="user-dids">
+      <div className="user-dids-head">
+        {row(primary)}
+        {others.length > 0 && (
+          <button
+            type="button"
+            className="user-dids-toggle"
+            aria-expanded={expanded}
+            aria-controls="user-dids-rest"
+            onClick={() => setExpanded((v) => !v)}
+            title={expanded ? "Hide other DIDs" : "Show all DIDs"}
+          >
+            {expanded ? "Hide" : `+${others.length} more`}
+            <Icon name="chevronDown" size={13} />
+          </button>
+        )}
+      </div>
+      {expanded && others.length > 0 && (
+        <ul id="user-dids-rest" className="user-dids-rest">
+          {others.map((did) => <li key={did}>{row(did)}</li>)}
+        </ul>
       )}
     </div>
   );
