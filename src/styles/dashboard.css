@@ -2842,3 +2842,34 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .user-dids-rest { list-style: none; margin: 6px 0 0; padding: 2px 0 2px 12px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
 .user-dids .did-copy:focus-visible, .user-dids-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .user-dids-toggle svg { transition: none; } }
+
+/* Intent status pill that doubles as its picker (detail page and intents table). */
+.status-picker { display: inline-flex; flex-direction: column; align-items: flex-start; }
+.status-trigger {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px 3px 10px; border-radius: 999px;
+  border: 1px solid transparent; cursor: pointer; font: 700 12.5px var(--font-body); white-space: nowrap;
+  transition: border-color 120ms;
+}
+.status-trigger.sm { padding: 2px 5px 2px 8px; font-size: 11px; gap: 3px; }
+.status-trigger:hover:not(:disabled), .status-trigger[aria-expanded="true"] { border-color: currentColor; }
+.status-trigger:disabled { cursor: default; opacity: 0.7; }
+.status-trigger svg { transition: transform 150ms; }
+.status-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
+.status-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.status-error { margin-top: 5px; max-width: 220px; font-size: 11.5px; color: var(--threat); white-space: normal; }
+.status-menu {
+  position: fixed; z-index: 300; min-width: 160px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--bg-1); border: 1px solid var(--line-strong); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(10,34,64,0.16);
+}
+.status-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px;
+  border: 0; border-radius: 7px; background: transparent; cursor: pointer; text-align: left;
+  font: 500 13px var(--font-body); color: var(--fg);
+}
+.status-option.current, .status-option:hover:not(:disabled) { background: var(--bg-2); }
+.status-option:disabled { cursor: default; }
+.status-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.status-option-label { display: inline-flex; align-items: center; gap: 8px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) { .status-trigger, .status-trigger svg { transition: none; } }
