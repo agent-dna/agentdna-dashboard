@@ -71,7 +71,7 @@ export function exportIntentPdf({ intent, interactions, participants }: ExportAr
     ["Interactions", String(ix)],
     ["Agents touched", String(intent.agentsInteracted)],
     ["Apps touched", String(intent.toolsInteracted)],
-    ["Threats", String(intent.threats), intent.threats > 0 ? THREAT : NAVY],
+    ["Incidents", String(intent.threats), intent.threats > 0 ? THREAT : NAVY],
     ["Reliability", reliability == null ? "—" : `${reliability} / 100`],
   ]);
 
@@ -79,7 +79,7 @@ export function exportIntentPdf({ intent, interactions, participants }: ExportAr
   if (interactions.length > 0) {
     section("Interactions");
     table(
-      ["ID", "Initiator", "Target", "Threat", "Time"],
+      ["ID", "Initiator", "Target", "Incident", "Time"],
       [110, 130, 130, 60, 100],
       interactions.slice(0, 50).map((i) => [
         shortId(i.id),
@@ -101,7 +101,7 @@ export function exportIntentPdf({ intent, interactions, participants }: ExportAr
   if (participants.length > 0) {
     section("Participants");
     table(
-      ["Name", "Type", "Hops", "Threats"],
+      ["Name", "Type", "Hops", "Incidents"],
       [240, 80, 60, 60],
       participants.map((p) => [
         truncate(p.entity.name || p.entity.id, 36),

@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { fetchAllIntents } from "../data/api";
+import { fetchHomeMetrics } from "../data/api";
 
 interface IntentReviewContextValue {
-  /** Count of intents whose reviewStatus isn't "Acknowledged" — drives the sidebar's red badge. */
+  /** Threat intents not yet "Acknowledged" (`/home-metrics` → `unacknowledgedTotal`) — the sidebar's red badge. */
   unacknowledgedCount: number;
   loading: boolean;
-  /** Re-pulls every intent and recomputes the count — call after changing a status. */
+  /** Re-reads the count from /home-metrics — call after changing a status. */
   refetch: () => void;
 }
 
@@ -19,13 +19,13 @@ export function IntentReviewProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchAllIntents()
-      .then((intents) => {
-        if (cancelled) return;
-        setUnacknowledgedCount(intents.filter((i) => i.reviewStatus !== "Acknowledged").length);
+    // One call: /home-metrics carries the count, so no paging through /intent-list.
+    fetchHomeMetrics(1)
+      .then((m) => {
+        if (!cancelled) setUnacknowledgedCount(m.unacknowledgedTotal ?? 0);
       })
       .catch((e) => {
-        console.warn("[IntentReview] fetchAllIntents failed", e);
+        console.warn("[IntentReview] /home-metrics failed", e);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -44,7 +44,7 @@ export function IntentReviewProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Falls back to a zero count if no provider is mounted (e.g. dummy mode pages that don't wrap it). */
+/** Falls back to a zero count if no provider is mounted (e.g. pages that don't wrap it). */
 export function useIntentReview(): IntentReviewContextValue {
   return (
     useContext(Ctx) ?? { unacknowledgedCount: 0, loading: false, refetch: () => {} }

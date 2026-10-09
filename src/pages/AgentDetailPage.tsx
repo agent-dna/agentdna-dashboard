@@ -10,14 +10,13 @@ import { InfoStat } from "../components/InfoStat";
 import { EditAgentPolicyModal } from "../components/forms/EditAgentPolicyModal";
 import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { RevokeAgentModal } from "../components/forms/RevokeAgentModal";
-import { useAgent, useAgentInteractions, useAgentIntents, useAgentTools, useAgentPolicyHistory } from "../data/hooks";
-import type { AgentToolLink } from "../data/api";
+import { useAgent, useAgentInteractions, useAgentIntents, /* useAgentTools, */ useAgentPolicyHistory } from "../data/hooks";
+// import type { AgentToolLink } from "../data/api";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
-import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { useResolveName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
-import { isDummyMode } from "../data/dummyRouter";
-import { initials, timeAgo, timeAgoLong, capitalizeFirst } from "../lib/format";
+import { initials, timeAgo, /* timeAgoLong, */ capitalizeFirst } from "../lib/format";
 import { LedgerTable } from "../components/LedgerTable";
 import { AppIcon } from "../components/AppIcon";
 import { ThreatPill } from "../components/ThreatPill";
@@ -40,7 +39,7 @@ export function AgentDetailPage() {
   const { user } = useAuth();
   const resolve = useResolveName();
   const isAdmin = !!user?.is_admin;
-  const [tab, setTab] = useState<Tab>("tools");
+  const [tab, setTab] = useState<Tab>("interactions");
   const [policyOpen, setPolicyOpen] = useState(false);
   const [viewPolicyOpen, setViewPolicyOpen] = useState(false);
   const [revokeOpen, setRevokeOpen] = useState(false);
@@ -54,7 +53,7 @@ export function AgentDetailPage() {
   const { data: agent, loading } = agentState;
   const { data: interactions } = useAgentInteractions(agentId);
   const { data: intents } = useAgentIntents(agentId);
-  const { data: tools } = useAgentTools(agentId);
+  // const { data: tools } = useAgentTools(agentId);
   const { data: history } = useAgentPolicyHistory(agentId);
   const openHistoryRevision = (entry: PolicyHistoryEntry) => {
     setHistoryOpen(entry);
@@ -116,7 +115,7 @@ export function AgentDetailPage() {
       key: "initiator",
       label: "Initiator",
       render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(resolveDisplayName(resolve, r.initiator))}</span>
+        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{capitalizeFirst(resolve(r.initiator.id, r.initiator.name).name)}</span>
       ),
     },
     {
@@ -135,7 +134,7 @@ export function AgentDetailPage() {
         return (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {apps.slice(0, 3).map((app) => (
-              <AppIcon key={app.id} name={resolveDisplayName(resolve, app)} size={20} />
+              <AppIcon key={app.id} name={resolve(app.id, app.name).name} size={20} />
             ))}
             {apps.length > 3 && (
               <span style={{ fontSize: 11, color: "var(--fg-muted)", fontFamily: "var(--font-mono)" }}>+{apps.length - 3}</span>
@@ -146,7 +145,7 @@ export function AgentDetailPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       render: (r) => <ThreatPill threat={r.threats > 0} />,
     },
     {
@@ -180,47 +179,48 @@ export function AgentDetailPage() {
     },
   ];
 
-  const toolCols: DataTableColumn<AgentToolLink>[] = [
-    {
-      key: "tool",
-      label: "Tool Name",
-      render: (r) => (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <AppIcon name={r.toolName} size={22} />
-          <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{r.toolName}</span>
-        </div>
-      ),
-    },
-    {
-      key: "trust",
-      label: "Trust Score",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.trustScore}</span>,
-    },
-    {
-      key: "intentScore",
-      label: "Intent Score",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.intentScore}</span>,
-    },
-    {
-      key: "hallucinationScore",
-      label: "Hallucination Score",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.hallucinationScore}</span>,
-    },
-    {
-      key: "policyScore",
-      label: "Policy Score",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.policyScore}</span>,
-    },
-    {
-      key: "lastInteracted",
-      label: "Last Interacted",
-      render: (r) => (
-        <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-          {timeAgoLong(r.lastInteracted)}
-        </span>
-      ),
-    },
-  ];
+  // Tools tab hidden for now — restore with the tab entry and table below.
+  // const toolCols: DataTableColumn<AgentToolLink>[] = [
+    // {
+      // key: "tool",
+      // label: "Tool Name",
+      // render: (r) => (
+        // <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          // <AppIcon name={r.toolName} size={22} />
+          // <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{r.toolName}</span>
+        // </div>
+      // ),
+    // },
+    // {
+      // key: "trust",
+      // label: "Trust Score",
+      // render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.trustScore}</span>,
+    // },
+    // {
+      // key: "intentScore",
+      // label: "Intent Score",
+      // render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.intentScore}</span>,
+    // },
+    // {
+      // key: "hallucinationScore",
+      // label: "Hallucination Score",
+      // render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.hallucinationScore}</span>,
+    // },
+    // {
+      // key: "policyScore",
+      // label: "Policy Score",
+      // render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.policyScore}</span>,
+    // },
+    // {
+      // key: "lastInteracted",
+      // label: "Last Interacted",
+      // render: (r) => (
+        // <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+          // {timeAgoLong(r.lastInteracted)}
+        // </span>
+      // ),
+    // },
+  // ];
 
   return (
     <div className="page">
@@ -235,7 +235,7 @@ export function AgentDetailPage() {
         </button>
         <span style={{ color: "var(--fg-faint)" }}>/</span>
         <span style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600 }}>
-          {isDummyMode() ? agent.name : agent.id}
+          {agent.id}
         </span>
       </div>
 
@@ -279,11 +279,9 @@ export function AgentDetailPage() {
                 agent
               </span>
             </div>
-            {!isDummyMode() && (
-              <div style={{ color: "var(--fg-muted)", fontSize: 13, fontFamily: "var(--font-mono)", marginBottom: 16 }}>
-                {agent.id}
-              </div>
-            )}
+            <div style={{ color: "var(--fg-muted)", fontSize: 13, fontFamily: "var(--font-mono)", marginBottom: 16 }}>
+              {agent.id}
+            </div>
 
             <div
               style={{
@@ -294,7 +292,31 @@ export function AgentDetailPage() {
                 paddingTop: 16,
               }}
             >
-              <InfoStat label="Owner" value={resolve(agent.owner).name} />
+              {/* /agent-info sends the deployer's name; the directory and a short DID are fallbacks. The
+                  deployer is always a user, so it links to their page even when the directory lacks them. */}
+              <InfoStat
+                label="Owner"
+                value={
+                  agent.owner ? (
+                    <a
+                      href={`/users/${encodeURIComponent(agent.owner)}`}
+                      title={`Open ${agent.ownerName || "owner"}'s page`}
+                      onClick={(e) => {
+                        // Let modified clicks (new tab, etc.) behave natively.
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                        e.preventDefault();
+                        navigate(`/users/${encodeURIComponent(agent.owner)}`);
+                      }}
+                      className="owner-link"
+                    >
+                      {agent.ownerName || resolve(agent.owner).name}
+                      <Icon name="arrowUpRight" size={13} />
+                    </a>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
               <InfoStat label="Environment" value={agent.env} />
               <InfoStat label="Created" value={timeAgo(agent.created)} />
               <InfoStat label="Interacted apps" value={agent.connected} mono />
@@ -346,7 +368,7 @@ export function AgentDetailPage() {
           sparkColor="#0EA5E9"
           spark={[]}
         />
-        <MetricTile label="Threats" value={agent.threats} icon="shield" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Incidents" value={agent.threats} icon="shield" sparkColor="#DC2626" spark={[]} />
         <MetricTile label="Intents handled" value={intents.length} icon="intents" sparkColor="#0A2240" spark={[]} />
       </div>
 
@@ -358,7 +380,7 @@ export function AgentDetailPage() {
           tabs={[
             { key: "interactions", label: "Interactions", count: interactions.length },
             { key: "intents", label: "Intents", count: intents.length },
-            { key: "tools", label: "Tools", count: tools.length },
+            // { key: "tools", label: "Tools", count: tools.length },
             { key: "history", label: "Policy History", count: history?.history?.length ?? 0 },
           ]}
         />
@@ -381,6 +403,7 @@ export function AgentDetailPage() {
           />
         )}
 
+        {/* Tools tab hidden for now.
         {tab === "tools" && (
           <>
             <DataTable
@@ -391,6 +414,7 @@ export function AgentDetailPage() {
             />
           </>
         )}
+        */}
 
         {tab === "history" && (
           <DataTable

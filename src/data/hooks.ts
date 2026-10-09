@@ -63,11 +63,11 @@ export const useToolsPaged = (page = 1) =>
     [page],
   );
 export const useIntents = (page = 1) => useAsync<Intent[]>(() => api.fetchIntents(page), [], [page]);
-export const useIntentsPaged = (page = 1) =>
+export const useIntentsPaged = (page = 1, { enrich = true }: { enrich?: boolean } = {}) =>
   useAsync<api.PagedIntentsResult>(
-    () => api.fetchIntentsPaged(page),
+    () => api.fetchIntentsPaged(page, { enrich }),
     { items: [], total: 0, page: 1, totalPages: 1, pageSize: 10 },
-    [page],
+    [page, enrich],
   );
 export const useInteractions = (page = 1) => useAsync<Interaction[]>(() => api.fetchInteractions(page), [], [page]);
 export const useInteractionsPaged = (page = 1) =>
@@ -84,6 +84,8 @@ export const useThreatEventsPaged = (page = 1, limit = 10) =>
     [page, limit],
   );
 export const useTopThreats = () => useAsync<api.TopThreat[]>(api.fetchTopThreats, []);
+export const useIntentThreats = (intentId: string) =>
+  useAsync<api.IntentThreat[]>(() => api.fetchIntentThreats(intentId), [], [intentId]);
 export const useThreatByID = (threatId: string | undefined) =>
   useAsync<api.ThreatByID | null>(() => api.fetchThreatByID(threatId || ""), null, [threatId]);
 export const useThreatsListPaged = (page = 1) =>
@@ -95,7 +97,7 @@ export const useThreatsListPaged = (page = 1) =>
 export const useHomeMetrics = (page = 1) =>
   useAsync<HomeMetrics>(
     () => api.fetchHomeMetrics(page),
-    { agentCount: 0, intentCount: 0, interactionsCount: 0, threatCount: 0, page: 1, agentList: [] },
+    { agentCount: 0, appCount: 0, intentCount: 0, interactionsCount: 0, threatCount: 0, page: 1, agentList: [], agentCount24hChange: 0, appCount24hChange: 0, intentCount24hChange: 0, interactionsCount24hChange: 0, threatCount24hChange: 0 },
     [page],
   );
 export const useAgentsAppsMetrics = () =>
@@ -160,8 +162,6 @@ export const useAgentPolicyHistory = (id: string) =>
 export const useIntentDiagram = (id: string) =>
   useAsync<api.IntentDiagram | null>(() => api.fetchIntentDiagram(id), null, [id]);
 
-export const useIntentBlockData = (id: string) =>
-  useAsync<api.IntentBlock | null>(() => api.fetchIntentBlockData(id), null, [id]);
 
 export const useToolInfo = (nameOrDid: string, interactionsPage = 1, intentsPage = 1) =>
   useAsync<api.ToolDetailResult | null>(
@@ -170,5 +170,13 @@ export const useToolInfo = (nameOrDid: string, interactionsPage = 1, intentsPage
     [nameOrDid, interactionsPage, intentsPage],
   );
 
-export const useToolAgentScores = (toolDID: string) =>
-  useAsync<api.ToolAgentScore[]>(() => api.fetchToolAgentScores(toolDID), [], [toolDID]);
+// Waits for a resolved toolDID; the backend only matches on the DID, not the tool name.
+/** /tool-info for an app known by DID, falling back to its name (see fetchToolInfoByDidOrName). */
+export const useToolInfoByDidOrName = (did: string, name?: string) =>
+  useAsync<api.ToolDetailResult | null>(() => api.fetchToolInfoByDidOrName(did, name), null, [did, name]);
+export const useToolAgentScores = (toolDID: string | undefined) =>
+  useAsync<api.ToolAgentScore[]>(
+    () => (toolDID ? api.fetchToolAgentScores(toolDID) : Promise.resolve([])),
+    [],
+    [toolDID],
+  );

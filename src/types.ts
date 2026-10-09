@@ -14,6 +14,8 @@ export interface Agent {
   status: Status;
   env: string;
   owner: string;
+  /** Deployer's display name. Only /agent-info returns it, and it can be blank. */
+  ownerName?: string;
   /** Raw .md/.txt policy text from /agent-info; empty string when no policy uploaded. */
   policy?: string;
   /** From /agent-info's `revoked` field. Only /agent-info returns this — false for endpoints that don't. */
@@ -46,15 +48,14 @@ export interface Intent {
   threats: number;
   score: number;
   status: Status;
-  provenanceRecordID: string;
   signature?: string;
   /** Distinct apps/tools this intent's interactions touched. Only populated where explicitly computed (e.g. an agent's own intents list). */
   appsInteracted?: EntityRef[];
-  /** Human review state — separate from the pipeline `status` field. Defaults to "Ongoing" server-side. */
+  /** Human review state — separate from the pipeline `status` field. Defaults to "Unreviewed" server-side. */
   reviewStatus: IntentReviewStatus;
 }
 
-export type IntentReviewStatus = "Ongoing" | "Acknowledged" | "Flagged";
+export type IntentReviewStatus = "Unreviewed" | "Acknowledged" | "Flagged";
 
 export type EntityRef = Pick<Agent | Tool, "id" | "name">;
 
@@ -73,6 +74,13 @@ export interface Interaction {
   threatID?: string;
   /** Resolved threat message, when the caller already has it (e.g. from /threats-list) — skips the GET /threat-by-id lookup in the drawer. */
   message?: string;
+  /** What the sender sent in this hop (the endpoint's `message`), shown as the drawer's Message. */
+  payload?: string;
+  /**
+   * The sender's original envelope for this hop, exactly as the agent sent it (from /intent-info's
+   * `rawData`; earlier envelopes nest in `parent_envelope`). Shown as the interaction's raw data.
+   */
+  raw?: unknown;
 }
 
 export interface TimeSeries {
@@ -114,11 +122,24 @@ export interface HomeAgentSummary {
 
 export interface HomeMetrics {
   agentCount: number;
+  appCount: number;
   intentCount: number;
   interactionsCount: number;
   threatCount: number;
   page: number;
   agentList: HomeAgentSummary[];
+  // 24-hour changes
+  agentCount24hChange?: number;
+  appCount24hChange?: number;
+  intentCount24hChange?: number;
+  interactionsCount24hChange?: number;
+  threatCount24hChange?: number;
+  /**
+   * Intents with a threat whose review status isn't "Acknowledged" (missing counts as Unreviewed);
+   * clean intents are never counted. Org-wide for admins, the user's visible intents otherwise.
+   * Ignores `page`. Drives the sidebar badge on Intents.
+   */
+  unacknowledgedTotal?: number;
 }
 
 export interface PublicMetrics {

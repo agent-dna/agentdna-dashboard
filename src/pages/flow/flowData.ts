@@ -7,13 +7,14 @@
  *   - interactions: from /intent-info.interactions (each interaction is one hop)
  *   - resolve: DID → { name, kind } lookup from DirectoryContext
  *
- * Output: a `Flow` with normalized 0..1 node coordinates in a clean tiered
- * layout (operator → orchestrator → workers → tools).
+ * Output: a `Flow` with normalized 0..1 node coordinates, laid out left-to-right
+ * by call depth (initiator → each hop in its own column).
  */
 
 import type { Intent, Interaction } from "../../types";
-import type { DiagramInteraction, IntentBlock, IntentDiagram } from "../../data/api";
+import type { DiagramInteraction, IntentDiagram } from "../../data/api";
 import type { useResolveName } from "../../context/DirectoryContext";
+import { branchName, compareInteractionIds, forkPosition, isOnPath, parentBranch, parseInteractionId } from "../../lib/interactionBranch";
 
 export type FlowNodeKind = "human" | "agent" | "tool" | "provenance";
 export type FlowDirection = "request" | "response";
@@ -26,7 +27,7 @@ export interface FlowNode {
   label: string;
   /** Raw DID this node was built from — `id` is a sanitized derivative. */
   did?: string;
-  /** normalized 0..1 — set by tierLayout */
+  /** normalized 0..1 — set by depthLayout */
   x: number;
   y: number;
   /** true if this node was the source/target of a blocked hop */
@@ -52,6 +53,30 @@ export interface FlowStep {
   interactionID?: string;
   /** Ordering stamp from /intent-diagram; equal values mean concurrent hops. */
   epoch?: number;
+  /** Branch this hop belongs to: `""` on the trunk, else e.g. `"2b"` (see lib/interactionBranch). */
+  branch?: string;
+  /** Hop label from the interaction ID: `"1"`, `"2b.1"`. */
+  label?: string;
+}
+
+/** One branch of the intent's tree: the hops that diverged from `parent` at `forkAt`. */
+export interface FlowBranch {
+  /** e.g. `"2b"`, `"2b.3a"`. */
+  key: string;
+  /** `"Branch B"`, `"Branch B › A"`. */
+  name: string;
+  /** `""` when it forked off the trunk. */
+  parent: string;
+  /** Position on the parent where it diverged; the parent's hops before it are shared. */
+  forkAt: number;
+  /** Index into the branch palette, stable for the flow. */
+  color: number;
+  /** Any hop in this branch (not its sub-branches) was blocked. */
+  blocked: boolean;
+  /** Hops in this branch itself, not counting sub-branches. */
+  hops: number;
+  /** No branch forks off this one: a complete path ends here. */
+  leaf: boolean;
 }
 
 export interface TraceSpan {
@@ -106,160 +131,205 @@ export interface Flow {
   steps: FlowStep[];
   status: "halted" | "completed";
   trace: FlowTrace;
+  /** Branches in tree order; empty when the intent never forked. */
+  branches: FlowBranch[];
   /** Raw /intent-diagram response — shown as-is in the JSON tab. */
   rawDiagram?: unknown;
-}
-
-/* ------- tier layout ------- */
-
-function tierLayout(nodes: FlowNode[], orchId: string | null, steps: FlowStep[]): FlowNode[] {
-  const order: Record<string, number> = {};
-  let o = 0;
-  for (const s of steps) {
-    for (const id of [s.from, s.to]) {
-      if (order[id] == null) order[id] = o++;
-    }
-  }
-
-  const cols: Record<"human" | "orch" | "worker" | "tool", FlowNode[]> = {
-    human: [],
-    orch: [],
-    worker: [],
-    tool: [],
-  };
-  for (const n of nodes) {
-    const tier = n.kind === "human" ? "human" : n.id === orchId ? "orch" : n.kind === "tool" ? "tool" : "worker";
-    cols[tier].push(n);
-  }
-
-  // Only the tiers that actually have nodes get an X slot — and we space those
-  // evenly across the canvas (with margins) so the graph is always centred
-  // regardless of which tiers are missing.
-  const tierOrder = ["human", "orch", "worker", "tool"] as const;
-  const activeTiers = tierOrder.filter((t) => cols[t].length > 0);
-
-  const place = (arr: FlowNode[], x: number) => {
-    arr.sort((a, b) => (order[a.id] ?? 0) - (order[b.id] ?? 0));
-    const k = arr.length;
-    const half = Math.min(0.34, 0.17 * (k - 1));
-    arr.forEach((n, i) => {
-      n.x = x;
-      n.y = k === 1 ? 0.5 : 0.5 - half + 2 * half * (i / (k - 1));
-    });
-  };
-
-  if (activeTiers.length === 0) return nodes;
-  if (activeTiers.length === 1) {
-    place(cols[activeTiers[0]], 0.5);
-  } else {
-    const xStart = 0.14;
-    const xEnd = 0.86;
-    const step = (xEnd - xStart) / (activeTiers.length - 1);
-    activeTiers.forEach((tier, i) => {
-      place(cols[tier], xStart + step * i);
-    });
-  }
-
-  return nodes;
 }
 
 /* ------- depth layout (DAG layering) ------- */
 
 /**
- * Lay nodes out by longest-path depth from the initiator instead of by role.
+ * Layout rules this pass guarantees, in priority order:
+ *  1. The intent's initiator owns the leftmost column, on its own.
+ *  2. Columns follow call depth, so the diagram reads left → right in call order.
+ *  3. Within a column, nodes are ordered to minimise edge crossings.
+ *  4. Nodes keep a minimum gap so icons and captions never sit on top of each other.
+ */
+const X_BAND = { start: 0.11, end: 0.89 };
+/** Stops above the provenance row (y 0.82) so the ledger never collides with a node. */
+const Y_BAND = { start: 0.12, end: 0.72 };
+/** Normalised minimums. Below these the band widens rather than letting nodes touch. */
+const MIN_ROW_GAP = 0.16;
+const MIN_COL_GAP = 0.12;
+
+/**
+ * Lay nodes out in call order: each node takes the column after the node that first
+ * called it, so a chain A → B → C reads left to right in exactly that order.
  *
- * The role-based `tierLayout` collapses every agent into a single "worker"
- * column, so a parallel flow (A fans out to B and C, both returning to A) ends
- * up with A sitting alongside its own children and every edge drawn as an
- * intra-column arc. Layering by depth puts each hop in its own column and lets
- * concurrent siblings share one.
- *
- * Response hops are excluded from the depth graph: they point back up the tree
- * and would otherwise form cycles that have no valid layering.
+ * Layering is driven by discovery order rather than by every edge in the graph. Replies
+ * (C → B, B → A) aren't always tagged as responses — the interactions list marks every
+ * hop a request — and treating them as calls creates cycles with no valid layering.
+ * Any edge that points back to an already-discovered node is therefore a return or
+ * re-entry and never moves a node rightwards. Over the remaining (acyclic) edges each
+ * node takes its longest path from the initiator, so concurrent siblings share a column.
  */
 function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
   const ids = new Set(nodes.map((n) => n.id));
+  const initiatorId = flowOriginId(nodes, steps);
 
-  // First-appearance order, used to keep column ordering stable.
-  const order: Record<string, number> = {};
-  let o = 0;
-  for (const s of steps) {
-    for (const id of [s.from, s.to]) {
-      if (order[id] == null) order[id] = o++;
-    }
-  }
-
-  // Forward (request) edges only, deduped.
-  const outAdj = new Map<string, string[]>();
-  const indeg = new Map<string, number>();
-  for (const id of ids) { outAdj.set(id, []); indeg.set(id, 0); }
-
-  const seenEdge = new Set<string>();
-  const forward: Array<[string, string]> = [];
+  // Discovery order: the initiator first, then each node the first time it's reached.
+  const order = new Map<string, number>();
+  const discover = (id: string) => { if (ids.has(id) && !order.has(id)) order.set(id, order.size); };
+  if (initiatorId) discover(initiatorId);
   for (const s of steps) {
     if (s.dir === "response") continue;
-    if (s.from === s.to) continue;
+    discover(s.from);
+    discover(s.to);
+  }
+  for (const s of steps) { discover(s.from); discover(s.to); }
+  for (const n of nodes) discover(n.id);
+  const ord = (id: string) => order.get(id) ?? 0;
+
+  // Forward edges only — caller discovered before callee — deduped.
+  const outAdj = new Map<string, string[]>();
+  const inAdj = new Map<string, string[]>();
+  for (const id of ids) { outAdj.set(id, []); inAdj.set(id, []); }
+  const seenEdge = new Set<string>();
+  for (const s of steps) {
+    if (s.dir === "response" || s.from === s.to) continue;
     if (!ids.has(s.from) || !ids.has(s.to)) continue;
+    if (ord(s.from) >= ord(s.to)) continue;
     const key = `${s.from}>${s.to}`;
     if (seenEdge.has(key)) continue;
     seenEdge.add(key);
-    forward.push([s.from, s.to]);
     outAdj.get(s.from)!.push(s.to);
-    indeg.set(s.to, indeg.get(s.to)! + 1);
+    inAdj.get(s.to)!.push(s.from);
   }
 
-  // Kahn's topological sort, propagating longest-path depth.
+  // Longest path in discovery order — a valid topological order by construction.
   const depth = new Map<string, number>();
-  for (const id of ids) depth.set(id, 0);
+  const byOrder = Array.from(ids).sort((a, b) => ord(a) - ord(b));
+  for (const id of byOrder) {
+    const parents = inAdj.get(id)!;
+    depth.set(id, parents.length ? Math.max(...parents.map((p) => depth.get(p)! + 1)) : 0);
+  }
 
-  const queue = Array.from(ids).filter((id) => indeg.get(id) === 0);
-  queue.sort((a, b) => (order[a] ?? 0) - (order[b] ?? 0));
-  const settled = new Set<string>();
-
-  while (queue.length) {
-    const id = queue.shift()!;
-    settled.add(id);
-    for (const next of outAdj.get(id)!) {
-      depth.set(next, Math.max(depth.get(next)!, depth.get(id)! + 1));
-      indeg.set(next, indeg.get(next)! - 1);
-      if (indeg.get(next) === 0) queue.push(next);
+  // The initiator alone holds column 0; any other parentless node starts one column in.
+  if (initiatorId && ids.has(initiatorId)) {
+    depth.set(initiatorId, 0);
+    for (const id of ids) {
+      if (id !== initiatorId && depth.get(id) === 0) depth.set(id, 1);
     }
   }
 
-  // Anything left unsettled sits in a request-edge cycle (a re-entrant agent).
-  // Best-effort: place it one column past its deepest parent so it still lands
-  // somewhere sensible rather than collapsing to column 0.
-  for (const [from, to] of forward) {
-    if (!settled.has(to)) {
-      depth.set(to, Math.max(depth.get(to)!, depth.get(from)! + 1));
-    }
-  }
-
-  // Group into columns and spread each one vertically.
+  // Group into columns, seeded in discovery order.
   const byDepth = new Map<number, FlowNode[]>();
   for (const n of nodes) {
     const d = depth.get(n.id) ?? 0;
     if (!byDepth.has(d)) byDepth.set(d, []);
     byDepth.get(d)!.push(n);
   }
+  const columns = Array.from(byDepth.keys())
+    .sort((a, b) => a - b)
+    .map((d) => byDepth.get(d)!.sort((a, b) => ord(a.id) - ord(b.id)));
 
-  const depths = Array.from(byDepth.keys()).sort((a, b) => a - b);
-  const xStart = 0.14;
-  const xEnd = 0.86;
+  reduceCrossings(columns, inAdj, outAdj, initiatorId);
 
-  depths.forEach((d, i) => {
-    const col = byDepth.get(d)!;
-    col.sort((a, b) => (order[a.id] ?? 0) - (order[b.id] ?? 0));
-    const x = depths.length === 1 ? 0.5 : xStart + ((xEnd - xStart) / (depths.length - 1)) * i;
-    const k = col.length;
-    const half = Math.min(0.34, 0.17 * (k - 1));
+  // X: columns spread evenly across the band, with a floor so captions never touch.
+  const colGap = columns.length > 1
+    ? Math.max(MIN_COL_GAP, (X_BAND.end - X_BAND.start) / (columns.length - 1))
+    : 0;
+  const colSpan = colGap * (columns.length - 1);
+  const xStart = columns.length > 1 ? Math.max(0.06, X_BAND.start - (colSpan - (X_BAND.end - X_BAND.start)) / 2) : 0.5;
+
+  // Y: every node aims for the height of its callers, so a chain stays on one
+  // horizontal line even inside a branch. Columns are then packed at a minimum
+  // gap and shifted as a block to sit as close to those targets as possible.
+  const mid = (Y_BAND.start + Y_BAND.end) / 2;
+  const rowGap = Math.max(
+    MIN_ROW_GAP,
+    Math.min(0.22, (Y_BAND.end - Y_BAND.start) / Math.max(1, Math.max(...columns.map((c) => c.length)) - 1)),
+  );
+  const yOf = new Map<string, number>();
+  columns.forEach((col, i) => {
+    const x = columns.length === 1 ? 0.5 : xStart + colGap * i;
+    const targets = col.map((n) => {
+      const ys = inAdj.get(n.id)!.map((p) => yOf.get(p)).filter((v): v is number => v != null);
+      return ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : mid;
+    });
+    // Pack top-down at the minimum gap, never above each node's target.
+    const ys: number[] = [];
+    targets.forEach((t, j) => { ys.push(j === 0 ? t : Math.max(t, ys[j - 1] + rowGap)); });
+    // Shift the block so its mean sits on the mean target, then keep it in the band.
+    const drift = targets.reduce((a, t, j) => a + (t - ys[j]), 0) / ys.length;
+    let shift = drift;
+    const top = ys[0] + shift;
+    const bottom = ys[ys.length - 1] + shift;
+    if (bottom - top <= Y_BAND.end - Y_BAND.start) {
+      if (top < Y_BAND.start) shift += Y_BAND.start - top;
+      if (bottom > Y_BAND.end) shift -= bottom - Y_BAND.end;
+    } else {
+      shift = mid - (top + bottom) / 2 + shift;
+    }
     col.forEach((n, j) => {
       n.x = x;
-      n.y = k === 1 ? 0.5 : 0.5 - half + 2 * half * (j / (k - 1));
+      n.y = ys[j] + shift;
+      yOf.set(n.id, n.y);
     });
   });
 
   return nodes;
+}
+
+/**
+ * Whoever the flow starts from: the human who raised the intent, else the sender
+ * of the very first hop. Shared with the provenance pass so the seal drops from
+ * the same node the diagram starts at.
+ */
+function flowOriginId(nodes: FlowNode[], steps: FlowStep[]): string | undefined {
+  return nodes.find((n) => n.kind === "human")?.id ?? steps[0]?.from;
+}
+
+/**
+ * Rule 3: order each column by the median position of its neighbours in the
+ * previous/next column — the standard barycenter sweep. Without it, columns keep
+ * first-appearance order and edges cross each other for no structural reason.
+ * The initiator is pinned to the top of column 0 so the origin never drifts.
+ */
+function reduceCrossings(
+  columns: FlowNode[][],
+  inAdj: Map<string, string[]>,
+  outAdj: Map<string, string[]>,
+  initiatorId: string | undefined,
+) {
+  const indexIn = (col: FlowNode[]) => {
+    const m = new Map<string, number>();
+    col.forEach((n, i) => m.set(n.id, i));
+    return m;
+  };
+
+  /** Median neighbour index, or -1 when a node has no neighbour in that column. */
+  const median = (ids: string[], pos: Map<string, number>): number => {
+    const xs = ids.map((id) => pos.get(id)).filter((v): v is number => v != null).sort((a, b) => a - b);
+    if (xs.length === 0) return -1;
+    const mid = Math.floor(xs.length / 2);
+    return xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
+  };
+
+  const sweep = (col: FlowNode[], ref: Map<string, number>, adj: Map<string, string[]>) => {
+    const keyed = col.map((n, i) => ({ n, i, m: median(adj.get(n.id) ?? [], ref) }));
+    keyed.sort((a, b) => {
+      // Nodes with no neighbour keep their current slot rather than piling at the top.
+      if (a.m === -1 || b.m === -1) return a.i - b.i;
+      return a.m === b.m ? a.i - b.i : a.m - b.m;
+    });
+    return keyed.map((k) => k.n);
+  };
+
+  for (let pass = 0; pass < 4; pass++) {
+    for (let i = 1; i < columns.length; i++) {
+      columns[i] = sweep(columns[i], indexIn(columns[i - 1]), inAdj);
+    }
+    for (let i = columns.length - 2; i >= 0; i--) {
+      columns[i] = sweep(columns[i], indexIn(columns[i + 1]), outAdj);
+    }
+  }
+
+  if (initiatorId && columns[0]) {
+    const at = columns[0].findIndex((n) => n.id === initiatorId);
+    if (at > 0) columns[0].unshift(...columns[0].splice(at, 1));
+  }
 }
 
 
@@ -268,32 +338,13 @@ function depthLayout(nodes: FlowNode[], steps: FlowStep[]): FlowNode[] {
 /**
  * Group step indices into rounds that play together.
  *
- * A fan-out — one agent dispatching to several others at once — should light up
- * as a single beat rather than a sequence. Consecutive request hops leaving the
- * same node for different targets are treated as concurrent; when the diagram
- * supplies epochs, they must match too, so genuinely sequential calls from the
- * same source stay separate.
- *
- * Responses always stand alone: a reply is a distinct beat even when several
- * arrive from a fan-out.
+ * Each interaction now gets its own beat for individual playback.
+ * Previously concurrent interactions (fan-outs) are now played sequentially,
+ * one beat per interaction.
  */
 export function groupParallelRounds(steps: FlowStep[]): number[][] {
-  const rounds: number[][] = [];
-  for (let i = 0; i < steps.length; i++) {
-    const s = steps[i];
-    const open = rounds[rounds.length - 1];
-    const prev = open ? steps[open[open.length - 1]] : null;
-    const concurrent =
-      prev != null &&
-      s.dir === "request" &&
-      prev.dir === "request" &&
-      s.from === prev.from &&
-      s.to !== prev.to &&
-      (s.epoch == null || prev.epoch == null || s.epoch === prev.epoch);
-    if (concurrent && open) open.push(i);
-    else rounds.push([i]);
-  }
-  return rounds;
+  // Each step gets its own round - one beat per interaction
+  return steps.map((_, i) => [i]);
 }
 
 
@@ -302,11 +353,12 @@ export function groupParallelRounds(steps: FlowStep[]): number[][] {
 export const PROVENANCE_ID = "nd_provenance";
 
 /**
- * Every flow terminates in the provenance layer.
- *
- * The last hop's envelope is sealed and stored; on top of that, any hop where a
- * threat was detected writes its envelope immediately, so a halted flow still
- * leaves a record at the point it was stopped.
+ * Every flow terminates in the provenance layer — and the seal is always
+ * drawn from the intent's initiator, never from whichever node happened to
+ * be holding the envelope on the last (or a blocked) hop. The envelope is
+ * the initiator's the whole time; the chain in between is just delegation.
+ * That's true whether the flow completed cleanly or was halted by a threat —
+ * the seal still runs from the initiator, just colored red instead of green.
  *
  * The node is positioned directly rather than by the layout pass — it isn't a
  * participant in the call chain, it's the ledger the chain drops into, so it
@@ -315,41 +367,33 @@ export const PROVENANCE_ID = "nd_provenance";
 function attachProvenance(steps: FlowStep[], nodes: FlowNode[]): { node: FlowNode | null; sealEdges: SealEdge[] } {
   if (steps.length === 0) return { node: null, sealEdges: [] };
 
-  const sealEdges: SealEdge[] = [];
-  const sealed = new Set<string>();
-
-  // The closing seal first, so if the final hop is itself blocked it reads as
-  // the full seal rather than a bare threat write.
   const last = steps[steps.length - 1];
-  if (last) {
-    sealed.add(last.to);
-    sealEdges.push({
-      from: last.to,
-      to: PROVENANCE_ID,
-      label: "",
-      threat: last.verdict === "blocked",
-      stepIndex: steps.length - 1,
-    });
-  }
+  // Prefer the explicit human node; a purely agent-to-agent chain (no human
+  // in it) falls back to whoever sent the very first hop. Same helper the layout
+  // uses, so the seal always drops from the node sitting in the first column.
+  const initiatorId = flowOriginId(nodes, steps) ?? last?.to;
+  const anyBlocked = steps.some((s) => s.verdict === "blocked");
 
-  // Sit directly beneath the node that closes the flow, so the seal reads as a
-  // short drop from its source. Y is kept well inside the frame — the node's
-  // caption renders below it and would otherwise clip off the canvas.
-  const anchor = last ? nodes.find((n) => n.id === last.to) : undefined;
+  const sealEdges: SealEdge[] = initiatorId
+    ? [{ from: initiatorId, to: PROVENANCE_ID, label: "", threat: anyBlocked, stepIndex: steps.length - 1 }]
+    : [];
+
+  // Sit directly beneath the initiator — the seal line runs from there, so the drop reads as a
+  // short vertical hop rather than a long diagonal across the chain. Y is kept well inside the
+  // frame: the node's caption renders below it and would otherwise clip off the canvas.
+  // Rule: the ledger sits directly beneath whichever node writes to it, so the
+  // seal reads as a short vertical drop rather than a diagonal across the chain.
+  // Clamped inside the frame because the caption renders below the icon.
+  const writerId = sealEdges[0]?.from ?? initiatorId;
+  const anchor = nodes.find((n) => n.id === writerId) ?? (last ? nodes.find((n) => n.id === last.to) : undefined);
   const node: FlowNode = {
     id: PROVENANCE_ID,
     kind: "provenance",
     name: "Provenance Layer",
     label: "",
-    x: anchor ? anchor.x : 0.5,
-    y: 0.82,
+    x: anchor ? Math.min(0.92, Math.max(0.08, anchor.x)) : 0.5,
+    y: 0.86,
   };
-
-  steps.forEach((s, i) => {
-    if (s.verdict !== "blocked" || sealed.has(s.to)) return;
-    sealed.add(s.to);
-    sealEdges.push({ from: s.to, to: PROVENANCE_ID, label: "Envelope stored", threat: true, stepIndex: i });
-  });
 
   return { node, sealEdges };
 }
@@ -370,8 +414,9 @@ interface BuildArgs {
 }
 
 export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs): Flow {
-  // Chronological order (oldest first).
-  const sorted = [...interactions].sort((a, b) => b.created - a.created);
+  // Tree order from the interaction IDs (trunk, then each branch depth first); oldest first
+  // for anything whose ID doesn't carry a position.
+  const sorted = sortInteractions(interactions);
 
 
   const nodesById = new Map<string, FlowNode>();
@@ -442,6 +487,8 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
       // Links this step back to the real Interaction record, so the trace
       // inspector can show the exact same raw data as the interaction drawer.
       interactionID: ixn.id,
+      branch: parseInteractionId(ixn.id)?.branch ?? "",
+      label: parseInteractionId(ixn.id)?.label,
     });
     // Only the target — the entity where the threat was detected — gets the
     // red box. The initiator (`fromNode`) is the culprit, not the victim, so
@@ -469,7 +516,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     }
   }
 
-  tierLayout(nodes, null, rawSteps as FlowStep[]);
+  depthLayout(nodes, rawSteps as FlowStep[]);
 
   const halted = rawSteps.some((s) => s.verdict === "blocked");
 
@@ -620,7 +667,81 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
     steps,
     status: halted ? "halted" : "completed",
     trace: flowTrace,
+    branches: collectBranches(steps),
   };
+}
+
+/**
+ * The flow narrowed to one path through the tree: the trunk plus every branch from the root
+ * down to `leaf`. Nodes keep their positions so switching paths doesn't reshuffle the canvas;
+ * edges, threat marks and the closing seal follow the hops on the path. `null` → the whole flow.
+ */
+export function flowForPath(flow: Flow, leaf: string | null): Flow {
+  if (leaf == null || flow.branches.length === 0) return flow;
+  const steps = flow.steps.filter((s) => isOnPath(s.branch ?? "", leaf));
+  const used = new Set(steps.flatMap((s) => [s.from, s.to]));
+  const blockedTo = new Set(steps.filter((s) => s.verdict === "blocked").map((s) => s.to));
+  const nodes = flow.nodes.map((n) => (n.kind === "provenance" ? n : { ...n, threat: blockedTo.has(n.id) }));
+  const edges = flow.edges.filter(([a, b]) => steps.some((s) => s.from === a && s.to === b));
+  const blocked = steps.some((s) => s.verdict === "blocked");
+  return {
+    ...flow,
+    nodes: nodes.filter((n) => n.kind === "provenance" || used.has(n.id)),
+    nodeById: Object.fromEntries(nodes.map((n) => [n.id, n])),
+    edges,
+    steps,
+    sealEdges: flow.sealEdges.map((e) => ({ ...e, threat: blocked, stepIndex: steps.length - 1 })),
+    status: blocked ? "halted" : "completed",
+  };
+}
+
+/**
+ * The intent's envelope as the agents sent it, for the Envelope inspector's root view. Each
+ * hop's `raw` nests every earlier envelope in `parent_envelope`, so the last hop of a path
+ * carries the whole chain: one envelope for a straight intent, one per branch end when it forked.
+ * `null` when no interaction has its raw envelope.
+ */
+export function intentEnvelope(interactions: Interaction[]): unknown {
+  const withRaw = sortInteractions(interactions).filter((ix) => ix.raw !== undefined);
+  if (withRaw.length === 0) return null;
+  // Last hop on each branch that nothing forks off (the trunk when there are no branches).
+  const lastByBranch = new Map<string, Interaction>();
+  for (const ix of withRaw) lastByBranch.set(parseInteractionId(ix.id)?.branch ?? "", ix);
+  const keys = [...lastByBranch.keys()];
+  const ends = keys.filter((k) => !keys.some((o) => o !== k && (k === "" || o.startsWith(`${k}.`))));
+  const raws = ends.map((k) => lastByBranch.get(k)!.raw);
+  return raws.length === 1 ? raws[0] : raws;
+}
+
+/** Interactions in branch-tree order, falling back to oldest first. */
+export function sortInteractions(interactions: Interaction[]): Interaction[] {
+  return [...interactions]
+    .sort((a, b) => b.created - a.created)
+    .sort((a, b) => compareInteractionIds(a.id, b.id));
+}
+
+/** The flow's branches, in the order their first hop appears (tree order). */
+function collectBranches(steps: FlowStep[]): FlowBranch[] {
+  const byKey = new Map<string, FlowBranch>();
+  const ensure = (key: string): FlowBranch => {
+    let b = byKey.get(key);
+    if (!b) {
+      // Parents first, so a nested branch never appears before the branch it forked from.
+      const parent = parentBranch(key);
+      if (parent) ensure(parent);
+      b = { key, name: branchName(key), parent, forkAt: forkPosition(key), color: byKey.size, blocked: false, hops: 0, leaf: true };
+      byKey.set(key, b);
+    }
+    return b;
+  };
+  for (const s of steps) {
+    if (!s.branch) continue;
+    const b = ensure(s.branch);
+    b.hops++;
+    if (s.verdict === "blocked") b.blocked = true;
+  }
+  for (const b of byKey.values()) if (b.parent) byKey.get(b.parent)!.leaf = false;
+  return [...byKey.values()];
 }
 
 // ---- Diagram-based full flow builder (uses /intent-diagram flat interactions) ----
@@ -872,132 +993,98 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
     steps,
     status: halted ? "halted" : "completed",
     trace: flowTrace,
+    branches: collectBranches(steps),
     rawDiagram: diagram,
   };
 }
 
-// ---- Block-data-based trace builder (uses /intent-block-data) ----
+// ---- Interaction tree (Envelope inspector) ----
 //
-// Outbound blocks push a new span onto the call stack.
-// Inbound blocks pop back to the matching agent, set its output, and — if
-// cbac_app is present — insert a tool child span first.
+// One span per interaction, keyed by the interaction's own id, nested by call
+// stack: a call sits under the most recent open call whose target is its
+// initiator. Tools can't call onward, so they're never pushed as a frame.
 
-export function buildTraceFromBlocks(intent: Intent, blocks: IntentBlock[]): FlowTrace {
-  const sorted = [...blocks].sort((a, b) => a.block_index - b.block_index);
+export function buildInteractionTrace(
+  intent: Intent,
+  interactions: Interaction[],
+  /** DID → display name; falls back to the name on the interaction, then a short DID. */
+  nameOf: (did: string) => string | undefined,
+): FlowTrace {
+  // Same ordering as buildFlowFromIntent, so the tree and the step rail agree on sequence.
+  const sorted = sortInteractions(interactions);
+  const name = (ref: Interaction["initiator"]) => nameOf(ref.id) || ref.name || shortDid(ref.id);
+  const halted = sorted.some((ix) => ix.threat);
 
   const allSpans: TraceSpan[] = [];
-  const mkSpan = (s: Omit<TraceSpan, "children">): TraceSpan => {
-    const sp: TraceSpan = { ...s, children: [] };
-    allSpans.push(sp);
-    return sp;
-  };
-
-  const halted = sorted.some((b) => b.threat_detected);
-  const traceStatus: TraceSpan["status"] = halted ? "blocked" : "ok";
-
-  const rootSpan = mkSpan({
-    id: `sp_${sanitize(intent.id)}_root`,
-    name: `Intent · ${intent.id.slice(-8)}`,
+  const root: TraceSpan = {
+    id: `sp_${sanitize(intent.id)}_ixroot`,
+    name: intent.name || `Intent · ${intent.id.slice(-8)}`,
     kind: "chain",
-    label: "TRACE",
-    status: traceStatus,
-        input: `Execute intent: ${intent.id}`,
-    output: halted ? "Intent halted: policy violation detected." : "Intent finished successfully.",
+    label: "INTENT",
+    status: halted ? "blocked" : "ok",
+    input: "",
+    output: "",
     model: null,
     parentId: null,
-    metadata: { intentId: intent.id, status: halted ? "halted" : "finished" },
-  });
+    metadata: { intentId: intent.id, interactions: sorted.length, status: halted ? "halted" : "finished" },
+    children: [],
+  };
+  allSpans.push(root);
 
-  // Stack of active frames: { did, span }
-  // The root frame is a sentinel so we never pop below the intent root.
-  const stack: Array<{ did: string; span: TraceSpan }> = [
-    { did: "__root__", span: rootSpan },
-  ];
+  const stack: Array<{ did: string; span: TraceSpan }> = [{ did: "__root__", span: root }];
 
-  let humanName = intent.initiator?.name || "User";
+  for (const ix of sorted) {
+    while (stack.length > 1 && stack[stack.length - 1].did !== ix.initiator.id) stack.pop();
+    const parent = stack[stack.length - 1].span;
+    const isTool = ix.targetType === "tool";
+    const from = name(ix.initiator);
+    const to = name(ix.target);
 
-  for (const block of sorted) {
-    if (block.direction === "outbound") {
-      const isHuman = block.block_type === "intent";
-      if (isHuman) humanName = block.agent_name || humanName;
-
-      const parent = stack[stack.length - 1].span;
-      const spanId = `sp_${sanitize(intent.id)}_${sanitize(block.id)}`;
-
-      const span = mkSpan({
-        id: spanId,
-        name: block.agent_name || block.agent_did.slice(-8),
-        kind: isHuman ? "human" : "agent",
-        label: isHuman ? "User" : "Agent",
-        status: block.threat_detected ? "blocked" : "ok",
-                input: block.message || "",
-        output: "",  // filled in when the matching inbound block arrives
-        model: isHuman ? null : "agent/reason-v2",
-        parentId: parent.id,
-        metadata: {
-          agentDid: block.agent_did,
-          blockType: block.block_type,
-          blockIndex: block.block_index,
-          ...(block.delegate_to ? { delegateTo: block.delegate_to } : {}),
-          ...(block.received_from ? { receivedFrom: block.received_from } : {}),
-        },
-        signature: block.signature || undefined,
-      });
-
-      parent.children.push(span);
-      stack.push({ did: block.agent_did, span });
-    } else {
-      // inbound — find the matching agent frame and fill its output
-      let frameIdx = stack.length - 1;
-      while (frameIdx > 0 && stack[frameIdx].did !== block.agent_did) {
-        frameIdx--;
-      }
-
-      if (frameIdx > 0) {
-        const frame = stack[frameIdx];
-
-        // If a tool was involved, add it as a child before closing this span
-        if (block.cbac_app) {
-          const toolSpanId = `sp_${sanitize(intent.id)}_tool_${sanitize(block.id)}`;
-          const toolSpan = mkSpan({
-            id: toolSpanId,
-            name: block.cbac_app,
-            kind: "tool",
-            label: "Tool",
-            status: block.threat_detected ? "blocked" : "ok",
-                        input: block.message || "",
-            output: block.response || "",
-            model: null,
-            parentId: frame.span.id,
-            metadata: {
-              cbacApp: block.cbac_app,
-              cbacDecision: block.cbac_decision,
-              trustIssues: block.trust_issues,
-              blockIndex: block.block_index,
-            },
-          });
-          frame.span.children.push(toolSpan);
-        }
-
-        // Fill the agent span's output and propagate threat upward if needed
-        frame.span.output = block.response || block.message || "";
-        if (block.threat_detected) frame.span.status = "blocked";
-
-        // Pop this frame and everything above it
-        stack.splice(frameIdx);
-      }
-    }
+    // Interactions carry no payload of their own, so Preview splits the record into
+    // what was asked (who → whom) and what came back (verdict, runtime, threat).
+    const pos = parseInteractionId(ix.id);
+    const span: TraceSpan = {
+      id: ix.id,
+      name: pos?.branch ? `${from} → ${to} · ${branchName(pos.branch)}` : `${from} → ${to}`,
+      kind: isTool ? "tool" : "agent",
+      label: ix.blockType || (isTool ? "Tool call" : "Agent call"),
+      status: ix.threat ? "blocked" : "ok",
+      input: JSON.stringify({
+        from: { name: from, id: ix.initiator.id },
+        to: { name: to, id: ix.target.id, type: ix.targetType },
+        intent: { id: ix.intent?.id, name: ix.intent?.name },
+      }),
+      output: JSON.stringify({
+        verdict: ix.threat ? "blocked" : "allowed",
+        runtime: ix.runtime,
+        ...(ix.threatID ? { threatID: ix.threatID } : {}),
+        ...(ix.message ? { message: ix.message } : {}),
+      }),
+      model: null,
+      parentId: parent.id,
+      metadata: {
+        interactionId: ix.id,
+        ...(pos?.branch ? { branch: branchName(pos.branch), hop: pos.label } : {}),
+        ...(ix.blockType ? { blockType: ix.blockType } : {}),
+        created: ix.created,
+        runtime: ix.runtime,
+      },
+      children: [],
+    };
+    allSpans.push(span);
+    parent.children.push(span);
+    if (!isTool) stack.push({ did: ix.target.id, span });
   }
 
   const spanById: Record<string, TraceSpan> = {};
   for (const s of allSpans) spanById[s.id] = s;
 
   return {
-    trace: rootSpan,
+    trace: root,
     spanById,
     traceId: `tr_${sanitize(intent.id).slice(-8)}`,
     sessionId: `sess_${sanitize(intent.id).slice(-6)}`,
-    userId: humanName,
+    userId: intent.initiator?.name || "operator",
     env: "prod",
     totalTokensIn: 0,
     totalTokensOut: 0,

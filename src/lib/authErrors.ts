@@ -25,6 +25,19 @@ export function friendlyAuthError(err: unknown, fallback = "Something went wrong
   if (m.includes("otp") && m.includes("expire")) {
     return { message: "Your OTP code has expired. Request a new one." };
   }
+  // /admin-login's own messages (400 / 403 / 502 / 504), before the generic password rule below.
+  if (m.includes("are required")) {
+    return { message: "Enter both your username or email and your password." };
+  }
+  if (m.includes("not registered with this dashboard")) {
+    return { message: "This admin account isn't registered with this dashboard. Ask your AgentDNA administrator to add it." };
+  }
+  if (m.includes("admin server unavailable")) {
+    return { message: "Admin sign-in is unavailable right now. Try again in a moment." };
+  }
+  if (m.includes("invalid username")) {
+    return { message: "Incorrect username or password." };
+  }
   if (m.includes("invalid credentials") || m.includes("unauthorized") || m.includes("password")) {
     return { message: "Incorrect email or password." };
   }

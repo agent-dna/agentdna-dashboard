@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.3",
+    "@types/cytoscape": "^3.21.9",
+    "@xyflow/react": "^12.11.6",
+    "cytoscape": "^3.34.3",
     "framer-motion": "^12.40.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.8.0",

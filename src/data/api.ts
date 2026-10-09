@@ -1,10 +1,9 @@
-// Data layer — mixes real API calls with stubs for endpoints that don't exist yet.
+// Data layer — real API calls; shapes are mapped into the UI types here.
 // Shapes defined in src/types.ts; API contracts in the middleware README.
 
 import { apiRequest } from "../api/client";
-import { isDummyMode } from "./dummyRouter";
+import { compareInteractionIds } from "../lib/interactionBranch";
 import { getDirectorySnapshot, waitForDirectoryReady } from "./directoryCache";
-import dummy from "./dummy.json";
 import type {
   Agent,
   Tool,
@@ -26,6 +25,22 @@ function isoToMinutesAgo(iso: string | undefined | null): number {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return 0;
   return Math.max(0, Math.floor((Date.now() - t) / 60000));
+}
+
+/**
+ * /user-info's agents.list[].created comes back as a raw Unix epoch
+ * timestamp (not an ISO string like every other `createdAt` field, and not
+ * already "minutes ago"), so it was being handed straight to timeAgo() as if
+ * it *were* minutes-ago — a value that large read as tens of thousands of
+ * months. Handles both epoch-seconds and epoch-milliseconds (some backends
+ * send one, some the other) by magnitude: anything past year ~5138 in
+ * seconds is almost certainly already milliseconds.
+ */
+function epochToMinutesAgo(epoch: number | undefined | null): number {
+  if (!epoch) return 0;
+  const ms = epoch > 1e12 ? epoch : epoch * 1000;
+  if (Number.isNaN(ms)) return 0;
+  return Math.max(0, Math.floor((Date.now() - ms) / 60000));
 }
 
 function shortDid(did: string): string {
@@ -53,7 +68,7 @@ function classifyParticipant(id: string): "agent" | "tool" {
   return isAgentId(id) ? "agent" : "tool";
 }
 
-interface ApiInteraction {
+export interface ApiInteraction {
   interactionID: string;
   from: string;
   to: string;
@@ -68,6 +83,10 @@ interface ApiInteraction {
   blockType?: string;
   /** Non-empty only when `threat` is true — pass to GET /threat-by-id for the full message. */
   threatID?: string;
+  /** /intent-info only: the sender's original envelope for this hop (see `Interaction.raw`). */
+  rawData?: unknown;
+  /** What the sender sent in this hop, when the endpoint includes it. */
+  message?: string;
 }
 
 function mapInteraction(i: ApiInteraction): Interaction {
@@ -84,13 +103,25 @@ function mapInteraction(i: ApiInteraction): Interaction {
     created: isoToMinutesAgo(i.time),
     blockType: i.blockType,
     threatID: i.threatID || undefined,
+    ...(i.rawData !== undefined ? { raw: i.rawData } : {}),
+    ...(i.message ? { payload: i.message } : {}),
   };
 }
 
 // ============ Home ============
 
+/** In-flight /home-metrics requests by page: the sidebar badge and the Home page both ask on load. */
+const homeMetricsInFlight = new Map<number, Promise<HomeMetrics>>();
+
+/** GET /home-metrics. Callers asking while the same page is in flight share that request. */
 export function fetchHomeMetrics(page = 1): Promise<HomeMetrics> {
-  return apiRequest<HomeMetrics>("/home-metrics", { query: { page } });
+  const pending = homeMetricsInFlight.get(page);
+  if (pending) return pending;
+  const req = apiRequest<HomeMetrics>("/home-metrics", { query: { page } }).finally(() => {
+    homeMetricsInFlight.delete(page);
+  });
+  homeMetricsInFlight.set(page, req);
+  return req;
 }
 
 export function fetchPublicMetrics(): Promise<PublicMetrics> {
@@ -325,6 +356,49 @@ export async function fetchThreatByID(threatId: string): Promise<ThreatByID | nu
     description: res.description,
     message: res.message,
   };
+}
+
+/** One flagged interaction in an intent, with its /threat-by-id detail when that loaded. */
+export interface IntentThreat {
+  interactionID: string;
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  /** ISO time of the interaction. */
+  time: string;
+  threatID: string;
+  detail: ThreatByID | null;
+  /** Why the detail is missing: no threatID on the interaction, or the lookup failed. */
+  error?: string;
+}
+
+/**
+ * Every threat in an intent: the flagged interactions from /intent-info (all of them, not one
+ * page), each looked up in /threat-by-id in parallel. A failed lookup keeps the row with `error`.
+ */
+export async function fetchIntentThreats(intentId: string): Promise<IntentThreat[]> {
+  const info = await fetchIntentInfo(intentId);
+  const flagged = (info?.interactions ?? []).filter((i) => i.threat);
+  return Promise.all(
+    flagged.map(async (ix): Promise<IntentThreat> => {
+      const base = {
+        interactionID: ix.interactionID,
+        from: ix.from,
+        fromName: ix.fromName?.trim() || "",
+        to: ix.to,
+        toName: ix.toName?.trim() || "",
+        time: ix.time,
+        threatID: ix.threatID || "",
+      };
+      if (!ix.threatID) return { ...base, detail: null, error: "No incident ID on this interaction" };
+      try {
+        return { ...base, detail: await fetchThreatByID(ix.threatID) };
+      } catch (e) {
+        return { ...base, detail: null, error: e instanceof Error ? e.message : "Failed to load incident details" };
+      }
+    }),
+  );
 }
 
 /**
@@ -576,8 +650,11 @@ interface ApiIntent {
   agentsCount?: number;
   /** Distinct tools touched by this intent. */
   toolsCount?: number;
-  provenanceRecordID?: string;
-  /** Human review state — separate from `status` (the pipeline state). Defaults to "Ongoing" server-side. */
+  /** DIDs of the apps the intent called; [] when it used none. */
+  appDIDs?: string[];
+  /** The same apps with their names. */
+  apps?: { did: string; name?: string }[];
+  /** Human review state — separate from `status` (the pipeline state). Defaults to "Unreviewed" server-side. */
   reviewStatus?: string;
 }
 
@@ -605,7 +682,19 @@ function stubAgent(did: string, name?: string): Agent {
 }
 
 function toReviewStatus(s: string | undefined): Intent["reviewStatus"] {
-  return s === "Acknowledged" || s === "Flagged" ? s : "Ongoing";
+  // Anything else is unreviewed, including a missing status and the legacy "Ongoing".
+  return s === "Acknowledged" || s === "Flagged" ? s : "Unreviewed";
+}
+
+/**
+ * The apps an intent called, named from `apps`; a DID in `appDIDs` with no entry there is kept
+ * with an empty name, so the row still shows that an app was used.
+ */
+function intentApps(i: ApiIntent): { id: string; name: string }[] {
+  const named = (i.apps ?? []).filter((a) => a.did).map((a) => ({ id: a.did, name: a.name?.trim() || "" }));
+  const seen = new Set(named.map((a) => a.id));
+  const unnamed = (i.appDIDs ?? []).filter((d) => d && !seen.has(d)).map((d) => ({ id: d, name: "" }));
+  return [...named, ...unnamed];
 }
 
 function mapIntent(i: ApiIntent): Intent {
@@ -630,8 +719,8 @@ function mapIntent(i: ApiIntent): Intent {
     threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
     score: 0,
     status: i.threatDetected ? "threat" : "safe",
-    provenanceRecordID: i.provenanceRecordID ?? "",
     reviewStatus: toReviewStatus(i.reviewStatus),
+    ...(i.apps || i.appDIDs ? { appsInteracted: intentApps(i) } : {}),
   };
 }
 
@@ -654,6 +743,7 @@ export async function updateIntentStatus(
     method: "POST",
     body: { intentID, status },
   });
+  invalidateIntentInfo(intentID);
   return { intentID: res.intentID, reviewStatus: toReviewStatus(res.reviewStatus) };
 }
 
@@ -665,9 +755,15 @@ export interface PagedIntentsResult {
   pageSize: number;
 }
 
-export async function fetchIntentsPaged(page = 1): Promise<PagedIntentsResult> {
+/**
+ * One page of /intent-list. With `enrich` (the default), each intent also gets its apps from a
+ * per-intent /interactions-list call (see enrichIntentApps), which waits on the org directory.
+ * Pass `enrich: false` to take /intent-list as is: one call, with counts but no app names.
+ */
+export async function fetchIntentsPaged(page = 1, { enrich = true }: { enrich?: boolean } = {}): Promise<PagedIntentsResult> {
   const res = await apiRequest<PagedIntents>("/intent-list", { query: { page } });
-  const items = await Promise.all((res.intentsList || []).map(mapIntent).map(enrichIntentApps));
+  const mapped = (res.intentsList || []).map(mapIntent);
+  const items = enrich ? await Promise.all(mapped.map(enrichIntentApps)) : mapped;
   return {
     items,
     total: res.total || 0,
@@ -689,9 +785,6 @@ export async function fetchAllIntents(): Promise<Intent[]> {
 }
 
 export async function fetchSeries(range: "24h" | "7d" | "30d"): Promise<TimeSeries> {
-  if (isDummyMode()) {
-    return dummySeries(range);
-  }
   try {
     const res = await apiRequest<{ safe: number[]; threats: number[] }>(
       "/interactions/series",
@@ -707,65 +800,6 @@ export async function fetchSeries(range: "24h" | "7d" | "30d"): Promise<TimeSeri
   }
 }
 
-interface DummyInteractionForSeries {
-  time: string;
-  threat: boolean;
-}
-
-/**
- * Bucket dummy interactions into hourly (24h) or daily (7d) slots ending "now".
- * Built so the demo chart isn't flat — values come from the dummy.json times,
- * augmented with a small synthetic baseline so we don't show a row of zeros.
- */
-function dummySeries(range: "24h" | "7d" | "30d"): TimeSeries {
-  const ix: DummyInteractionForSeries[] = (dummy.intents as Array<{ interactions: DummyInteractionForSeries[] }>)
-    .flatMap((i) => i.interactions);
-
-  const buckets = range === "24h" ? 24 : range === "7d" ? 7 : 30;
-  const stepMs = range === "24h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
-  // Anchor on the latest interaction so the chart fills the whole window even
-  // if "now" has drifted past the seeded times.
-  const latest = ix.reduce(
-    (m, x) => Math.max(m, new Date(x.time).getTime()),
-    new Date(dummy.intents[0]?.startedAt || "").getTime() || 0,
-  ) || Date.now();
-  const endMs = latest;
-  const startMs = endMs - (buckets - 1) * stepMs;
-
-  const safe = Array<number>(buckets).fill(0);
-  const threats = Array<number>(buckets).fill(0);
-
-  for (const x of ix) {
-    const t = new Date(x.time).getTime();
-    if (Number.isNaN(t)) continue;
-    const b = Math.floor((t - startMs) / stepMs);
-    if (b < 0 || b >= buckets) continue;
-    if (x.threat) threats[b]++;
-    else safe[b]++;
-  }
-
-  // Layer a deterministic baseline so the chart looks alive even when the
-  // bucketed dataset is sparse.
-  const baseline = range === "24h"
-    ? [4, 3, 2, 2, 3, 4, 6, 9, 12, 15, 17, 19, 22, 24, 23, 21, 19, 17, 15, 13, 11, 9, 7, 5]
-    : range === "7d"
-    ? [42, 51, 48, 63, 70, 58, 66]
-    : [38, 42, 45, 50, 48, 55, 60, 58, 63, 66, 70, 68, 72, 75, 71, 69, 74, 78, 76, 80, 77, 73, 68, 65, 70, 74, 72, 76, 80, 78];
-  const threatBaseline = range === "24h"
-    ? [0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 4, 4, 3, 2, 2, 1, 1, 0, 0, 0, 0]
-    : range === "7d"
-    ? [3, 5, 4, 6, 7, 5, 4]
-    : [2, 3, 2, 4, 3, 5, 4, 3, 5, 6, 5, 4, 6, 7, 5, 4, 6, 7, 5, 6, 4, 3, 5, 4, 6, 5, 4, 6, 7, 5];
-
-  for (let i = 0; i < buckets; i++) {
-    safe[i] += baseline[i] ?? 0;
-    threats[i] += threatBaseline[i] ?? 0;
-  }
-
-  const total = safe.map((v, i) => v + threats[i]);
-  return { total, safe, threats };
-}
-
 export async function fetchHeatmap(): Promise<HeatmapRow[]> {
   return [];
 }
@@ -777,6 +811,7 @@ interface ApiAgentInfo {
   agentName: string;
   createdAt: string;
   deployerDID: string;
+  deployerName?: string;
   policy?: string;
   orgID: string;
   totalInteractions: number;
@@ -804,6 +839,7 @@ export async function fetchAgent(id: string): Promise<Agent | null> {
       status: r.totalThreats > 5 ? "warn" : "safe",
       env: r.orgID || "",
       owner: r.deployerDID || "",
+      ownerName: r.deployerName?.trim() || undefined,
       policy: r.policy || "",
       revoked: !!r.revoked,
     };
@@ -812,7 +848,7 @@ export async function fetchAgent(id: string): Promise<Agent | null> {
   }
 }
 
-interface ApiIntentInfo {
+export interface ApiIntentInfo {
   intentID: string;
   initiatorDID: string;
   initiatorName?: string;
@@ -820,15 +856,68 @@ interface ApiIntentInfo {
   endedAt?: string;
   status: string;
   threatDetected: boolean;
-  provenanceRecordID?: string;
   reviewStatus?: string;
+  agentsCount?: number;
+  toolsCount?: number;
+  interactionsCount?: number;
+  /** Every interaction of the intent, oldest first — never paged. */
   interactions?: ApiInteraction[];
 }
 
-async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null> {
+/**
+ * One /intent-info response per intent, shared by everything that shows that intent (the
+ * intent page's header, participants, interactions table and threats; the flow page; the
+ * observability Intent Info tab), so opening an intent costs one call instead of one per
+ * consumer. Concurrent callers share the in-flight request.
+ *
+ * Held in memory only (this module's Map; a reload starts empty). Entries expire after
+ * INTENT_INFO_TTL_MS, are dropped when the intent's review status changes, and the whole cache
+ * is cleared on logout or a 401 so the next user never sees the previous user's responses.
+ * Each response carries every envelope, so it keeps at most INTENT_INFO_MAX intents, evicting
+ * the least recently used.
+ */
+const INTENT_INFO_TTL_MS = 15_000;
+const INTENT_INFO_MAX = 20;
+/** Insertion order is recency: a read moves its entry to the end, so the first key is the least recently used. */
+const intentInfoCache = new Map<string, { at: number; req: Promise<ApiIntentInfo> }>();
+
+/** GET /intent-info, through the shared cache. Rejects on failure (nothing is cached then). */
+export function getIntentInfo(id: string): Promise<ApiIntentInfo> {
+  const now = Date.now();
+  const hit = intentInfoCache.get(id);
+  if (hit && now - hit.at < INTENT_INFO_TTL_MS) {
+    intentInfoCache.delete(id);
+    intentInfoCache.set(id, hit);
+    return hit.req;
+  }
+  // Drop what has expired, then make room for this entry.
+  for (const [key, entry] of intentInfoCache) {
+    if (now - entry.at >= INTENT_INFO_TTL_MS) intentInfoCache.delete(key);
+  }
+  while (intentInfoCache.size >= INTENT_INFO_MAX) {
+    intentInfoCache.delete(intentInfoCache.keys().next().value!);
+  }
+  const req = apiRequest<ApiIntentInfo>("/intent-info", { query: { intentID: id } });
+  intentInfoCache.set(id, { at: now, req });
+  req.catch(() => {
+    if (intentInfoCache.get(id)?.req === req) intentInfoCache.delete(id);
+  });
+  return req;
+}
+
+/** Forget a cached /intent-info so the next read refetches (after its review status changes). */
+export function invalidateIntentInfo(id: string) {
+  intentInfoCache.delete(id);
+}
+
+/** Forget every cached /intent-info — on logout or a 401, so nothing outlives the session. */
+export function clearIntentInfoCache() {
+  intentInfoCache.clear();
+}
+
+export async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null> {
   try {
-    const res = await apiRequest<ApiIntentInfo>("/intent-info", { query: { intentID: id } });
-    return res;
+    return await getIntentInfo(id);
   } catch (e) {
     console.warn(`[GET /intent-info?intentID=${id}] failed`, e);
     return null;
@@ -836,18 +925,10 @@ async function fetchIntentInfo(id: string): Promise<ApiIntentInfo | null> {
 }
 
 export async function fetchIntent(id: string): Promise<Intent | null> {
-  const [r, firstPage] = await Promise.all([
-    fetchIntentInfo(id),
-    fetchIntentInteractionsPaged(id, 1),
-  ]);
+  const r = await fetchIntentInfo(id);
   if (!r) return null;
-  
-  // Collect all interactions across pages to derive participant counts.
-  const allInteractions = [...firstPage.interactions];
-  for (let p = 2; p <= firstPage.totalPages; p++) {
-    const page = await fetchIntentInteractionsPaged(id, p);
-    allInteractions.push(...page.interactions);
-  }
+  // /intent-info carries every interaction, so participant counts come from it directly.
+  const allInteractions = intentInfoInteractions(r);
 
   // "Owner" is the sender of the intent's very first interaction, not the
   // top-level initiatorDID/initiatorName — those two can disagree (e.g. the
@@ -889,8 +970,7 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     threatDetected: r.threatDetected,
     agentsCount: agentDids.size,
     toolsCount: toolDids.size,
-    interactionsCount: firstPage.total,
-    provenanceRecordID: r.provenanceRecordID ?? "",
+    interactionsCount: r.interactionsCount ?? allInteractions.length,
     reviewStatus: r.reviewStatus,
   });
 }
@@ -922,9 +1002,12 @@ export async function fetchAgentInteractions(id: string, page = 1): Promise<Inte
  * the intent detail page uses — so every intent table agrees with it.
  */
 async function enrichIntentApps(intent: Intent): Promise<Intent> {
+  // The endpoint already said which apps the intent used (`apps` / `appDIDs`): trust it. Guessing
+  // from participants misreads agents the directory doesn't know as apps.
+  if (intent.appsInteracted) return intent;
   try {
     const [firstPage] = await Promise.all([
-      fetchIntentInteractionsPaged(intent.id, 1),
+      fetchIntentInteractionsListPage(intent.id, 1),
       // See directoryCache.ts — without this, a request racing ahead of
       // DirectoryProvider's initial load misclassifies tools as agents via
       // the DID-prefix fallback, silently dropping them from "apps
@@ -1108,10 +1191,17 @@ export async function fetchToolAgentScores(toolDID: string): Promise<ToolAgentSc
   return (res.agents || []).map(mapToolAgentScore);
 }
 
+/** An /intent-info response's interactions, mapped. Its rows carry no intentID of their own. */
+function intentInfoInteractions(r: ApiIntentInfo): Interaction[] {
+  return (r.interactions || []).map((i) => mapInteraction({ ...i, intentID: i.intentID || r.intentID }));
+}
+
 export async function fetchIntentInteractions(id: string): Promise<Interaction[]> {
   const r = await fetchIntentInfo(id);
-  return (r?.interactions || []).map(mapInteraction);
+  return r ? intentInfoInteractions(r) : [];
 }
+
+const INTENT_INTERACTIONS_PAGE_SIZE = 10;
 
 export interface PagedIntentInteractionsResult {
   interactions: Interaction[];
@@ -1120,7 +1210,25 @@ export interface PagedIntentInteractionsResult {
   page: number;
 }
 
+/**
+ * One page of an intent's interactions, in branch-tree order. Sliced in the browser from the
+ * shared /intent-info (which returns them all), so paging the table makes no further calls.
+ */
 export async function fetchIntentInteractionsPaged(
+  intentId: string,
+  page = 1,
+): Promise<PagedIntentInteractionsResult> {
+  const all = [...(await fetchIntentInteractions(intentId))].sort((a, b) => compareInteractionIds(a.id, b.id));
+  const totalPages = Math.max(1, Math.ceil(all.length / INTENT_INTERACTIONS_PAGE_SIZE));
+  const start = (page - 1) * INTENT_INTERACTIONS_PAGE_SIZE;
+  return { interactions: all.slice(start, start + INTENT_INTERACTIONS_PAGE_SIZE), total: all.length, totalPages, page };
+}
+
+/**
+ * First page of /interactions-list for an intent — only for list rows (enrichIntentApps), where
+ * pulling a whole /intent-info (with every envelope) per row would cost far more.
+ */
+async function fetchIntentInteractionsListPage(
   intentId: string,
   page = 1,
 ): Promise<PagedIntentInteractionsResult> {
@@ -1140,17 +1248,9 @@ export async function fetchIntentInteractionsPaged(
 }
 
 export async function fetchIntentParticipants(id: string): Promise<IntentParticipant[]> {
-  const [intentInfo, firstPage] = await Promise.all([
-    fetchIntentInfo(id),
-    fetchIntentInteractionsPaged(id, 1),
-  ]);
+  const intentInfo = await fetchIntentInfo(id);
   const initiatorDID = (intentInfo?.initiatorDID ?? "").trim().toLowerCase();
-  const allInteractions = [...firstPage.interactions];
-  for (let p = 2; p <= firstPage.totalPages; p++) {
-    const page = await fetchIntentInteractionsPaged(id, p);
-    allInteractions.push(...page.interactions);
-  }
-  const interactions = allInteractions;
+  const interactions = intentInfo ? intentInfoInteractions(intentInfo) : [];
   const map = new Map<string, IntentParticipant>();
   for (const r of interactions) {
     const sides: { ref: { id: string; name: string }; type: "agent" | "tool" }[] = [
@@ -1184,49 +1284,6 @@ export async function fetchLogs(_kind: "agent" | "intent", _id: string): Promise
   return [];
 }
 
-export interface IntentBlock {
-  id: string;
-  block_index: number;
-  agent_did: string;
-  agent_name: string;
-  direction: string;
-  block_type: "trigger" | "delegate" | "tool_call" | "execute" | "response" | "verify" | string;
-  message: string;
-  response: string;
-  delegate_to: string;
-  received_from: string;
-  cbac_app: string;
-  cbac_decision: string;
-  threat_detected: boolean;
-  trust_issues: string[];
-  signature: string;
-  created_at: string;
-  parent_block: IntentBlock | null;
-}
-
-/** Walk the parent_block chain and return blocks ordered oldest → newest. */
-export function flattenIntentBlocks(root: IntentBlock): IntentBlock[] {
-  const chain: IntentBlock[] = [];
-  let cur: IntentBlock | null = root;
-  while (cur) {
-    chain.push(cur);
-    cur = cur.parent_block;
-  }
-  return chain.reverse();
-}
-
-export async function fetchIntentBlockData(intentId: string): Promise<IntentBlock | null> {
-  try {
-    // apiRequest already unwraps { status, data } and returns the inner object directly.
-    const res = await apiRequest<IntentBlock>("/intent-block-data", {
-      query: { intent_id: intentId },
-    });
-    return res ?? null;
-  } catch (e) {
-    console.warn(`[GET /intent-block-data?intent_id=${intentId}] failed`, e);
-    return null;
-  }
-}
 
 export interface DiagramBasicInfo {
   intentID: string;
@@ -1308,7 +1365,6 @@ interface ApiToolInteraction {
   intentID: string;
   message?: string;
   signature?: string;
-  provenanceRecordID?: string;
   time: string;
   /** Non-empty only when `threat` is true — pass to GET /threat-by-id for the full message. */
   threatID?: string;
@@ -1386,6 +1442,7 @@ function mapToolInteraction(i: ApiToolInteraction): Interaction {
     threat: !!i.threat,
     created: isoToMinutesAgo(i.time),
     threatID: i.threatID || undefined,
+    ...(i.message ? { payload: i.message } : {}),
   };
 }
 
@@ -1402,7 +1459,6 @@ function mapToolIntent(i: ApiToolIntent): Intent {
     threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
     score: i.threatDetected ? 0 : 100,
     status: (i.status as Agent["status"]) || "safe",
-    provenanceRecordID: "",
     reviewStatus: toReviewStatus(i.reviewStatus),
   };
 }
@@ -1411,6 +1467,8 @@ function mapToolIntent(i: ApiToolIntent): Intent {
 
 interface ApiUserIntent {
   intentID: string;
+  title?: string;
+  titleFull?: string;
   initiatorDID: string;
   initiatorName?: string;
   flowType?: string;
@@ -1433,24 +1491,27 @@ interface ApiUserIntent {
 function mapUserIntent(i: ApiUserIntent): Intent {
   return {
     id: i.intentID,
-    name: i.intentID,
+    name: i.titleFull || i.title || i.intentID,
     initiator: { id: i.initiatorDID, name: i.initiatorName || shortDid(i.initiatorDID) } as Agent,
     runtime: (i.runtimeSeconds || 0) * 1000,
     started: i.startedAt ? isoToMinutesAgo(i.startedAt) : 0,
     agentsInteracted: i.agentsCount || 0,
     toolsInteracted: i.toolsCount || 0,
     interactionsCount: i.interactionsCount || 0,
-    threats: i.threatCount ?? (i.threatDetected ? 1 : 0),
+    // threatCount can be 0 while threatDetected is true; count the detection then.
+    threats: i.threatCount || (i.threatDetected ? 1 : 0),
     score: i.threatDetected ? 0 : 100,
     status: (i.status as Agent["status"]) || "safe",
-    provenanceRecordID: "",
     reviewStatus: toReviewStatus(i.reviewStatus),
   };
 }
 
 interface ApiUserInfo {
   user: {
+    /** The user's primary DID (any of their DIDs is accepted as `userID`). */
     userID: string;
+    /** Every DID the user holds, oldest first. */
+    dids?: string[];
     userName: string;
     displayName?: string;
     createdAt: string;
@@ -1479,7 +1540,10 @@ interface ApiUserInfo {
 }
 
 export interface UserDetail {
+  /** Primary DID. */
   userID: string;
+  /** Every DID the user holds, oldest first (at least the primary). */
+  dids: string[];
   userName: string;
   displayName?: string;
   createdMinsAgo: number;    // minutes since createdAt
@@ -1532,6 +1596,7 @@ export async function fetchUserInfo(
     return {
       user: {
         userID: u.userID,
+        dids: u.dids?.length ? u.dids : [u.userID],
         userName: u.userName,
         displayName: u.displayName,
         createdMinsAgo: isoToMinutesAgo(u.createdAt),
@@ -1555,7 +1620,7 @@ export async function fetchUserInfo(
       agents: (r.agents?.list || []).map((a) => ({
         id: a.agentDID,
         name: a.agentName,
-        created: a.created,
+        created: epochToMinutesAgo(a.created),
         interactions: a.totalInteractions || 0,
         threats: a.totalThreats || 0,
         status: a.status,
@@ -1572,9 +1637,11 @@ export async function fetchToolInfo(
   nameOrDid: string,
   interactionsPage = 1,
   intentsPage = 1,
+  /** Force the lookup key; by default a "bafy…"/"did:" value is a DID and anything else a name. */
+  by?: "did" | "name",
 ): Promise<ToolDetailResult | null> {
   try {
-    const isDid = nameOrDid.startsWith("bafy") || nameOrDid.includes("did:");
+    const isDid = by ? by === "did" : nameOrDid.startsWith("bafy") || nameOrDid.includes("did:");
     const query: Record<string, string | number> = {
       interactionsPage,
       intentsPage,
@@ -1603,4 +1670,15 @@ export async function fetchToolInfo(
   } catch {
     return null;
   }
+}
+
+/**
+ * An app's /tool-info by DID, falling back to its name. Callers that only hold the DID (the
+ * observability plane) get nothing back when /tool-info can't resolve it, while lookups by name
+ * (the app page's) work, so try the name the caller knows before giving up.
+ */
+export async function fetchToolInfoByDidOrName(did: string, name?: string): Promise<ToolDetailResult | null> {
+  const byDid = did ? await fetchToolInfo(did, 1, 1, "did") : null;
+  if (byDid) return byDid;
+  return name && name !== did ? fetchToolInfo(name, 1, 1, "name") : null;
 }

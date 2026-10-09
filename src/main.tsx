@@ -18,11 +18,11 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { LandingPage } from "./pages/LockedPage";
 // import { LandingPage } from "./pages/LandingPage";
 import { FlowPage } from "./pages/flow/FlowPage";
+import { ObservabilityPage } from "./pages/observability/ObservabilityPage";
 import { DrawerProvider } from "./context/DrawerContext";
 import { TweaksProvider } from "./context/TweaksContext";
 import { AuthProvider } from "./context/AuthContext";
 import { DirectoryProvider } from "./context/DirectoryContext";
-import { IntentNumbersProvider } from "./context/IntentNumbersContext";
 import { IntentReviewProvider } from "./context/IntentReviewContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -31,8 +31,6 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <AuthProvider>
         <DirectoryProvider>
-        <IntentNumbersProvider>
-        <IntentReviewProvider>
         <TweaksProvider>
           <DrawerProvider>
             <Routes>
@@ -41,7 +39,10 @@ createRoot(document.getElementById("root")!).render(
               <Route
                 element={
                   <ProtectedRoute>
-                    <App />
+                    {/* Inside the guard so the sidebar's review count is only fetched once signed in. */}
+                    <IntentReviewProvider>
+                      <App />
+                    </IntentReviewProvider>
                   </ProtectedRoute>
                 }
               >
@@ -57,6 +58,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="graph" element={<FlowPage />} />
                 <Route path="graph/:intentId" element={<FlowPage />} />
                 <Route path="interactions" element={<InteractionsPage />} />
+                <Route path="observability" element={<ObservabilityPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 {/* <Route path="locked" element={<LockedPage />} /> */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -64,8 +66,6 @@ createRoot(document.getElementById("root")!).render(
             </Routes>
           </DrawerProvider>
         </TweaksProvider>
-        </IntentReviewProvider>
-        </IntentNumbersProvider>
         </DirectoryProvider>
       </AuthProvider>
     </BrowserRouter>

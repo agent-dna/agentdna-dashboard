@@ -10,7 +10,7 @@ import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics, useHomeMetrics } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
 import { AppIcon } from "../components/AppIcon";
-import { useDrawer } from "../context/DrawerContext";
+import { EmptyAgentsState } from "../components/EmptyAgentsState";
 import { timeAgo } from "../lib/format";
 import { exportAgentsListPdf, exportToolsListPdf } from "../lib/exportListPdf";
 import type { Agent, Tool } from "../types";
@@ -34,9 +34,8 @@ export function AgentsToolsPage() {
   const toolsTotalPages = toolsState.data.totalPages || 1;
   const toolsTotal = toolsState.data.total || 0;
   const toolsPageSize = toolsState.data.pageSize || 10;
-  const { data: agentsAppsMetrics } = useAgentsAppsMetrics();
-  const { data: homeMetrics } = useHomeMetrics();
-  const { openDrawer } = useDrawer();
+  const { data: agentsAppsMetrics, loading: metricsLoading } = useAgentsAppsMetrics();
+  const { data: homeMetrics, loading: homeMetricsLoading } = useHomeMetrics();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState<{ open: boolean; agent?: Agent }>({ open: false });
@@ -45,89 +44,83 @@ export function AgentsToolsPage() {
   const isAgents = tab === "agents";
   const rows = isAgents ? agents : tools;
 
+  // Admins see the org-wide count; a regular user only their own access-scoped agents.
+  const agentCount = isAdmin ? agentsAppsMetrics.metrics.totalAgents : homeMetrics.agentCount;
+  const countLoading = (isAdmin ? metricsLoading : homeMetricsLoading) || agentsState.loading;
+  // With no agents there is nothing to have called an app or raised a threat, so the
+  // remaining tiles read zero rather than showing org-wide numbers the user can't see behind.
+  const noAgents = !countLoading && agentCount === 0;
+  const m = agentsAppsMetrics.metrics;
+
   const agentCols: DataTableColumn<Agent>[] = [
     {
       key: "name",
       label: "Agent",
-      width: "20%",
+      width: "28%",
       sortFn: (a, b) => a.name.localeCompare(b.name),
-      render: (r) => <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>,
+      render: (r) => (
+        <div className="at-name">
+          <span className={`at-av a${monogramTone(r.id || r.name)}`} aria-hidden>
+            {initials(r.name)}
+          </span>
+          <div className="at-name-text">
+            <div className="at-nm" title={r.name}>{r.name}</div>
+            <div className="at-sub at-did" title={r.id}>{shortDid(r.id)}</div>
+          </div>
+        </div>
+      ),
     },
     {
       key: "interactions",
       label: "Interactions",
       align: "right",
-      width: "15%",
+      width: "13%",
       sortFn: (a, b) => a.interactions - b.interactions,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
-      ),
+      render: (r) => <span className="at-num">{r.interactions.toLocaleString()}</span>,
+    },
+    {
+      key: "threats",
+      label: "Incidents",
+      align: "right",
+      width: "11%",
+      sortFn: (a, b) => a.threats - b.threats,
+      render: (r) => <ThreatCount n={r.threats} />,
     },
     {
       key: "score",
       label: "Reliability",
-      align: "right",
-      width: "25%",
-      sortFn: (a, b) => a.score - b.score,
-      render: (r) => {
-        if (r.interactions <= 0) {
-          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
-        }
-        const pct = computeReliability(r.interactions, r.threats);
-        const color = pct < 70 ? "var(--threat)" : pct < 85 ? "var(--warn)" : "var(--safe)";
-        return (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color, minWidth: 40, textAlign: "right" }}>
-              {pct}
-            </span>
-            <div style={{ width: 80, height: 6, borderRadius: 999, background: "var(--bg-3)", overflow: "hidden", flexShrink: 0 }}>
-              <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: color, borderRadius: 999 }} />
-            </div>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-muted)", minWidth: 34, textAlign: "right" }}>
-              {Math.round(pct)}%
-            </span>
-          </div>
-        );
-      },
+      width: "20%",
+      sortFn: (a, b) => computeReliability(a.interactions, a.threats) - computeReliability(b.interactions, b.threats),
+      render: (r) => <ReliabilityBar interactions={r.interactions} threats={r.threats} />,
     },
     {
       key: "created",
       label: "Created",
       align: "right",
-      width: "15%",
+      width: "11%",
       sortFn: (a, b) => a.created - b.created,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-dim)" }}>{timeAgo(r.created)}</span>
-      ),
+      render: (r) => <span className="at-meta">{timeAgo(r.created)}</span>,
     },
-    // {
-    //   key: "connected",
-    //   label: "Apps Interacted",
-    //   align: "right",
-    //   sortFn: (a, b) => a.connected - b.connected,
-    //   render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.connected}</span>,
-    // },
     {
       key: "actions",
-      label: "Action",
+      label: "",
       align: "right",
-      width: "25%",
+      width: "17%",
       render: (r) => (
         <div className="row-actions" style={{ flexWrap: "nowrap" }}>
           <button
-            className="btn-mini danger"
-            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            className="btn-mini at-btn"
+            title={r.policy ? "Read this agent's policy" : "No policy uploaded"}
             onClick={(e) => {
               e.stopPropagation();
               setPolicyOpen(r);
             }}
           >
             <Icon name="eye" size={12} />
-            View Policy
+            Policy
           </button>
           <button
-            className="btn-mini info"
-            style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}
+            className="btn-mini info at-btn"
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/agents/${r.id}`);
@@ -145,13 +138,14 @@ export function AgentsToolsPage() {
     {
       key: "name",
       label: "App",
+      width: "34%",
       sortFn: (a, b) => a.name.localeCompare(b.name),
       render: (r) => (
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <AppIcon name={r.name} size={28} />
-          <div>
-            <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>{r.name}</div>
-            {r.provider && <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 1 }}>{r.provider}</div>}
+        <div className="at-name">
+          <AppIcon name={r.name} size={32} />
+          <div className="at-name-text">
+            <div className="at-nm" title={r.name}>{r.name}</div>
+            {r.provider && r.provider !== r.name && <div className="at-sub">{r.provider}</div>}
           </div>
         </div>
       ),
@@ -160,45 +154,51 @@ export function AgentsToolsPage() {
       key: "interactions",
       label: "Interactions",
       align: "right",
+      width: "15%",
       sortFn: (a, b) => a.interactions - b.interactions,
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactions.toLocaleString()}</span>
-      ),
+      render: (r) => <span className="at-num">{r.interactions.toLocaleString()}</span>,
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       align: "right",
+      width: "13%",
       sortFn: (a, b) => a.threats - b.threats,
-      render: (r) =>
-        r.threats > 0 ? (
-          <span className="chip threat" style={{ fontVariantNumeric: "tabular-nums" }}>
-            {r.threats}
-          </span>
-        ) : (
-          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>
-        ),
+      render: (r) => <ThreatCount n={r.threats} />,
+    },
+    {
+      key: "score",
+      label: "Reliability",
+      width: "24%",
+      sortFn: (a, b) => computeReliability(a.interactions, a.threats) - computeReliability(b.interactions, b.threats),
+      render: (r) => <ReliabilityBar interactions={r.interactions} threats={r.threats} />,
     },
     {
       key: "actions",
       label: "",
       align: "right",
-      width: 60,
+      width: "14%",
       render: (r) => (
         <div className="row-actions">
           <button
-            className="btn-mini"
+            className="btn-mini info at-btn"
             onClick={(e) => {
               e.stopPropagation();
-              openDrawer("tool", r);
+              navigate(`/tools/${encodeURIComponent(r.name)}`);
             }}
           >
-            View
+            <Icon name="search" size={12} />
+            Inspect
           </button>
         </div>
       ),
     },
   ];
+
+  // Tab counts come from the same metrics as the cards above; the paged lists only know
+  // their current page. Fall back to the list's own total until the metrics arrive.
+  const agentsTabCount = countLoading ? agentsTotal : agentCount;
+  const appsTabCount = noAgents ? 0 : metricsLoading ? toolsTotal : m.totalApps || toolsTotal;
 
   return (
     <div className="page">
@@ -223,19 +223,23 @@ export function AgentsToolsPage() {
       </div>
 
       <div className="metrics">
-        <MetricTile label="Total Agents" value={isAdmin ? agentsAppsMetrics.metrics.totalAgents : homeMetrics.agentCount} icon="agents" sparkColor="#2563EB" spark={[]} />
-        <MetricTile label="Total Apps" value={agentsAppsMetrics.metrics.totalApps} icon="box" sparkColor="#0A2240" spark={[]} />
+        <MetricTile label="Total Agents" value={agentCount} icon="agents" sparkColor="#2563EB" spark={[]} />
+        <MetricTile label="Total Apps" value={noAgents ? 0 : m.totalApps} icon="box" sparkColor="#0A2240" spark={[]} />
         <MetricTile
           label="Avg. Reliability"
-          value={parseFloat(agentsAppsMetrics.metrics.avgReliability.toFixed(2))}
+          value={noAgents ? 0 : parseFloat(m.avgReliability.toFixed(2))}
           unit="%"
           icon="target"
           sparkColor="#0EA5E9"
           spark={[]}
         />
-        <MetricTile label="Total Threats" value={agentsAppsMetrics.metrics.totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Total Incidents" value={noAgents ? 0 : m.totalThreats} icon="shield" sparkColor="#DC2626" spark={[]} />
       </div>
 
+      {noAgents ? (
+        <EmptyAgentsState showBrowseLink={false} />
+      ) : (
+      <>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
         <TopAgentsList
           rows={
@@ -267,6 +271,7 @@ export function AgentsToolsPage() {
             id: a.name,
             name: a.name,
             interactions: a.totalInteractions,
+            threats: a.totalThreats,
           }))}
           totalApps={agentsAppsMetrics.metrics.totalApps}
           onRowClick={(r) => navigate(`/tools/${encodeURIComponent(r.name)}`)}
@@ -277,14 +282,14 @@ export function AgentsToolsPage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            {([{ key: "agents", label: "Agents", count: agents.length }, { key: "tools", label: "Apps", count: tools.length }] as const).map((t) => (
+            {([{ key: "agents", label: "Agents", count: agentsTabCount }, { key: "tools", label: "Apps", count: appsTabCount }] as const).map((t) => (
               <div
                 key={t.key}
                 className={`tab ${tab === t.key ? "active" : ""}`}
                 onClick={() => setTab(t.key as Tab)}
               >
                 {t.label}
-                <span className="pill">{t.count}</span>
+                <span className="pill">{t.count.toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -304,16 +309,20 @@ export function AgentsToolsPage() {
             rows={rows as Agent[]}
             onRowClick={(r) => navigate(`/agents/${r.id}`)}
             emptyText="No agents yet"
+            alignCells
           />
         ) : (
           <DataTable
             columns={toolCols}
             rows={rows as Tool[]}
             onRowClick={(r) => navigate(`/tools/${encodeURIComponent(r.name)}`)}
-            emptyText="No tools yet"
+            emptyText="No apps yet"
+            alignCells
           />
         )}
       </div>
+      </>
+      )}
 
       <AgentRequestModal
         open={createOpen}
@@ -349,6 +358,55 @@ function computeReliability(interactions: number, threats: number): number {
   return Math.max(0, Math.round(pct * 100) / 100);
 }
 
+/** Clean share of traffic as a bar; the unfilled part is the flagged share, tinted red. */
+function ReliabilityBar({ interactions, threats }: { interactions: number; threats: number }) {
+  if (interactions <= 0) return <span className="at-meta">No traffic yet</span>;
+  const pct = computeReliability(interactions, threats);
+  const band = pct < 70 ? "low" : pct < 85 ? "mid" : "high";
+  const clean = Math.max(0, interactions - threats);
+  return (
+    <div
+      className={`at-rel ${band}`}
+      title={`${clean.toLocaleString()} of ${interactions.toLocaleString()} interactions passed without an incident`}
+    >
+      <div className="at-rel-track">
+        <div className="at-rel-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+      <span className="at-rel-pct">{pct % 1 === 0 ? pct : pct.toFixed(1)}%</span>
+    </div>
+  );
+}
+
+function ThreatCount({ n }: { n: number }) {
+  return n > 0 ? (
+    <span className="at-threats">{n.toLocaleString()}</span>
+  ) : (
+    <span className="at-meta">None</span>
+  );
+}
+
+function initials(name: string): string {
+  const parts = name.split(/[\s._-]+/).filter(Boolean);
+  const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2);
+  return letters.toUpperCase() || "?";
+}
+
+/** One of the five avatar tones (.at-av.a1…a5), stable per agent. */
+function monogramTone(key: string): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return (h % 5) + 1;
+}
+
+/** did:method:abcdef…7890 — enough to tell agents apart; the full DID is in the tooltip. */
+function shortDid(id: string): string {
+  if (id.length <= 24) return id;
+  const lastColon = id.lastIndexOf(":");
+  const prefix = lastColon > 0 && lastColon < 16 ? id.slice(0, lastColon + 1) : "";
+  const key = id.slice(prefix.length);
+  return `${prefix}${key.slice(0, 6)}…${key.slice(-4)}`;
+}
+
 interface VolumeRow {
   id: string;
   name: string;
@@ -372,13 +430,13 @@ function TopAgentsList({
       <div style={{ padding: "18px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: "var(--fg)", marginBottom: 2 }}>Top agents by volume</div>
-          <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>Ranked by interactions · threats flagged</div>
+          <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>Ranked by interactions · incidents flagged</div>
         </div>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", background: "var(--bg-3)", color: "var(--fg-muted)", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>LAST 30 DAYS</span>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", padding: "12px 20px 6px", borderBottom: "1px solid var(--line)" }}>
-        {["#", "AGENT", "IXNS", "THREATS"].map((h, i) => (
+        {["#", "AGENT", "TXNS", "INCIDENTS"].map((h, i) => (
           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase", textAlign: i > 1 ? "right" : "left" }}>{h}</div>
         ))}
       </div>
@@ -435,20 +493,19 @@ function TopAppsList({
   onRowClick: (r: VolumeRow) => void;
   onViewAll: () => void;
 }) {
-  const totalIxns = rows.reduce((s, r) => s + r.interactions, 0) || 1;
   const maxIxns = rows.reduce((m, r) => Math.max(m, r.interactions), 0) || 1;
   return (
     <div style={{ borderRadius: 14, background: "#0b1633", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ padding: "18px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: 16.5, fontWeight: 700, color: "#fff", marginBottom: 2 }}>Top apps by volume</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)" }}>Ranked by interactions</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)" }}>Ranked by interactions · incidents flagged</div>
         </div>
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.4)", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>LAST 30 DAYS</span>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "36px 28px 1fr 76px 72px", padding: "12px 20px 6px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-        {["#", "", "APP", "IXNS", "SHARE"].map((h, i) => (
+        {["#", "", "APP", "IXNS", "INCIDENTS"].map((h, i) => (
           <div key={i} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", textAlign: i > 2 ? "right" : "left" }}>{h}</div>
         ))}
       </div>
@@ -458,7 +515,7 @@ function TopAppsList({
           <div style={{ padding: 28, color: "rgba(255,255,255,0.35)", fontSize: 14, textAlign: "center" }}>No data</div>
         )}
         {rows.map((r, i) => {
-          const share = Math.round((r.interactions / totalIxns) * 100);
+          const threats = r.threats ?? 0;
           const barPct = (r.interactions / maxIxns) * 100;
           return (
             <div
@@ -479,8 +536,10 @@ function TopAppsList({
                 <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
                   {r.interactions.toLocaleString()}
                 </div>
-                <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.6)", fontVariantNumeric: "tabular-nums" }}>
-                  {share}%
+                <div style={{ textAlign: "right" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 700, background: threats > 0 ? "rgba(248,113,113,0.16)" : "rgba(255,255,255,0.07)", color: threats > 0 ? "#f87171" : "rgba(255,255,255,0.4)", padding: "2px 8px", borderRadius: 4 }}>
+                    {threats.toLocaleString()}
+                  </span>
                 </div>
               </div>
               <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginBottom: 8 }}>

@@ -43,11 +43,11 @@ export function getDirectorySnapshot(): Map<string, DirectoryEntry> {
 // of racing it.
 let ready = false;
 let resolveReady: (() => void) | null = null;
-const readyPromise = new Promise<void>((resolve) => {
+let readyPromise = new Promise<void>((resolve) => {
   resolveReady = resolve;
 });
 
-/** Called once by DirectoryProvider after its initial load settles (success or caught-empty). */
+/** Called by DirectoryProvider once a session's directory load settles (success or caught-empty). */
 export function markDirectoryReady() {
   if (ready) return;
   ready = true;
@@ -55,8 +55,40 @@ export function markDirectoryReady() {
 }
 
 /**
+ * Back to "not loaded" with an empty snapshot — when the signed-in user changes or signs out,
+ * so the next session classifies against its own directory, never the previous user's.
+ */
+export function resetDirectory() {
+  snapshot = new Map();
+  if (!ready) return;
+  ready = false;
+  readyPromise = new Promise<void>((resolve) => {
+    resolveReady = resolve;
+  });
+}
+
+// ── On-demand loading ────────────────────────────────────────────────────────
+// The directory walks every page of /agents-list, /tools-list and /users-list, so it is only
+// loaded once something needs it (a page resolving names, or api.ts classifying participants)
+// rather than on every page — the Home page, for one, never needs it.
+let loader: (() => void) | null = null;
+let requested = false;
+
+/** DirectoryProvider registers how to start a load; a request made before that is kept. */
+export function setDirectoryLoader(fn: (() => void) | null) {
+  loader = fn;
+  if (fn && requested) fn();
+}
+
+/** Ask for the directory to be loaded (idempotent; the provider ignores repeat requests). */
+export function requestDirectory() {
+  requested = true;
+  loader?.();
+}
+
+/**
  * Resolves once the org directory has completed its initial load — await
- * this before classifying participants.
+ * this before classifying participants. Starts the load if nothing has yet.
  *
  * markDirectoryReady() is *guaranteed* to fire eventually (DirectoryProvider's
  * fetchAllAgents/fetchAllTools/listAllUsers are all wrapped in .catch(), so
@@ -70,6 +102,7 @@ export function markDirectoryReady() {
  */
 export function waitForDirectoryReady(): Promise<void> {
   if (ready) return Promise.resolve();
+  requestDirectory();
   return Promise.race([
     readyPromise,
     new Promise<void>((resolve) =>

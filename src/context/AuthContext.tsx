@@ -1,356 +1,190 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { login as apiLogin, adminLogin as apiAdminLogin, adminRegister as apiAdminRegister, registerAdminMiddleware, registerUser as apiRegisterUser, type LoginResponse } from "../api/auth";
-import { getToken, setToken, setUnauthorizedHandler } from "../api/client";
-import { fetchUserProfile, fetchAdminProfile } from "../api/profile";
-import { dummyCurrentUser, isDummyMode } from "../data/dummyRouter";
+import {
+  login as apiLogin,
+  adminLogin as apiAdminLogin,
+  adminRegister as apiAdminRegister,
+  registerAdminMiddleware,
+  registerUser as apiRegisterUser,
+  fetchSession,
+  logoutSession,
+  logoutAllSessions,
+  type SessionInfo,
+} from "../api/auth";
+import { ApiError, setUnauthorizedHandler } from "../api/client";
+import { clearIntentInfoCache } from "../data/api";
 
-const USER_KEY = "agentdna.user";
-const SESSION_START_KEY = "agentdna.sessionStart";
-
-/** Hard cap on how long a session survives, regardless of what the JWT claims. */
-const MAX_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
-
-function markSessionStart() {
-  try {
-    localStorage.setItem(SESSION_START_KEY, String(Date.now()));
-  } catch {
-    // ignore
-  }
-}
-
-function clearSessionStart() {
-  try {
-    localStorage.removeItem(SESSION_START_KEY);
-  } catch {
-    // ignore
-  }
-}
-
-/**
- * True when the stored session is older than MAX_SESSION_MS. Sessions created before
- * this cap existed have no recorded start, so we stamp them now instead of evicting
- * everyone at once — the JWT `exp` check and the 401 handler still catch stale ones.
+/*
+ * The session is an HttpOnly cookie the backend sets on login; nothing about it is stored or
+ * decoded here. Who is signed in comes from the login responses and GET /session, which the
+ * app asks on load. Only an HTTP 401 means the session is gone.
  */
-function isSessionExpired(): boolean {
-  try {
-    const raw = localStorage.getItem(SESSION_START_KEY);
-    if (!raw) {
-      markSessionStart();
-      return false;
-    }
-    const started = Number(raw);
-    if (!Number.isFinite(started)) {
-      markSessionStart();
-      return false;
-    }
-    return Date.now() - started >= MAX_SESSION_MS;
-  } catch {
-    return false;
-  }
-}
 
 export interface AuthUser {
+  /** Primary DID. A user can hold several; see `dids` on /user-info for all of them. */
   did: string;
+  /** For admins, their admin username. */
   name?: string;
+  /** May be empty for admins. */
   email: string;
   org_id: string;
-  api_key: string;
+  /** Only the login responses carry these; /session doesn't. */
+  api_key?: string;
   userCardId?: string;
-  is_admin: boolean;
   agent_access_list?: string[];
+  is_admin: boolean;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
-  token: string | null;
+  /** False until the boot-time GET /session has answered; nothing should redirect before then. */
+  ready: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  loginAdmin: (email: string, password: string) => Promise<void>;
+  loginAdmin: (username: string, password: string) => Promise<void>;
   registerAdmin: (username: string, email: string, password: string, org: string, otp?: string) => Promise<void>;
   registerUser: (username: string, email: string, password: string, orgId: string, otp?: string) => Promise<void>;
-  logout: () => void;
+  /** Ends this session (POST /logout) and clears the signed-in user. */
+  logout: () => Promise<void>;
+  /** Ends every session of the account on all devices (POST /logout-all), this one included. */
+  logoutAll: () => Promise<void>;
+  /** Re-reads GET /session, e.g. after the primary DID may have changed. */
+  refreshSession: () => Promise<void>;
   patchUser: (patch: Partial<AuthUser>) => void;
 }
 
 const Ctx = createContext<AuthContextValue | null>(null);
 
-function readStoredUser(): AuthUser | null {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
-  } catch {
-    return null;
-  }
-}
-
-interface JwtClaims {
-  sub?: string;       // admin JWT: username
-  did?: string;
-  email?: string;     // user JWT: email address
-  org_id?: string;
-  api_key?: string;
-  nft_id?: string;
-  is_admin?: boolean;
-  exp?: number;
-}
-
-function decodeJwt(token: string): JwtClaims | null {
-  try {
-    const payload = token.split(".")[1];
-    if (!payload) return null;
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(json) as JwtClaims;
-  } catch {
-    return null;
-  }
-}
-
-function userFromToken(token: string | null): AuthUser | null {
-  if (!token) return null;
-  const claims = decodeJwt(token);
-  if (!claims) return null;
-  if (claims.exp && claims.exp * 1000 < Date.now()) return null;
-  // User JWT uses `email`; admin JWT uses `sub` (username) — accept either
-  const identifier = claims.email || claims.sub || "";
-  if (!identifier) return null;
-  return {
-    did: claims.did || "",
-    email: identifier,
-    org_id: claims.org_id || "",
-    api_key: claims.api_key || "",
-    userCardId: claims.nft_id,
-    // Admin JWT has no is_admin field — treat as admin if sub is present and no email
-    is_admin: claims.is_admin !== undefined ? !!claims.is_admin : !!claims.sub && !claims.email,
-  };
-}
-
-function writeStoredUser(user: AuthUser | null) {
-  try {
-    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
-    else localStorage.removeItem(USER_KEY);
-  } catch {
-    // ignore
-  }
-}
-
-function dummyUser(): AuthUser {
-  const u = dummyCurrentUser();
-  return {
-    did: u.did,
-    email: u.email,
-    org_id: u.org_id,
-    api_key: u.api_key,
-    userCardId: u.nft_id,
-    is_admin: u.is_admin,
-  };
-}
+const fromSession = (s: SessionInfo, prev: AuthUser | null): AuthUser => ({
+  // Login-only fields survive a session refresh; everything /session sends wins.
+  ...(prev ?? {}),
+  did: s.did,
+  email: s.email || "",
+  name: s.name || prev?.name,
+  org_id: s.org_id,
+  is_admin: !!s.is_admin,
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const dummy = isDummyMode();
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    if (dummy) return dummyUser();
-    // A token that is past its exp, or a session older than 7 days, is dead — don't
-    // restore a logged-in shell the backend will only answer with 401s.
-    if (!userFromToken(getToken()) || isSessionExpired()) {
-      setToken(null);
-      writeStoredUser(null);
-      clearSessionStart();
-      return null;
-    }
-    return readStoredUser() || userFromToken(getToken());
-  });
-  const [token, setTokenState] = useState<string | null>(() => (dummy ? "dummy.jwt.token" : getToken()));
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const logout = useCallback(() => {
-    setToken(null);
-    writeStoredUser(null);
-    clearSessionStart();
+  /** Signed out, by us or by the server: drop the user and anything cached for them. */
+  const clearUser = useCallback(() => {
+    clearIntentInfoCache();
     setUser(null);
-    setTokenState(null);
   }, []);
 
-  useEffect(() => {
-    setUnauthorizedHandler(() => {
-      writeStoredUser(null);
-      clearSessionStart();
-      setUser(null);
-      setTokenState(null);
-    });
-    return () => setUnauthorizedHandler(null);
-  }, []);
+  const refreshSession = useCallback(async () => {
+    try {
+      const s = await fetchSession();
+      setUser((prev) => fromSession(s, prev));
+    } catch (e) {
+      // 401: no live session. Anything else (network, 5xx) leaves the current state alone.
+      if (e instanceof ApiError && e.status === 401) clearUser();
+    }
+  }, [clearUser]);
 
-  // Proactively sign out when the JWT expires or the 7-day session cap is hit —
-  // both while the tab stays open and when it wakes back up after being away.
+  // On load, ask the server who (if anyone) is signed in.
   useEffect(() => {
-    if (dummy) return;
-    const check = () => {
-      const tok = getToken();
-      if (!tok) return;
-      if (userFromToken(tok) !== null && !isSessionExpired()) return;
-      setToken(null);
-      writeStoredUser(null);
-      clearSessionStart();
-      setUser(null);
-      setTokenState(null);
-    };
-    const id = window.setInterval(check, 30_000);
-    window.addEventListener("focus", check);
-    document.addEventListener("visibilitychange", check);
+    let live = true;
+    fetchSession()
+      .then((s) => live && setUser(fromSession(s, null)))
+      .catch(() => live && setUser(null))
+      .finally(() => live && setReady(true));
     return () => {
-      window.clearInterval(id);
-      window.removeEventListener("focus", check);
-      document.removeEventListener("visibilitychange", check);
+      live = false;
     };
-  }, [dummy]);
-
-  const applyAuthResponse = useCallback((res: LoginResponse) => {
-    const u: AuthUser = {
-      did: res.did,
-      email: res.email,
-      org_id: res.org_id,
-      api_key: res.api_key,
-      userCardId: res.nft_id,
-      is_admin: res.is_admin,
-      agent_access_list: res.agent_access_list,
-    };
-    setToken(res.token);
-    markSessionStart();
-    writeStoredUser(u);
-    setUser(u);
-    setTokenState(res.token);
   }, []);
 
-  // After any login, fetch the profile in the background to populate name and org_id.
-  const fetchAndPatchName = useCallback((isAdmin: boolean) => {
-    const fetcher = isAdmin ? fetchAdminProfile : fetchUserProfile;
-    fetcher()
-      .then((p) => {
-        setUser((prev) => {
-          if (!prev) return prev;
-          const patch: Partial<AuthUser> = {};
-          if (p.name) patch.name = p.name;
-          if (p.organizationID) patch.org_id = p.organizationID;
-          if (Object.keys(patch).length === 0) return prev;
-          const next = { ...prev, ...patch };
-          writeStoredUser(next);
-          return next;
-        });
-      })
-      .catch(() => {});
-  }, []);
+  // Any 401 from any call: the session expired or was ended elsewhere.
+  useEffect(() => {
+    setUnauthorizedHandler(clearUser);
+    return () => setUnauthorizedHandler(null);
+  }, [clearUser]);
 
-  const login = useCallback(async (email: string, _password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     try {
-      if (isDummyMode()) {
-        const u = dummyUser();
-        u.email = email || u.email;
-        setToken("dummy.jwt.token");
-        markSessionStart();
-        writeStoredUser(u);
-        setUser(u);
-        setTokenState("dummy.jwt.token");
-        return;
-      }
-      applyAuthResponse(await apiLogin(email, _password));
-      fetchAndPatchName(false);
+      const r = await apiLogin(email, password);
+      setUser({
+        did: r.did,
+        email: r.email,
+        org_id: r.org_id,
+        api_key: r.api_key,
+        userCardId: r.nft_id,
+        agent_access_list: r.agent_access_list,
+        is_admin: !!r.is_admin,
+      });
+      void refreshSession(); // fills in the name
     } finally {
       setLoading(false);
     }
-  }, [applyAuthResponse, fetchAndPatchName]);
-
-  // applyJwt: used when the backend returns a raw JWT string (admin login/register auto-login)
-  const applyJwt = useCallback((jwt: string) => {
-    const u = userFromToken(jwt);
-    if (!u) throw new Error("Received invalid or expired token.");
-    setToken(jwt);
-    markSessionStart();
-    writeStoredUser(u);
-    setUser(u);
-    setTokenState(jwt);
-  }, []);
+  }, [refreshSession]);
 
   const loginAdmin = useCallback(async (username: string, password: string) => {
     setLoading(true);
     try {
-      if (isDummyMode()) {
-        const u = dummyUser();
-        u.email = username || u.email;
-        u.is_admin = true;
-        setToken("dummy.jwt.token");
-        markSessionStart();
-        writeStoredUser(u);
-        setUser(u);
-        setTokenState("dummy.jwt.token");
-        return;
-      }
-      applyJwt(await apiAdminLogin(username, password));
-      fetchAndPatchName(true);
+      const r = await apiAdminLogin(username, password);
+      setUser({
+        did: r.did,
+        name: r.username,
+        email: r.email || "",
+        org_id: r.org_id,
+        api_key: r.api_key,
+        is_admin: !!r.is_admin,
+      });
+      void refreshSession();
     } finally {
       setLoading(false);
     }
-  }, [applyJwt, fetchAndPatchName]);
+  }, [refreshSession]);
 
   const registerAdmin = useCallback(async (username: string, email: string, password: string, org: string, otp = "") => {
     setLoading(true);
     try {
-      if (isDummyMode()) {
-        const u = dummyUser();
-        u.email = email || username || u.email;
-        u.org_id = org || u.org_id;
-        u.is_admin = true;
-        setToken("dummy.jwt.token");
-        markSessionStart();
-        writeStoredUser(u);
-        setUser(u);
-        setTokenState("dummy.jwt.token");
-        return;
-      }
       const { did } = await apiAdminRegister({ username, email, orgID: org, password, otp });
       await registerAdminMiddleware(did, org);
-      applyJwt(await apiAdminLogin(username, password));
-      fetchAndPatchName(true);
     } finally {
       setLoading(false);
     }
-  }, [applyJwt, fetchAndPatchName]);
+    await loginAdmin(username, password);
+  }, [loginAdmin]);
 
   const registerUser = useCallback(async (name: string, email: string, password: string, orgId: string, otp = "") => {
     setLoading(true);
     try {
-      if (isDummyMode()) {
-        const u = dummyUser();
-        u.email = email || name || u.email;
-        u.org_id = orgId || u.org_id;
-        u.is_admin = false;
-        setToken("dummy.jwt.token");
-        markSessionStart();
-        writeStoredUser(u);
-        setUser(u);
-        setTokenState("dummy.jwt.token");
-        return;
-      }
       await apiRegisterUser({ name: name || undefined, email, password, orgID: orgId, otp });
-      applyAuthResponse(await apiLogin(email, password));
-      fetchAndPatchName(false);
     } finally {
       setLoading(false);
     }
-  }, [applyAuthResponse, fetchAndPatchName]);
+    await login(email, password);
+  }, [login]);
+
+  const logout = useCallback(async () => {
+    try {
+      await logoutSession();
+    } catch {
+      // Already gone server-side, or unreachable: still sign out here.
+    }
+    clearUser();
+  }, [clearUser]);
+
+  const logoutAll = useCallback(async () => {
+    try {
+      await logoutAllSessions();
+    } finally {
+      clearUser();
+    }
+  }, [clearUser]);
 
   const patchUser = useCallback((patch: Partial<AuthUser>) => {
-    setUser((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, ...patch };
-      writeStoredUser(next);
-      return next;
-    });
+    setUser((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser }),
-    [user, token, loading, login, loginAdmin, registerAdmin, registerUser, logout, patchUser],
+    () => ({ user, ready, loading, login, loginAdmin, registerAdmin, registerUser, logout, logoutAll, refreshSession, patchUser }),
+    [user, ready, loading, login, loginAdmin, registerAdmin, registerUser, logout, logoutAll, refreshSession, patchUser],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

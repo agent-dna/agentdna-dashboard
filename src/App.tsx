@@ -66,7 +66,9 @@ export function App() {
     { to: "/intents", label: "Intents", icon: "intents", badge: unacknowledgedCount > 0 ? unacknowledgedCount : undefined },
     { to: "/agents", label: "Agents & Apps", icon: "agents" },
     { to: "/requests", label: "Requests", icon: "box", badge: pendingCount > 0 ? pendingCount : undefined },
-    { to: "/interactions", label: "Interactions", icon: "interactions" },
+    // Hidden from the sidebar for now; the /interactions route still works.
+    // { to: "/interactions", label: "Interactions", icon: "interactions" },
+    { to: "/observability", label: "Observability", icon: "activity" },
   ];
 
   const collapsed = tweaks.sidebar === "collapsed";

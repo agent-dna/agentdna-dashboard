@@ -1,9 +1,10 @@
-import { apiRequest, ApiError } from "./client";
+import { apiRequest } from "./client";
 
-// ── Existing user login (original backend, unchanged) ──────────────────────
+// All auth goes through the middleware (/dashboard/v1). Logging in sets the HttpOnly session
+// cookie; identity comes from these responses and GET /session, never from a token.
 
+/** POST /login — org users. Data only; the session itself is the cookie it sets. */
 export interface LoginResponse {
-  token: string;
   did: string;
   email: string;
   org_id: string;
@@ -13,6 +14,7 @@ export interface LoginResponse {
   agent_access_list?: string[];
 }
 
+/** 400 with the server's message on wrong credentials (admins get that here too; they use /admin-login). */
 export function login(email: string, password: string): Promise<LoginResponse> {
   return apiRequest<LoginResponse>("/login", {
     method: "POST",
@@ -21,51 +23,55 @@ export function login(email: string, password: string): Promise<LoginResponse> {
   });
 }
 
-// ── Admin auth — /agent-admin/v1 base ─────────────────────────────────────
-// Response shapes per README:
-//   POST /login           → { status, message, data: <jwt string> }
-//   POST /register-admin  → { status, message, data: null }  (message = DID)
-
-// No localhost fallback here on purpose — same rationale as client.ts's BASE:
-// a deployed build with a missing/misconfigured VITE_ADMIN_API_BASE_URL should
-// fail loudly (see the guard in adminFetch below), not silently start firing
-// requests at whoever's machine happens to be running it.
-const ADMIN_BASE = ((import.meta.env.VITE_ADMIN_API_BASE_URL as string | undefined) || "").replace(/\/$/, "");
-
-interface AdminRawResponse {
-  status: boolean;
-  message: string;
-  data: unknown;
+/** POST /admin-login — admins. The middleware checks the credentials with the admin server. */
+export interface AdminLoginResponse {
+  username: string;
+  did: string;
+  /** May be empty for admins. */
+  email: string;
+  org_id: string;
+  api_key: string;
+  is_admin: boolean;
 }
 
-async function adminFetch(path: string, body: unknown): Promise<AdminRawResponse> {
-  if (!ADMIN_BASE) {
-    throw new ApiError(
-      "Admin API base URL is not configured (VITE_ADMIN_API_BASE_URL is missing) — nothing to send this request to.",
-      0,
-    );
-  }
-  const res = await fetch(`${ADMIN_BASE}${path}`, {
+/**
+ * Errors carry the server's message for the form: 400 (missing fields / wrong credentials),
+ * 403 (admin not registered with this dashboard), 502/504 ("Admin server unavailable").
+ */
+export function adminLogin(username: string, password: string): Promise<AdminLoginResponse> {
+  return apiRequest<AdminLoginResponse>("/admin-login", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: { username, password },
+    auth: false,
   });
-  let payload: AdminRawResponse;
-  try {
-    payload = (await res.json()) as AdminRawResponse;
-  } catch {
-    throw new ApiError(`Invalid JSON response (HTTP ${res.status})`, res.status);
-  }
-  if (!payload.status) {
-    throw new ApiError(payload.message || `HTTP ${res.status}`, res.status);
-  }
-  return payload;
 }
 
-/** POST /agent-admin/v1/login — returns the JWT string */
-export async function adminLogin(username: string, password: string): Promise<string> {
-  const res = await adminFetch("/login", { username, password });
-  return res.data as string;
+/** GET /session — the signed-in account, fresh from the DB. 401 when there is no live session. */
+export interface SessionInfo {
+  /** Primary DID; can change when a new DID is registered, so re-read rather than cache. */
+  did: string;
+  /** May be empty for admins. */
+  email: string;
+  /** For admins, their admin username. */
+  name: string;
+  org_id: string;
+  is_admin: boolean;
+  expiresAt: string;
+}
+
+export function fetchSession(): Promise<SessionInfo> {
+  // The caller decides what a 401 means (at boot it just means "signed out").
+  return apiRequest<SessionInfo>("/session", { skipLogoutOn401: true });
+}
+
+/** POST /logout — ends this session and clears the cookie. */
+export function logoutSession(): Promise<unknown> {
+  return apiRequest<unknown>("/logout", { method: "POST", skipLogoutOn401: true });
+}
+
+/** POST /logout-all — ends every session of the account, this one included. */
+export function logoutAllSessions(): Promise<{ sessionsEnded: number }> {
+  return apiRequest<{ sessionsEnded: number }>("/logout-all", { method: "POST", skipLogoutOn401: true });
 }
 
 /** POST /send-otp — public, triggers OTP email before registration */
@@ -86,7 +92,7 @@ export function forgotPassword(email: string): Promise<{ message: string }> {
   });
 }
 
-/** POST /reset-password — resets password using OTP */
+/** POST /reset-password — resets password using OTP. Ends every session of the account. */
 export function resetPassword(email: string, otp: string, new_password: string): Promise<{ message: string }> {
   return apiRequest<{ message: string }>("/reset-password", {
     method: "POST",

@@ -17,7 +17,11 @@ interface DataTableProps<R extends { id?: string }> {
   emptyText?: string;
   /** Extra inline style per row, e.g. tinting threat rows red. */
   rowStyle?: (row: R) => CSSProperties | undefined;
+  /** Align each column by its own `align` (default left) instead of centering everything. */
+  alignCells?: boolean;
 }
+
+const JUSTIFY = { left: "flex-start", center: "center", right: "flex-end" } as const;
 
 export function DataTable<R extends { id?: string }>({
   columns,
@@ -26,6 +30,7 @@ export function DataTable<R extends { id?: string }>({
   selectedId,
   emptyText = "No data",
   rowStyle,
+  alignCells = false,
 }: DataTableProps<R>) {
   const [sort, setSort] = useState<{ key: string | null; dir: 1 | -1 }>({ key: null, dir: 1 });
 
@@ -46,7 +51,7 @@ export function DataTable<R extends { id?: string }>({
               <th
                 key={c.key}
                 className={sort.key === c.key ? "active" : ""}
-                style={{ width: c.width, textAlign: c.align || "left" }}
+                style={{ width: c.width, textAlign: alignCells ? c.align ?? "left" : "center" }}
                 onClick={() =>
                   c.sortFn &&
                   setSort((s) => ({
@@ -79,8 +84,15 @@ export function DataTable<R extends { id?: string }>({
               style={{ cursor: onRowClick ? "pointer" : "default", ...rowStyle?.(row) }}
             >
               {columns.map((c) => (
-                <td key={c.key} style={{ textAlign: c.align || "left", width: c.width }}>
-                  {c.render ? c.render(row) : (row as Record<string, ReactNode>)[c.key]}
+                <td key={c.key} style={{ width: c.width }}>
+                  {/* A centered flex wrapper (not just text-align) so this
+                      centers everything a column can render — plain text,
+                      pills/chips, and multi-element rows like an icon+name
+                      flex container — regardless of what alignment that
+                      column's own render() markup was built with. */}
+                  <div style={{ display: "flex", justifyContent: alignCells ? JUSTIFY[c.align ?? "left"] : "center", alignItems: "center", gap: 6, minWidth: 0 }}>
+                    {c.render ? c.render(row) : (row as Record<string, ReactNode>)[c.key]}
+                  </div>
                 </td>
               ))}
             </tr>

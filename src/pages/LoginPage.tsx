@@ -244,6 +244,7 @@ export function LoginPage() {
             </button>
           </form>
 
+
           {/* Footer link */}
           <div style={footerStyle}>
             {role === "user" && (

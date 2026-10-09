@@ -29,7 +29,6 @@ two backend services (the **dashboard middleware** and the **agent-admin** servi
 - [Local development](#local-development)
 - [Environment variables](#environment-variables)
 - [Docker](#docker)
-- [Dummy / demo mode](#dummy--demo-mode)
 
 ---
 
@@ -72,7 +71,7 @@ two backend services (the **dashboard middleware** and the **agent-admin** servi
 │  HTTP client (src/api/client.ts)                             │
 │      • injects Bearer JWT                                    │
 │      • unwraps { status, data, message }                     │
-│      • 401 handling, logging, dummy-mode short-circuit       │
+│      • 401 handling, logging                                 │
 └───────────────┬──────────────────────────┬───────────────────┘
                 │                          │
    VITE_API_BASE_URL          VITE_ADMIN_API_BASE_URL
@@ -112,9 +111,7 @@ src/
 │
 ├── data/
 │   ├── api.ts               Domain data layer + wire→domain mappers
-│   ├── hooks.ts             useAsync-based hooks consumed by pages
-│   ├── dummyRouter.ts       Offline mock router (VITE_DUMMY=true)
-│   └── dummy.json           Seed data for dummy mode
+│   └── hooks.ts             useAsync-based hooks consumed by pages
 │
 ├── context/
 │   ├── AuthContext.tsx      Session, JWT decode/expiry, login/register/logout
@@ -323,7 +320,6 @@ cp .env.sample .env
 |---|---|---|---|
 | `VITE_API_BASE_URL` | Yes | Base URL of the dashboard middleware API | `http://your-backend-ip:9000/dashboard/v1/` |
 | `VITE_ADMIN_API_BASE_URL` | Yes | Base URL of the agent-admin API | `http://your-backend-ip:8001/agent-admin/v1` |
-| `VITE_DUMMY` | No | `true` runs entirely on mock data, no backend needed | `false` |
 | `VITE_PORT` | No | Dev-server port (default `4009`) | `8989` |
 | `VITE_DEV_TOKEN` | No | Fallback bearer token used when `localStorage` has none — dev only | – |
 
@@ -354,7 +350,6 @@ Pass environment variables at runtime with `-e`:
 docker run -p 80:80 \
   -e VITE_API_BASE_URL=http://your-backend-ip:9000/dashboard/v1/ \
   -e VITE_ADMIN_API_BASE_URL=http://your-backend-ip:8001/agent-admin/v1 \
-  -e VITE_DUMMY=false \
   agentdna-dashboard
 ```
 
@@ -375,20 +370,10 @@ at runtime. There is no need to rebuild the image to change the backend URL.
 ```js
 window.__ENV__ = {
   VITE_API_BASE_URL: "…",
-  VITE_ADMIN_API_BASE_URL: "…",
-  VITE_DUMMY: "false"
+  VITE_ADMIN_API_BASE_URL: "…"
 };
 ```
 
 `index.html` loads that file before the bundle, so `src/api/client.ts` picks the values up before any
 API call is made.
 
----
-
-## Dummy / demo mode
-
-Set `VITE_DUMMY=true` to run the whole dashboard with no backend. `src/api/client.ts` short-circuits
-every request through `src/data/dummyRouter.ts`, which serves paginated slices of
-`src/data/dummy.json` and logs each intercepted call as `[DUMMY <METHOD> <path>]`. Auth is stubbed
-with a fixed demo user, and the volume chart is generated from the seeded interaction timestamps plus
-a deterministic baseline so the chart is never flat.

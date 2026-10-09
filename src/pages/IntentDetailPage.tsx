@@ -7,25 +7,26 @@ import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { EntityCell } from "../components/EntityCell";
 import { EntityLink } from "../components/EntityLink";
 import { entityPath } from "../lib/entityLinks";
-import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { useResolveName, shortDid } from "../context/DirectoryContext";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
-import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useThreatByID } from "../data/hooks";
+import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useIntentThreats } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { useIntentReview } from "../context/IntentReviewContext";
 import { timeAgo, titleOrUnknown } from "../lib/format";
 import { LedgerTable } from "../components/LedgerTable";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
-import { updateIntentStatus } from "../data/api";
+import { updateIntentStatus, type IntentThreat } from "../data/api";
 import { ApiError } from "../api/client";
 import { IntentIdChip } from "../context/IntentNumbersContext";
+import { branchName, compareInteractionIds, parseInteractionId } from "../lib/interactionBranch";
 import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
 
-const REVIEW_STATUSES: IntentReviewStatus[] = ["Ongoing", "Acknowledged", "Flagged"];
+const REVIEW_STATUSES: IntentReviewStatus[] = ["Unreviewed", "Acknowledged", "Flagged"];
 
 const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
-  Ongoing: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
+  Unreviewed: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
   Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
   Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
 };
@@ -37,6 +38,17 @@ export function IntentDetailPage() {
   const navigate = useNavigate();
   const { openDrawer } = useDrawer();
   const resolve = useResolveName();
+
+  /**
+   * Owner label: a real display name when the backend or the directory has one, otherwise the
+   * initiator's full DID (not the "did:abc…1234" short form, and never a bare "—").
+   */
+  function ownerLabel(initiator: { id: string; name: string }): { text: string; isDid: boolean } {
+    const resolved = resolve(initiator.id, initiator.name).name;
+    const unresolved = !resolved || resolved === "—" || resolved === shortDid(initiator.id);
+    if (unresolved && initiator.id) return { text: initiator.id, isDid: true };
+    return { text: resolved || "—", isDid: false };
+  }
   const { refetch: refetchIntentReview } = useIntentReview();
   const [tab, setTab] = useState<Tab>("interactions");
   const [interactionsPage, setInteractionsPage] = useState(1);
@@ -80,8 +92,7 @@ export function IntentDetailPage() {
   const interactionsTotal = interactionsPaged.total;
   const interactionsTotalPages = interactionsPaged.totalPages;
   const { data: participants } = useIntentParticipants(intentId);
-  const firstThreatID = interactions.find((i) => i.threat && i.threatID)?.threatID;
-  const { data: threatSummary, loading: threatSummaryLoading, error: threatSummaryError } = useThreatByID(firstThreatID);
+  const { data: threats, loading: threatsLoading, error: threatsError } = useIntentThreats(intentId);
   if (loading) {
     return (
       <div className="page">
@@ -134,16 +145,14 @@ export function IntentDetailPage() {
     else openDrawer("tool", p.entity as unknown as Tool);
   };
 
-  const threatCount = interactions.filter((i: { threat: boolean }) => i.threat).length;
+  // Counted across the whole intent (every interaction), not just the page the table shows.
+  const threatCount = threatsLoading || threatsError
+    ? interactions.filter((i: { threat: boolean }) => i.threat).length
+    : threats.length;
 
-  // Interaction IDs end in "-<n>", the sequence number within the intent's
-  // block chain — list them in that order (1, 2, 3, …) rather than however
-  // the backend happened to return the page.
-  const interactionSeq = (id: string): number => {
-    const m = id.match(/-(\d+)$/);
-    return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
-  };
-  const sortedInteractions = [...interactions].sort((a, b) => interactionSeq(a.id) - interactionSeq(b.id));
+  // Interaction IDs carry their place in the intent's branch tree (`-1`, `-2-b-1`, …) —
+  // list them in tree order rather than however the backend returned the page.
+  const sortedInteractions = [...interactions].sort((a, b) => compareInteractionIds(a.id, b.id));
 
   const participantCols: DataTableColumn<IntentParticipant & { id: string }>[] = [
     {
@@ -167,7 +176,7 @@ export function IntentDetailPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       align: "right",
       render: (r) =>
         r.threats > 0 ? (
@@ -248,48 +257,47 @@ export function IntentDetailPage() {
                 >
                   Owner
                 </div>
-                <div
+                {(() => {
+                  const owner = ownerLabel(intent.initiator);
+                  return (
+                    <div
+                      title={owner.isDid ? owner.text : undefined}
+                      style={{
+                        // A DID is long and not a name — render it in mono at a size that fits.
+                        fontFamily: owner.isDid ? "var(--font-mono)" : "var(--font-display)",
+                        fontSize: owner.isDid ? 13 : 20,
+                        fontWeight: 600,
+                        color: "var(--fg)",
+                        letterSpacing: owner.isDid ? "0" : "-0.01em",
+                        wordBreak: "break-all",
+                        lineHeight: owner.isDid ? 1.45 : undefined,
+                      }}
+                    >
+                      {owner.text}
+                    </div>
+                  );
+                })()}
+                {/* The intent's record on the provenance layer, keyed by the intent ID. */}
+                <a
+                  href={`https://testnetexplorer.rubix.net/nft-explorer?token=${encodeURIComponent(intent.id)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: 20,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    marginTop: 6,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11.5,
+                    color: "var(--accent)",
+                    textDecoration: "none",
                     fontWeight: 600,
-                    color: "var(--fg)",
-                    letterSpacing: "-0.01em",
-                    wordBreak: "break-word",
                   }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
                 >
-                  {resolveDisplayName(resolve, intent.initiator)}
-                </div>
-                {intent.provenanceRecordID ? (
-                  <a
-                    href={`https://testnetexplorer.rubix.net/transaction-explorer?tx=${intent.provenanceRecordID}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 5,
-                      marginTop: 6,
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 11.5,
-                      color: "var(--accent)",
-                      textDecoration: "none",
-                      fontWeight: 600,
-                    }}
-                    onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
-                    onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
-                  >
-                    View on Provenance Layer ↗
-                  </a>
-                ) : (
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6,
-                    fontFamily: "var(--font-mono)", fontSize: 11.5,
-                    color: "var(--fg-faint)", fontWeight: 600,
-                  }}>
-                    Saved on Provenance Layer
-                  </span>
-                )}
+                  View on Provenance Layer ↗
+                </a>
               </div>
               <InfoStat
                 label="Intent ID"
@@ -320,7 +328,7 @@ export function IntentDetailPage() {
                 }
               />
               <InfoStat
-                label="Threat detected"
+                label="Incident detected"
                 value={
                   <span style={{ color: threatCount > 0 ? "var(--threat)" : "var(--fg)", fontWeight: 600 }}>
                     {threatCount}
@@ -400,43 +408,26 @@ export function IntentDetailPage() {
         </div>
 
         {threatCount > 0 && (
-          <div
-            style={{
-              marginTop: 18,
-              paddingTop: 16,
-              borderTop: "1px solid var(--line)",
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 10,
-            }}
-          >
-            <Icon name="shield" size={15} style={{ color: "var(--threat)", flexShrink: 0, marginTop: 1 }} />
-            <div style={{ minWidth: 0 }}>
-              {threatSummaryLoading ? (
-                <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Loading threat details…</span>
-              ) : threatSummary ? (
-                <>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--threat)" }}>{titleOrUnknown(threatSummary.title)}</span>
-                  <span style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--fg-muted)", marginLeft: 8 }}>
-                    code {threatSummary.threatCode}
-                  </span>
-                  {threatSummary.message && (
-                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-muted)", marginTop: 3 }}>{threatSummary.message}</div>
-                  )}
-                  {threatCount > 1 && (
-                    <div style={{ fontSize: 11.5, color: "var(--fg-faint)", marginTop: 3 }}>
-                      +{threatCount - 1} more threat{threatCount - 1 === 1 ? "" : "s"} in this intent
-                    </div>
-                  )}
-                </>
-              ) : (
-                <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-                  {threatCount} threat{threatCount === 1 ? "" : "s"} detected in this intent
-                  {!firstThreatID && " (no threatID on the first threat interaction)"}
-                  {threatSummaryError && ` (failed to load details: ${threatSummaryError.message})`}
-                </span>
-              )}
+          <div className="it-threats">
+            <div className="it-threats-head">
+              <Icon name="shield" size={15} />
+              <span>
+                {threatCount} incident{threatCount === 1 ? "" : "s"} detected in this intent
+              </span>
             </div>
+            {threatsLoading ? (
+              <div className="it-threats-note">Loading incident details…</div>
+            ) : threatsError ? (
+              <div className="it-threats-note">Couldn't load threat details: {threatsError.message}</div>
+            ) : (
+              <ol className="it-threats-list">
+                {[...threats]
+                  .sort((a, b) => compareInteractionIds(a.interactionID, b.interactionID))
+                  .map((t) => (
+                    <ThreatRow key={t.threatID || t.interactionID} t={t} />
+                  ))}
+              </ol>
+            )}
           </div>
         )}
       </div>
@@ -446,7 +437,7 @@ export function IntentDetailPage() {
         <MetricTile label="Interactions" value={interactions.length} icon="activity" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Agents touched" value={intent.agentsInteracted} icon="agents" sparkColor="#0EA5E9" spark={[]} />
         <MetricTile label="Apps touched" value={intent.toolsInteracted} icon="box" sparkColor="#0A2240" spark={[]} />
-        <MetricTile label="Threats" value={threatCount} icon="shield" sparkColor="#DC2626" spark={[]} />
+        <MetricTile label="Incidents" value={threatCount} icon="shield" sparkColor="#DC2626" spark={[]} />
       </div>
 
       {/* Tabbed table */}
@@ -513,5 +504,40 @@ function CopyButton({ text }: { text: string }) {
     >
       <Icon name={copied ? "check" : "copy"} size={13} />
     </button>
+  );
+}
+
+/** One threat in the intent header: what it was, its code, which hop raised it, and the raw message. */
+function ThreatRow({ t }: { t: IntentThreat }) {
+  const [open, setOpen] = useState(false);
+  const d = t.detail;
+  const message = d?.message || "";
+  const long = message.length > 220;
+  const hop = [t.fromName || shortDid(t.from), t.toName || shortDid(t.to)].join(" → ");
+  const pos = parseInteractionId(t.interactionID);
+  return (
+    <li className="it-threat">
+      <div className="it-threat-top">
+        <span className="it-threat-title">{d ? titleOrUnknown(d.title) : "Incident"}</span>
+        {d && <span className="it-threat-code">code {d.threatCode}</span>}
+        <span className="it-threat-hop" title={t.interactionID}>
+          {pos && <b>#{pos.label}</b>} {pos?.branch ? `${branchName(pos.branch)} · ` : ""}{hop}
+        </span>
+        {t.time && <span className="it-threat-time">{timeAgo(Math.max(0, (Date.now() - new Date(t.time).getTime()) / 60000))}</span>}
+      </div>
+      {d?.description && <div className="it-threat-desc">{d.description}</div>}
+      {message ? (
+        <>
+          <div className={`it-threat-msg${open || !long ? "" : " clamped"}`}>{message}</div>
+          {long && (
+            <button type="button" className="it-threat-more" onClick={() => setOpen((o) => !o)}>
+              {open ? "Show less" : "Show full message"}
+            </button>
+          )}
+        </>
+      ) : (
+        !d && <div className="it-threat-desc">{t.error ?? "No details for this incident."}</div>
+      )}
+    </li>
   );
 }

@@ -96,7 +96,7 @@ export function SearchDropdown({ query, results, loading, onClose }: Props) {
               key={i.intentID}
               icon="I"
               primary={truncateId(i.intentID)}
-              secondary={`${i.status} · ${timeAgo(new Date(i.startedAt).getTime() / 60000)}${i.threatDetected ? " · ⚠ threat" : ""}`}
+              secondary={`${i.status} · ${timeAgo(new Date(i.startedAt).getTime() / 60000)}${i.threatDetected ? " · ⚠ incident" : ""}`}
               color={i.threatDetected ? "#dc2626" : "#16a34a"}
               onClick={() => go(`/intents/${i.intentID}`)}
             />

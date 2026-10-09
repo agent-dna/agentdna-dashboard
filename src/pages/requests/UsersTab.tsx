@@ -67,7 +67,7 @@ export function UsersTab() {
   useEffect(() => { load(); }, [load]);
 
   const cols: DataTableColumn<OrgUser & { id: string }>[] = [
-    { key: "userName", label: "Email", render: (r) => <span style={{ color: "var(--fg)", fontWeight: 600 }}>{r.userName}</span> },
+    { key: "userName", label: "Name", render: (r) => <span style={{ color: "var(--fg)", fontWeight: 600 }}>{r.userName}</span> },
     {
       key: "userID",
       label: "User ID",
@@ -79,7 +79,7 @@ export function UsersTab() {
     },
     { key: "totalIntents", label: "Intents", align: "right",
       render: (r) => <span style={{ fontFamily: "var(--font-mono)" }}>{r.totalIntents}</span> },
-    { key: "totalThreats", label: "Threats", align: "right",
+    { key: "totalThreats", label: "Incidents", align: "right",
       render: (r) => r.totalThreats > 0
         ? <span className="chip threat">{r.totalThreats}</span>
         : <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)" }}>0</span> },

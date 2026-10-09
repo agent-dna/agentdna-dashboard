@@ -16,8 +16,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Flow, FlowNode } from "./flowData";
+import { BRANCH_TONES, TRUNK_TONE, withAlpha } from "./branchPalette";
+import { Icon } from "../../components/Icon";
 
-const NODE_DOT = { human: "#1E3A8A", agent: "#2563EB", tool: "#0EA5E9" } as const;
 
 /** Keyword → icon for known app/tool integrations (matched against the node name). */
 const APP_ICON_RULES: [RegExp, LucideIcon][] = [
@@ -77,9 +78,10 @@ function qbez(p0: Point, c: Point, p1: Point, t: number): Point {
 /**
  * Control point for the arc between two nodes.
  *
- * `bow` scales how far the curve bulges out. Repeated interactions between the
- * same pair pass different values so each hop gets its own visible arc instead
- * of stacking on one path.
+ * The normal is chosen so a left → right call bows upward and the reply
+ * (right → left) bows downward — a request and its response between the same
+ * pair read as two separate lanes rather than one line with two arrowheads.
+ * `bow` scales how far the curve bulges out.
  */
 function ctrlFor(a: Point, b: Point, bow = 1): Point {
   const mx = (a.x + b.x) / 2;
@@ -88,7 +90,88 @@ function ctrlFor(a: Point, b: Point, bow = 1): Point {
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
   const off = Math.min(40, len * 0.12) * bow;
-  return { x: mx + (-dy / len) * off, y: my + (dx / len) * off };
+  return { x: mx + (dy / len) * off, y: my + (-dx / len) * off };
+}
+
+/** Space a node occupies around its centre: the icon plus its caption. */
+interface NodeBox {
+  x: number;
+  y: number;
+  top: number;
+  bottom: number;
+  half: number;
+}
+
+const ICON_CLEAR = 32;
+const CAPTION_CLEAR = 36;
+const CAPTION_HALF = 50;
+
+function hitsBox(p: Point, box: NodeBox): boolean {
+  const dx = Math.abs(p.x - box.x);
+  const dy = p.y - box.y;
+  if (dx <= ICON_CLEAR && Math.abs(dy) <= ICON_CLEAR) return true;
+  return dx <= box.half && dy >= -box.top && dy <= box.bottom;
+}
+
+/**
+ * Control point that routes an edge around every node between its endpoints.
+ *
+ * Starts from the default bow and grows it until the curve clears the icon and
+ * caption of each node in the way — so a hop that skips a column arcs over the
+ * node it passes rather than drawing through it. Falls back to the opposite
+ * side when that clears with a shallower arc.
+ */
+function routeCtrl(a: Point, b: Point, boxes: NodeBox[]): Point {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = dy / len;
+  const ny = -dx / len;
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const base = Math.min(40, len * 0.12);
+
+  const clears = (c: Point) => {
+    for (let t = 0.1; t <= 0.9; t += 0.04) {
+      const p = qbez(a, c, b, t);
+      if (boxes.some((box) => hitsBox(p, box))) return false;
+    }
+    return true;
+  };
+  const at = (off: number) => ({ x: mx + nx * off, y: my + ny * off });
+
+  if (clears(at(base))) return at(base);
+  for (let off = base + 12; off <= 320; off += 12) {
+    if (clears(at(off))) return at(off);
+    if (off > base + 60 && clears(at(-off))) return at(-off);
+  }
+  return at(base);
+}
+
+/**
+ * Control point bowing to one side of the straight A→B line: `side` 1 is the left of travel
+ * (up for a left → right hop), -1 the right. Starts at `min` and grows until the curve clears
+ * every node box in the way, so a mirrored lane routes around nodes on its own side.
+ */
+function sideCtrl(a: Point, b: Point, boxes: NodeBox[], side: 1 | -1, min: number): Point {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = dy / len;
+  const ny = -dx / len;
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const at = (off: number) => ({ x: mx + nx * off * side, y: my + ny * off * side });
+  for (let off = min; off <= 320; off += 12) {
+    const c = at(off);
+    let clear = true;
+    for (let t = 0.1; t <= 0.9 && clear; t += 0.04) {
+      const p = qbez(a, c, b, t);
+      if (boxes.some((box) => hitsBox(p, box))) clear = false;
+    }
+    if (clear) return c;
+  }
+  return at(min);
 }
 
 function trimEnds(a: Point, c: Point, b: Point, dStart: number, dEnd: number) {
@@ -104,26 +187,73 @@ function trimEnds(a: Point, c: Point, b: Point, dStart: number, dEnd: number) {
   };
 }
 
-function Packet({ a, c, b, blocked, duration }: { a: Point; c: Point; b: Point; blocked: boolean; duration: number }) {
+/**
+ * Smallest bow for a pair shared by several branches, as a control-point offset (the arc's
+ * middle sits about half this far off the straight line). The first lane bows up, the second
+ * down, mirrored; any further lanes alternate again with a wider bow.
+ */
+const LANE_BOW = 44;
+
+/**
+ * One drawn line: an A→B pair on one branch. Hops on different branches between the same two
+ * nodes get a lane each, fanned out side by side; repeats on the same branch share their lane.
+ */
+interface Lane {
+  key: string;
+  from: string;
+  to: string;
+  /** `""` for the trunk. */
+  branch: string;
+  /** Index into BRANCH_TONES, or null for the trunk (which keeps the canvas's usual blue). */
+  tone: number | null;
+  /** First step on this lane, or -1 for an edge no step plays. */
+  firstStep: number;
+  /** This lane's place among the pair's lanes (in the order they first play), and how many the pair has. */
+  index: number;
+  count: number;
+}
+
+function Packet({
+  a,
+  c,
+  b,
+  blocked,
+  duration,
+  color,
+}: {
+  a: Point;
+  c: Point;
+  b: Point;
+  blocked: boolean;
+  duration: number;
+  /** Branch colour; the trunk's packet keeps its stylesheet blue. */
+  color?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let raf = 0;
     let start: number | null = null;
     const el = ref.current;
     if (!el) return;
+    // One run per beat: the packet crosses the edge once and stays gone, so
+    // each interaction reads as a single send rather than a repeating loop.
     const tick = (now: number) => {
       if (start == null) start = now;
-      const t = ((now - start) % duration) / duration;
+      const t = Math.min(1, (now - start) / duration);
       const p = qbez(a, c, b, blocked ? Math.min(t, 0.62) : t);
       el.style.transform = `translate(${p.x}px, ${p.y}px)`;
       const fade = t < 0.08 ? t / 0.08 : t > 0.88 ? Math.max(0, (1 - t) / 0.12) : 1;
       el.style.opacity = String(blocked && t > 0.6 ? 0 : fade);
-      raf = requestAnimationFrame(tick);
+      if (t < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [a.x, a.y, b.x, b.y, c.x, c.y, duration, blocked]);
-  return <div ref={ref} className={`flow-packet ${blocked ? "blk" : ""}`} />;
+  const tint =
+    color && !blocked
+      ? { background: color, boxShadow: `0 0 10px 3px ${withAlpha(color, 0.8)}, 0 0 22px 6px ${withAlpha(color, 0.45)}` }
+      : undefined;
+  return <div ref={ref} className={`flow-packet ${blocked ? "blk" : ""}`} style={tint} />;
 }
 
 interface FlowCanvasProps {
@@ -136,9 +266,39 @@ interface FlowCanvasProps {
   activeSteps?: number[];
   /** The closing beat: the envelope travelling into the provenance layer. */
   sealActive?: boolean;
+  /** Hold/resume control shown in the bottom bar. */
+  playback?: {
+    held: boolean;
+    onToggle: () => void;
+    /** How long each beat dwells, for the countdown line. */
+    beatMs: number;
+    /** False when there is a single beat, so there is nothing to play through. */
+    canPlay: boolean;
+  };
 }
 
-export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: FlowCanvasProps) {
+/** Hold/resume toggle, plus a line along the bar's top that runs down to the next beat. */
+function PlaybackToggle({ playback, beatKey }: { playback: NonNullable<FlowCanvasProps["playback"]>; beatKey: string }) {
+  if (!playback.canPlay) return null;
+  const { held, onToggle, beatMs } = playback;
+  return (
+    <>
+      {!held && <span key={beatKey} className="cb-countdown" style={{ animationDuration: `${beatMs}ms` }} aria-hidden />}
+      <button
+        type="button"
+        className={`cb-play ${held ? "held" : ""}`}
+        onClick={onToggle}
+        aria-pressed={held}
+        title={held ? "Resume playback (Space)" : "Hold on this hop (Space)"}
+      >
+        <Icon name={held ? "play" : "pause"} size={12} />
+        {held ? "Resume" : <span className="sr-only">Hold</span>}
+      </button>
+    </>
+  );
+}
+
+export function FlowCanvas({ flow, step, activeSteps, sealActive = false, playback }: FlowCanvasProps) {
   const ref = useRef<HTMLDivElement>(null);
   const { w, h } = useElementSize(ref);
   const steps = flow.steps;
@@ -186,11 +346,106 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
   }, [steps, step]);
 
   /**
-   * Repeated hops between the same two nodes trace the same line rather than
-   * each drawing their own arc — once a pair's edge exists, every later
-   * interaction on that pair reuses it instead of piling up parallel lines.
+   * One routed control point per A→B pair. Repeated hops between the same two
+   * nodes trace the same line rather than each drawing their own arc, and the
+   * route bends around any node sitting between the two endpoints.
    */
-  const EDGE_BOW = 1;
+  const boxes = useMemo(() => {
+    const boxes = new Map<string, NodeBox>();
+    if (!ready) return boxes;
+    for (const n of flow.nodes) {
+      const p = pts[n.id];
+      if (!p) continue;
+      const above = sealSources.has(n.id);
+      boxes.set(n.id, {
+        x: p.x,
+        y: p.y,
+        top: above ? ICON_CLEAR + CAPTION_CLEAR : ICON_CLEAR,
+        bottom: above ? ICON_CLEAR : ICON_CLEAR + CAPTION_CLEAR,
+        half: CAPTION_HALF,
+      });
+    }
+    return boxes;
+  }, [ready, flow.nodes, pts, sealSources]);
+  /** Every node's box except the two ends of an edge. */
+  const boxesBesides = (from: string, to: string) =>
+    Array.from(boxes.entries())
+      .filter(([id]) => id !== from && id !== to)
+      .map(([, box]) => box);
+
+  const ctrlByPair = useMemo(() => {
+    const m = new Map<string, Point>();
+    if (!ready) return m;
+    for (const [from, to] of flow.edges) {
+      const a = pts[from];
+      const b = pts[to];
+      if (!a || !b) continue;
+      m.set(`${from}>${to}`, routeCtrl(a, b, boxesBesides(from, to)));
+    }
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, flow.edges, pts, boxes]);
+
+  const toneByBranch = useMemo(
+    () => new Map(flow.branches.map((br) => [br.key, br.color % BRANCH_TONES.length])),
+    [flow.branches],
+  );
+
+  const lanes = useMemo(() => {
+    const byKey = new Map<string, Lane>();
+    const byPair = new Map<string, Lane[]>();
+    const add = (from: string, to: string, branch: string, firstStep: number) => {
+      const key = `${from}>${to}>${branch}`;
+      if (byKey.has(key)) return;
+      const lane: Lane = { key, from, to, branch, tone: branch ? toneByBranch.get(branch) ?? 0 : null, firstStep, index: 0, count: 0 };
+      byKey.set(key, lane);
+      const pair = `${from}>${to}`;
+      byPair.set(pair, [...(byPair.get(pair) ?? []), lane]);
+    };
+    steps.forEach((s, i) => add(s.from, s.to, s.branch ?? "", i));
+    for (const [from, to] of flow.edges) {
+      if (!byPair.has(`${from}>${to}`)) add(from, to, "", -1);
+    }
+    for (const pairLanes of byPair.values()) {
+      pairLanes.forEach((l, i) => {
+        l.index = i;
+        l.count = pairLanes.length;
+      });
+    }
+    return [...byKey.values()];
+  }, [steps, flow.edges, toneByBranch]);
+  const laneOf = (from: string, to: string, branch = "") => `${from}>${to}>${branch}`;
+
+  /**
+   * Each lane's control point. A pair with one lane uses its routed arc. A pair shared by
+   * several branches splits them to both sides of the straight line — first up, second down,
+   * then alternating with a wider bow — each routed around the nodes on its own side.
+   */
+  const ctrlByLane = useMemo(() => {
+    const m = new Map<string, Point>();
+    if (!ready) return m;
+    for (const lane of lanes) {
+      const a = pts[lane.from];
+      const b = pts[lane.to];
+      if (!a || !b) continue;
+      if (lane.count <= 1) {
+        m.set(lane.key, ctrlByPair.get(`${lane.from}>${lane.to}`) ?? ctrlFor(a, b));
+        continue;
+      }
+      const side = lane.index % 2 === 0 ? 1 : -1;
+      const min = LANE_BOW * (1 + Math.floor(lane.index / 2) * 0.8);
+      m.set(lane.key, sideCtrl(a, b, boxesBesides(lane.from, lane.to), side, min));
+    }
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, lanes, pts, ctrlByPair, boxes]);
+  const laneCtrl = (lane: Lane, a: Point, b: Point): Point => ctrlByLane.get(lane.key) ?? ctrlFor(a, b);
+
+  // The legend lists the branches this view actually draws.
+  const laneBranches = useMemo(
+    () => flow.branches.filter((br) => lanes.some((l) => l.branch === br.key)),
+    [flow.branches, lanes],
+  );
 
   /**
    * Edges into the provenance layer. These aren't timed hops — they're always
@@ -220,24 +475,25 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
 
   const activeEdges = useMemo(() => {
     if (!ready) return [];
-    // A fan-out beat can hold several active steps, but two of them landing
-    // on the same A→B pair still share one line — dedupe so it doesn't
-    // double-draw.
-    const seenPairs = new Set<string>();
+    // A fan-out beat can hold several active steps, but two of them on the same lane (same
+    // pair, same branch) still share one line — dedupe so it doesn't double-draw.
+    const laneByKey = new Map(lanes.map((l) => [l.key, l]));
+    const seen = new Set<string>();
     return active.flatMap((si) => {
       const st = steps[si];
       if (!st) return [];
-      const pairKey = `${st.from}>${st.to}`;
-      if (seenPairs.has(pairKey)) return [];
-      seenPairs.add(pairKey);
+      const lane = laneByKey.get(laneOf(st.from, st.to, st.branch ?? ""));
+      if (!lane || seen.has(lane.key)) return [];
+      seen.add(lane.key);
       const a0 = pts[st.from];
       const b0 = pts[st.to];
       if (!a0 || !b0) return [];
-      const c = ctrlFor(a0, b0, EDGE_BOW);
+      const c = laneCtrl(lane, a0, b0);
       const { a, b } = trimEnds(a0, c, b0, 20, 36);
-      return [{ key: si, a, b, c, blocked: st.verdict === "blocked" }];
+      return [{ key: si, a, b, c, blocked: st.verdict === "blocked", tone: lane.tone }];
     });
-  }, [ready, active, steps, pts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, active, steps, pts, ctrlByLane, lanes]);
 
   // Gradients are defined once against the first active edge.
   const activeEdge = activeEdges[0] ?? null;
@@ -248,23 +504,28 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
         <div className="grid-dots" />
 
         <div className="canvas-top">
-          <div className={`canvas-badge ${flow.status === "halted" ? "halted" : ""}`}>
+          <div className="canvas-badge">
             <span className="lv" />
-            {flow.status === "halted" ? "POLICY HALT" : "LIVE TRACE"} · {flow.nodes.filter((n) => n.kind !== "provenance").length} nodes · {steps.length} hops
+            LIVE TRACE · {flow.nodes.filter((n) => n.kind !== "provenance").length} nodes · {steps.length} hops
+            {flow.branches.length > 0 && ` · ${flow.branches.length} branches`}
           </div>
-          <div className="canvas-legend">
-            <span className="lg">
-              <span className="sw human" style={{ background: NODE_DOT.human }} />
-              Operator
-            </span>
-            <span className="lg">
-              <span className="sw" style={{ background: NODE_DOT.agent }} />
-              Agent
-            </span>
-            <span className="lg">
-              <span className="sw" style={{ background: NODE_DOT.tool }} />
-              App
-            </span>
+          <div className="canvas-legends">
+            {laneBranches.length > 0 && (
+              <div className="canvas-legend lanes">
+                {lanes.some((l) => l.tone == null && l.firstStep !== -1) && (
+                  <span className="lg">
+                    <span className="ln" style={{ background: TRUNK_TONE.line }} />
+                    Main
+                  </span>
+                )}
+                {laneBranches.map((br) => (
+                  <span key={br.key} className="lg">
+                    <span className="ln" style={{ background: BRANCH_TONES[br.color % BRANCH_TONES.length].line }} />
+                    {br.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -308,33 +569,65 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
               <marker id="arrowBase" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
                 <path d="M0 0L10 5L0 10z" fill="rgba(150,180,255,0.22)" />
               </marker>
+              {/* Per-branch arrowheads: active, played, and not yet played. */}
+              {BRANCH_TONES.map((t, i) => (
+                <g key={i}>
+                  <marker id={`arrowBr${i}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M0 0L10 5L0 10z" fill={t.line} />
+                  </marker>
+                  <marker id={`arrowBr${i}Done`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+                    <path d="M0 0L10 5L0 10z" fill={withAlpha(t.line, 0.8)} />
+                  </marker>
+                  <marker id={`arrowBr${i}Base`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                    <path d="M0 0L10 5L0 10z" fill={withAlpha(t.line, 0.4)} />
+                  </marker>
+                </g>
+              ))}
             </defs>
 
-            {/* One path per unique A→B pair — repeated interactions between
-                the same two nodes trace over the same line instead of each
-                drawing their own. */}
-            {flow.edges.map(([from, to]) => {
-              const a0 = pts[from];
-              const b0 = pts[to];
+            {/* One path per lane: an A→B pair on one branch. Repeats on the same branch
+                trace over the same line; another branch between the same two nodes gets
+                its own line beside it, in that branch's colour. */}
+            {lanes.map((lane) => {
+              const a0 = pts[lane.from];
+              const b0 = pts[lane.to];
               if (!a0 || !b0) return null;
-              const c = ctrlFor(a0, b0, EDGE_BOW);
+              const c = laneCtrl(lane, a0, b0);
               const { a, b } = trimEnds(a0, c, b0, 20, 34);
               // Active this beat → drawn separately, highlighted.
-              const isActive = active.some((si) => steps[si]?.from === from && steps[si]?.to === to);
+              const isActive = active.some((si) => {
+                const st = steps[si];
+                return st && laneOf(st.from, st.to, st.branch ?? "") === lane.key;
+              });
               if (isActive) return null;
-              // Lit as soon as this pair's first interaction has played — it
+              // Lit as soon as this lane's first interaction has played — it
               // stays "done" from then on, however many more reuse the line.
-              const firstIx = steps.findIndex((s) => s.from === from && s.to === to);
-              const done = firstIx !== -1 && firstIx < doneBefore;
+              const done = lane.firstStep !== -1 && lane.firstStep < doneBefore;
+              const d = `M${a.x},${a.y} Q${c.x},${c.y} ${b.x},${b.y}`;
+              if (lane.tone == null) {
+                return (
+                  <path
+                    key={lane.key}
+                    d={d}
+                    fill="none"
+                    stroke={done ? "rgba(96,165,250,0.5)" : "rgba(150,180,255,0.13)"}
+                    strokeWidth={done ? 1.7 : 1.1}
+                    strokeDasharray={done ? "none" : "2 5"}
+                    markerEnd={done ? "url(#arrowDone)" : "url(#arrowBase)"}
+                  />
+                );
+              }
+              // Branch lanes show their colour before they play, so a fork is visible up front.
+              const line = BRANCH_TONES[lane.tone].line;
               return (
                 <path
-                  key={`${from}>${to}`}
-                  d={`M${a.x},${a.y} Q${c.x},${c.y} ${b.x},${b.y}`}
+                  key={lane.key}
+                  d={d}
                   fill="none"
-                  stroke={done ? "rgba(96,165,250,0.5)" : "rgba(150,180,255,0.13)"}
-                  strokeWidth={done ? 1.7 : 1.1}
+                  stroke={withAlpha(line, done ? 0.75 : 0.32)}
+                  strokeWidth={done ? 1.9 : 1.3}
                   strokeDasharray={done ? "none" : "2 5"}
-                  markerEnd={done ? "url(#arrowDone)" : "url(#arrowBase)"}
+                  markerEnd={`url(#arrowBr${lane.tone}${done ? "Done" : "Base"})`}
                 />
               );
             })}
@@ -384,21 +677,27 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
 
             {/* Every hop in the round lights at once, so a fan-out reads as
                 simultaneous branches rather than a sequence. */}
-            {activeEdges.map((e) => (
-              <g key={e.key}>
-                <path
-                  d={`M${e.a.x},${e.a.y} Q${e.c.x},${e.c.y} ${e.b.x},${e.b.y}`}
-                  fill="none"
-                  stroke={e.blocked ? "url(#edgeBlocked)" : "url(#edgeActive)"}
-                  strokeWidth="2.6"
-                  strokeLinecap="round"
-                  markerEnd={e.blocked ? "url(#arrowBlocked)" : "url(#arrowActive)"}
-                  style={{
-                    filter: `drop-shadow(0 0 6px ${e.blocked ? "rgba(248,113,113,0.6)" : "rgba(56,189,248,0.6)"})`,
-                  }}
-                />
-              </g>
-            ))}
+            {/* A blocked hop stays red whatever its branch: the threat matters more. */}
+            {activeEdges.map((e) => {
+              const line = e.tone != null && !e.blocked ? BRANCH_TONES[e.tone].line : null;
+              return (
+                <g key={e.key}>
+                  <path
+                    d={`M${e.a.x},${e.a.y} Q${e.c.x},${e.c.y} ${e.b.x},${e.b.y}`}
+                    fill="none"
+                    stroke={e.blocked ? "url(#edgeBlocked)" : line ?? "url(#edgeActive)"}
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    markerEnd={e.blocked ? "url(#arrowBlocked)" : line ? `url(#arrowBr${e.tone})` : "url(#arrowActive)"}
+                    style={{
+                      filter: `drop-shadow(0 0 6px ${
+                        e.blocked ? "rgba(248,113,113,0.6)" : line ? withAlpha(line, 0.6) : "rgba(56,189,248,0.6)"
+                      })`,
+                    }}
+                  />
+                </g>
+              );
+            })}
           </svg>
         )}
 
@@ -446,7 +745,7 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
               c={e.c}
               b={e.b}
               blocked={e.threat}
-              duration={1150}
+              duration={1400}
             />
           ))}
 
@@ -457,13 +756,15 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
             c={e.c}
             b={e.b}
             blocked={e.blocked}
-            duration={1150}
+            duration={1400}
+            color={e.tone != null ? BRANCH_TONES[e.tone].line : undefined}
           />
         ))}
       </div>
 
       {sealActive && (
         <div className="canvas-bar">
+          {playback && <PlaybackToggle playback={playback} beatKey="seal" />}
           <span className="cb-num">{String(steps.length + 1).padStart(2, "0")}</span>
           <span className="cb-pair">
             <span className="cb-node">{nb(flow.sealEdges[0]?.from ?? "")}</span>
@@ -475,7 +776,10 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
 
       {cur && (
         <div className={`canvas-bar ${cur.verdict === "blocked" ? "blk" : ""}`}>
-          <span className="cb-num">{String(step + 1).padStart(2, "0")}</span>
+          {playback && <PlaybackToggle playback={playback} beatKey={`step-${step}`} />}
+          <span className="cb-num" title={cur.branch ? `Hop ${cur.label} on ${flow.branches.find((b) => b.key === cur.branch)?.name ?? cur.branch}` : undefined}>
+            {cur.label ?? String(step + 1).padStart(2, "0")}
+          </span>
           <span className="cb-pair">
             <span className="cb-node">{nb(cur.from)}</span>
             <span className={`cb-arr ${cur.dir === "response" ? "ret" : ""}`}>
@@ -483,20 +787,6 @@ export function FlowCanvas({ flow, step, activeSteps, sealActive = false }: Flow
             </span>
             <span className="cb-node">{nb(cur.to)}</span>
           </span>
-          <span className="cb-checks">
-            {(
-              [
-                ["I", "identity"],
-                ["T", "trust"],
-                ["S", "scope"],
-              ] as const
-            ).map(([ltr, k]) => (
-              <span key={k} className={`cb-chk ${cur.checks[k] ? "" : "fail"}`} title={k}>
-                {ltr}
-              </span>
-            ))}
-          </span>
-          <span className="cb-lat">{cur.latency}ms</span>
           <span className={`cb-verdict ${cur.verdict}`}>{cur.verdict.toUpperCase()}</span>
         </div>
       )}

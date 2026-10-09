@@ -8,7 +8,7 @@ import { LedgerTable } from "../components/LedgerTable";
 import { Pagination } from "../components/Pagination";
 import { useToolInfo, useToolAgentScores } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
-import { useResolveName, resolveDisplayName } from "../context/DirectoryContext";
+import { useResolveName } from "../context/DirectoryContext";
 import { timeAgo } from "../lib/format";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { Intent, IntentReviewStatus } from "../types";
@@ -19,7 +19,7 @@ type Tab = "interactions" | "intents" | "agents";
 // Matches the pill styling used on the main Intents page (IntentsPage.tsx) so
 // review status looks identical everywhere it's shown.
 const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
-  Ongoing: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
+  Unreviewed: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
   Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
   Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
 };
@@ -35,7 +35,7 @@ export function ToolDetailPage() {
   const [intentsPage, setIntentsPage] = useState(1);
 
   const { data: result, loading } = useToolInfo(toolId, interactionsPage, intentsPage);
-  const { data: agentScores } = useToolAgentScores(result?.tool.id || toolId);
+  const { data: agentScores } = useToolAgentScores(result?.tool.id);
 
   if (loading) {
     return (
@@ -80,7 +80,7 @@ export function ToolDetailPage() {
       sortFn: (a, b) => a.initiator.name.localeCompare(b.initiator.name),
       render: (r) => (
         <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>
-          {resolveDisplayName(resolve, r.initiator)}
+          {resolve(r.initiator.id, r.initiator.name).name}
         </span>
       ),
     },
@@ -92,7 +92,7 @@ export function ToolDetailPage() {
     },
     {
       key: "threats",
-      label: "Threats",
+      label: "Incidents",
       sortFn: (a, b) => a.threats - b.threats,
       render: (r) => <ThreatPill threat={r.threats > 0} />,
     },
@@ -218,7 +218,7 @@ export function ToolDetailPage() {
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--fg)" }}>{tool.totalInteractions.toLocaleString()}</div>
               </div>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--fg-muted)", marginBottom: 4 }}>Threats</div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--fg-muted)", marginBottom: 4 }}>Incidents</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: tool.totalThreats > 0 ? "var(--threat)" : "var(--fg)" }}>{tool.totalThreats.toLocaleString()}</div>
               </div>
               <div>

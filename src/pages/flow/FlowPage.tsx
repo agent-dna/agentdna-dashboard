@@ -2,14 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon";
 import { TraceInspector } from "../../components/TraceInspector";
-import { useIntent, useIntentBlockData, useIntentInteractions } from "../../data/hooks";
+import { useIntent, useIntentInteractions } from "../../data/hooks";
 import { useResolveName } from "../../context/DirectoryContext";
 import { FlowCanvas } from "./FlowCanvas";
-import { buildFlowFromIntent, buildTraceFromBlocks, groupParallelRounds, type Flow, type FlowNode } from "./flowData";
-import { fetchIntents, flattenIntentBlocks } from "../../data/api";
+import { buildFlowFromIntent, buildInteractionTrace, flowForPath, intentEnvelope, groupParallelRounds, type Flow, type FlowBranch, type FlowNode } from "./flowData";
+import { fetchIntents } from "../../data/api";
+import { branchTone } from "./branchPalette";
 import type { Intent, Interaction } from "../../types";
 
 const STEP_MS = 2000;
+/** One colour per branch (shared with the canvas's lanes); the trunk stays neutral. */
+const branchColor = (b?: FlowBranch) => branchTone(b).ui;
 const STORAGE_KEY_STEP = "flow.step";
 
 export function FlowPage() {
@@ -47,7 +50,8 @@ export function FlowPage() {
 
   const { data: intent } = useIntent(activeId);
   const { data: interactions } = useIntentInteractions(activeId);
-  const { data: blocks } = useIntentBlockData(activeId);
+  // The agents' own envelope chain, from /intent-info's rawData (the same response as above).
+  const envelope = useMemo(() => intentEnvelope(interactions), [interactions]);
 
   const flow: Flow | null = useMemo(() => {
     if (!intent) return null;
@@ -56,31 +60,37 @@ export function FlowPage() {
     // classifies participants against the org directory (agent/user/tool)
     // instead of just assuming "intent initiator = human, everyone else =
     // agent" the way the /intent-diagram-based builder used to.
-    const base = buildFlowFromIntent({ intent, interactions, resolve });
-    if (blocks) {
-      const flat = flattenIntentBlocks(blocks);
-      if (flat.length > 0) base.trace = buildTraceFromBlocks(intent, flat);
-    }
-    return base;
-  }, [intent, interactions, blocks, resolve]);
+    return buildFlowFromIntent({ intent, interactions, resolve });
+  }, [intent, interactions, resolve]);
 
-  // Maps each step's spanId to the original Interaction record it came from,
-  // so the trace inspector's raw-data panel can show the exact same JSON the
-  // interaction drawer shows for that interaction, instead of a generic blob.
-  const interactionBySpanId = useMemo(() => {
-    if (!flow) return {};
-    const byId = new Map(interactions.map((ix) => [ix.id, ix]));
-    const map: Record<string, Interaction> = {};
-    for (const s of flow.steps) {
-      if (s.interactionID) {
-        const match = byId.get(s.interactionID);
-        if (match) map[s.spanId] = match;
-      }
-    }
-    return map;
+  // Which path through the branch tree plays: null = every branch, else a leaf branch key
+  // (the trunk plus the branches down to it). Resets when the intent changes.
+  const [path, setPath] = useState<{ intent: string; leaf: string | null }>({ intent: "", leaf: null });
+  const pathLeaf = path.intent === activeId && flow?.branches.some((b) => b.key === path.leaf) ? path.leaf : null;
+  const view: Flow | null = useMemo(() => (flow ? flowForPath(flow, pathLeaf) : null), [flow, pathLeaf]);
+  const branchByKey = useMemo(() => new Map((flow?.branches ?? []).map((b) => [b.key, b])), [flow]);
+  const leaves = useMemo(() => (flow?.branches ?? []).filter((b) => b.leaf), [flow]);
+  const pickPath = (leaf: string | null) => {
+    setPath({ intent: activeId, leaf });
+    setStep(0);
+  };
+
+  // The Envelope inspector lists interactions, nested by who called whom. Names come
+  // from the flow's resolved nodes so rows match what the canvas and rail show.
+  const interactionTrace = useMemo(() => {
+    if (!flow) return null;
+    const nameByDid = new Map(flow.nodes.filter((n) => n.did).map((n) => [n.did!, n.name]));
+    return buildInteractionTrace(flow.intent, interactions, (did) => nameByDid.get(did));
   }, [flow, interactions]);
 
-  const N = flow?.steps.length ?? 0;
+  // Each interaction row's span id is the interaction id, so the raw-data panel shows
+  // the exact same JSON the interaction drawer shows for it.
+  const interactionBySpanId = useMemo(
+    () => Object.fromEntries(interactions.map((ix) => [ix.id, ix])) as Record<string, Interaction>,
+    [interactions],
+  );
+
+  const N = view?.steps.length ?? 0;
 
   // Concurrent hops play as one beat, so playback advances a round at a time.
   // A final beat is appended for the provenance seal — the envelope travelling
@@ -88,10 +98,10 @@ export function FlowPage() {
   // sentinel index N, which no real step occupies.
   const SEAL_STEP = N;
   const rounds = useMemo(() => {
-    const base = groupParallelRounds(flow?.steps ?? []);
-    if (base.length > 0 && (flow?.sealEdges?.length ?? 0) > 0) base.push([SEAL_STEP]);
+    const base = groupParallelRounds(view?.steps ?? []);
+    if (base.length > 0 && (view?.sealEdges?.length ?? 0) > 0) base.push([SEAL_STEP]);
     return base;
-  }, [flow, SEAL_STEP]);
+  }, [view, SEAL_STEP]);
   const roundOfStep = useMemo(() => {
     const m = new Map<number, number>();
     rounds.forEach((r, ri) => r.forEach((si) => m.set(si, ri)));
@@ -104,6 +114,11 @@ export function FlowPage() {
     return Number.isFinite(n) && n >= 0 ? n : 0;
   });
   const [inspectSpanId, setInspectSpanId] = useState<string | null>(null);
+  /** Playback is held on the current hop: clicking a hop, stepping with the arrow keys, or the bar's toggle. */
+  const [held, setHeld] = useState(false);
+
+  // A newly opened intent plays from the start.
+  useEffect(() => setHeld(false), [activeId]);
 
   // Clamp step when flow changes
   useEffect(() => {
@@ -120,17 +135,46 @@ export function FlowPage() {
   const sealActive = roundSteps.includes(SEAL_STEP);
   const activeSteps = roundSteps.filter((i) => i < N);
 
-  // Auto-advance a round at a time, looping back to the first.
-  // Re-armed on every `step` change, so clicking a hop restarts the dwell
-  // from there rather than cutting it short.
+  // Auto-advance a round at a time, looping back to the first, unless held.
+  // Re-armed on every `step` change, so resuming plays the full dwell on the
+  // current hop before moving on.
   useEffect(() => {
-    if (rounds.length <= 1) return;
+    if (held || rounds.length <= 1) return;
     const t = window.setTimeout(() => {
       const next = rounds[(activeRound + 1) % rounds.length];
       if (next) setStep(next[0]);
     }, STEP_MS);
     return () => clearTimeout(t);
-  }, [step, activeRound, rounds]);
+  }, [step, activeRound, rounds, held]);
+
+  /** Move a round back or forward (wrapping) and hold there. */
+  const stepBy = (delta: 1 | -1) => {
+    if (rounds.length === 0) return;
+    const next = rounds[(activeRound + delta + rounds.length) % rounds.length];
+    if (next) setStep(next[0]);
+    setHeld(true);
+  };
+
+  // Space holds/resumes; ← → step a hop and hold. Not while typing or while the inspector is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (inspectSpanId !== null || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName))) return;
+      if (e.key === " ") {
+        e.preventDefault();
+        setHeld((h) => !h);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepBy(1);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepBy(-1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const stepsRef = useRef<HTMLDivElement>(null);
 
@@ -145,8 +189,10 @@ export function FlowPage() {
     }
   }, [step]);
 
+  // Clicking a hop holds playback on it; the bar's toggle (or Space) resumes from there.
   const jump = (i: number) => {
     setStep(i);
+    setHeld(true);
   };
 
   return (
@@ -154,7 +200,7 @@ export function FlowPage() {
       <div className="flow-body">
         {/* Rail */}
         <div className="flow-rail">
-          {flow && (
+          {flow && view && (
             <>
               {/* Trace section — sticky header + scrollable hops */}
               <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: "#ffffff", borderRadius: 10, overflow: "hidden", border: "1px solid #e2e8f0" }}>
@@ -168,22 +214,47 @@ export function FlowPage() {
                       <button
                         className="sl-data-btn"
                         title="Inspect trace data"
-                        onClick={() => setInspectSpanId(flow.steps[step]?.spanId || flow.trace.trace.id)}
+                        onClick={() => setInspectSpanId(view.steps[step]?.interactionID || interactionTrace?.trace.id || "")}
                       >
                         <Icon name="flow" size={12} />
                         Envelope 
                       </button>
                     </div>
                   </div>
+                  {leaves.length > 0 && (
+                    <div className="fl-paths" role="group" aria-label="Branch shown">
+                      <button type="button" className={pathLeaf == null ? "on" : ""} onClick={() => pickPath(null)}>
+                        All branches
+                      </button>
+                      {leaves.map((b) => (
+                        <button
+                          key={b.key}
+                          type="button"
+                          className={pathLeaf === b.key ? "on" : ""}
+                          onClick={() => pickPath(b.key)}
+                          title={`Play the main path and ${b.name}`}
+                        >
+                          <span className="fl-swatch" style={{ background: branchColor(b) }} />
+                          {b.name.replace(/^Branch /, "")}
+                          {b.blocked && <span className="fl-blk" title="Has a blocked hop" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flow-steps" ref={stepsRef}>
                   <div style={{ position: "relative", paddingLeft: 40 }}>
-                    {flow.steps.map((s, i) => {
-                      const from = flow.nodeById[s.from];
-                      const to = flow.nodeById[s.to];
+                    {view.steps.map((s, i) => {
+                      const from = view.nodeById[s.from];
+                      const to = view.nodeById[s.to];
                       const blk = s.verdict === "blocked";
                       const isActive = activeSteps.includes(i);
-                      const isLast = i === flow.steps.length - 1;
+                      const isLast = i === view.steps.length - 1;
+                      const branch = s.branch ? branchByKey.get(s.branch) : undefined;
+                      // A branch's first hop gets a fork header; the rail breaks there, since the
+                      // next hop in the list isn't a continuation of the previous one.
+                      const startsBranch = !!branch && view.steps[i - 1]?.branch !== s.branch;
+                      const continues = !isLast && view.steps[i + 1]?.branch === s.branch;
                       // The node ring and connector take the card's own border
                       // colour, so the rail reads as part of the block rather
                       // than a separate green track.
@@ -192,8 +263,18 @@ export function FlowPage() {
                       // use a readable tone of the same hue.
                       const numColor = blk ? "#dc2626" : isActive ? "#2563eb" : "#94a3b8";
                       return (
+                        <div key={i}>
+                        {startsBranch && branch && (
+                          <div className="fl-fork" style={{ ["--br" as string]: branchColor(branch) }}>
+                            <Icon name="flow" size={12} />
+                            <span className="fl-fork-name">{branch.name}</span>
+                            <span className="fl-fork-at">
+                              from {branch.parent ? `${branchByKey.get(branch.parent)?.name ?? "branch"} ` : ""}hop {branch.forkAt}
+                            </span>
+                            {branch.blocked && <span className="fl-fork-blk">Blocked</span>}
+                          </div>
+                        )}
                         <div
-                          key={i}
                           data-step={i}
                           onClick={() => jump(i)}
                           style={{ position: "relative", marginBottom: isLast ? 3 : 10, cursor: "pointer" }}
@@ -228,7 +309,7 @@ export function FlowPage() {
                               {String(i + 1).padStart(2, "0")}
                             </span>
                           </div>
-                          {!isLast && (
+                          {continues && (
                             <div style={{
                               position: "absolute",
                               left: -27,
@@ -263,10 +344,17 @@ export function FlowPage() {
                           }}>
                             {/* No status pill — verdict reads from the node colour,
                                 the card border, and the header threat count. */}
+                            {branch && (
+                              <div className="fl-hop-tag" style={{ ["--br" as string]: branchColor(branch) }}>
+                                <span className="fl-swatch" />
+                                {branch.name} · hop {s.label}
+                              </div>
+                            )}
                             <HopParty label="From" node={from} fallback={s.from} />
                             <div style={{ height: 1, background: "#e9eef5" }} />
                             <HopParty label="To" node={to} fallback={s.to} />
                           </div>
+                        </div>
                         </div>
                       );
                     })}
@@ -275,7 +363,7 @@ export function FlowPage() {
               </div>
 
               {/* Step JSON data card */}
-              <StepDataCard flow={flow} step={step} />
+              <StepDataCard flow={view} step={step} interactionById={interactionBySpanId} />
             </>
           )}
           {!flow && (
@@ -286,12 +374,13 @@ export function FlowPage() {
         </div>
 
         {/* Canvas */}
-        {flow ? (
+        {view ? (
           <FlowCanvas
-            flow={flow}
+            flow={view}
             step={Math.min(step, Math.max(0, N - 1))}
             activeSteps={activeSteps}
             sealActive={sealActive}
+            playback={{ held, onToggle: () => setHeld((h) => !h), beatMs: STEP_MS, canPlay: rounds.length > 1 }}
           />
         ) : (
           <div className="flow-canvas">
@@ -302,37 +391,44 @@ export function FlowPage() {
         )}
       </div>
 
-      {inspectSpanId !== null && flow && (
+      {inspectSpanId !== null && interactionTrace && (
         <TraceInspector
-          trace={flow.trace}
+          trace={interactionTrace}
           openSpanId={inspectSpanId}
           onClose={() => setInspectSpanId(null)}
-          rawData={blocks}
+          rawData={envelope ?? undefined}
           interactionBySpanId={interactionBySpanId}
+          noun={{ one: "interaction", many: "interactions" }}
         />
       )}
     </div>
   );
 }
 
-function StepDataCard({ flow, step }: { flow: Flow; step: number }) {
+function StepDataCard({ flow, step, interactionById }: { flow: Flow; step: number; interactionById: Record<string, Interaction> }) {
   const s = flow.steps[step];
   if (!s) return null;
   const span = flow.trace.spanById[s.spanId];
   const from = flow.nodeById[s.from];
   const to = flow.nodeById[s.to];
-
-  const data: Record<string, unknown> = {
-    from: from?.name || s.from,
-    to: to?.name || s.to,
-    direction: s.dir,
-    verdict: s.verdict,
-    checks: s.checks,
-    ...(span?.input ? { input: tryParse(span.input) } : {}),
-    ...(span?.output ? { output: tryParse(span.output) } : {}),
-    ...(span?.model ? { model: span.model } : {}),
-    ...(span?.metadata && Object.keys(span.metadata).length > 0 ? { metadata: span.metadata } : {}),
-  };
+  // This hop's rawData from /intent-info, exactly as the agent sent it — nested parent
+  // envelopes included, nothing added or folded. Only a hop without rawData falls back to a
+  // summary built from the flow.
+  const raw = s.interactionID ? interactionById[s.interactionID]?.raw : undefined;
+  const data: unknown =
+    raw !== undefined
+      ? raw
+      : {
+          ...(s.label ? { hop: s.label } : {}),
+          ...(s.branch ? { branch: flow.branches.find((b) => b.key === s.branch)?.name ?? s.branch } : {}),
+          from: from?.name || s.from,
+          to: to?.name || s.to,
+          verdict: s.verdict,
+          ...(span?.input ? { input: tryParse(span.input) } : {}),
+          ...(span?.output ? { output: tryParse(span.output) } : {}),
+          ...(span?.model ? { model: span.model } : {}),
+          ...(span?.metadata && Object.keys(span.metadata).length > 0 ? { metadata: span.metadata } : {}),
+        };
 
   return (
     <div style={{

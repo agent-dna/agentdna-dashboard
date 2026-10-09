@@ -8,6 +8,7 @@ import { UsersTab } from "./requests/UsersTab";
 import { useAuth } from "../context/AuthContext";
 import { useResolveName } from "../context/DirectoryContext";
 import { ApiError } from "../api/client";
+import { fetchUserInfo } from "../data/api";
 import {
   listAccessRequestsForOrg,
   listAccessRequestsForUser,
@@ -64,11 +65,26 @@ export function RequestsPage() {
   const resolve = useResolveName();
   const navigate = useNavigate();
 
+  // A user can hold several DIDs, so "created by me" checks all of them, not just the primary.
+  // Admins can edit any pending request, so only regular users need the list.
+  const [myDids, setMyDids] = useState<string[]>([]);
+  useEffect(() => {
+    if (!user?.did || isAdmin) return;
+    let live = true;
+    fetchUserInfo(user.did)
+      .then((r) => live && r && setMyDids(r.user.dids))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [user?.did, isAdmin]);
+
   const [tab, setTab] = useState<TabKey>("creation");
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<AgentRequest[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [noDid, setNoDid] = useState(false);
@@ -97,9 +113,17 @@ export function RequestsPage() {
           ? listAccessRequestsForOrg
           : listAccessRequestsForUser;
       const res = await fetcher(page);
+      const pages = res.totalPages || 1;
+      // The page can outrun the data (rows removed, or a stale page carried over):
+      // snap back to the last real page and let the effect refetch.
+      if (page > pages) {
+        setPage(pages);
+        return;
+      }
       setRows(res.requestsList || []);
       setTotal(res.total || 0);
-      setTotalPages(res.totalPages || 1);
+      setTotalPages(pages);
+      setPageSize(res.pageSize || 10);
     } catch (err) {
       if (err instanceof ApiError && err.message === "no_did") {
         setNoDid(true);
@@ -118,7 +142,17 @@ export function RequestsPage() {
   }, [tab, page, isAdmin]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setPage(1); }, [tab]);
+
+  // Reset paging with the tab in one render. Doing it in an effect keyed on `tab`
+  // let `load` fire once for the new tab at the old page first.
+  function changeTab(k: TabKey) {
+    if (k === tab) return;
+    setTab(k);
+    setPage(1);
+    setRows([]);
+    setTotal(0);
+    setTotalPages(1);
+  }
 
   const handleApprove = async (r: AgentRequest, status: "approved" | "rejected") => {
     // Approving a deploy_agent request → open the deploy modal so the admin sees
@@ -211,7 +245,7 @@ export function RequestsPage() {
               creatorMono = !hit.kind;
             }
 
-            const isCreator = r.creatorDID === user?.did;
+            const isCreator = !!r.creatorDID && (r.creatorDID === user?.did || myDids.includes(r.creatorDID));
             const canEdit = tab === "creation" && r.status === "pending" && (isCreator || isAdmin);
             const canApprove = isAdmin && r.status === "pending" && (tab === "creation" || tab === "access-org");
 
@@ -267,7 +301,9 @@ export function RequestsPage() {
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: "creation", label: "Agent Creation" },
-    ...(isAdmin ? [] : [{ key: "access-mine" as const, label: "My Access" }]),
+    // Hidden for now — the "access-mine" tab and its /agent-access-requests-list-user
+    // fetch still work; drop this line back in to bring it back for non-admins.
+    // ...(isAdmin ? [] : [{ key: "access-mine" as const, label: "My Access" }]),
     ...(isAdmin ? ([{ key: "users", label: "Users" }] as const) : []),
   ];
 
@@ -295,7 +331,7 @@ export function RequestsPage() {
       </div>
 
       <div className="card">
-        <Tabs active={tab} onChange={(k) => setTab(k as TabKey)} tabs={tabs} />
+        <Tabs active={tab} onChange={(k) => changeTab(k as TabKey)} tabs={tabs} />
 
         {tab === "users" ? (
           <UsersTab />
@@ -303,7 +339,13 @@ export function RequestsPage() {
           <>
             <div className="tb-toolbar">
               <div className="filters">
-                <span className="count">{loading ? "Loading…" : `${rows.length} of ${total}`}</span>
+                <span className="count">
+                  {loading
+                    ? "Loading…"
+                    : total === 0
+                    ? "0 of 0"
+                    : `${(page - 1) * pageSize + 1}–${(page - 1) * pageSize + rows.length} of ${total}`}
+                </span>
               </div>
               <Pagination page={page} totalPages={totalPages} onChange={setPage} />
             </div>
