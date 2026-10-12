@@ -11,6 +11,9 @@ import { useResolveName, shortDid } from "../context/DirectoryContext";
 import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
 import { StatusPicker } from "../components/StatusPicker";
+import { IntentEvidenceTrail } from "../components/IntentEvidenceTrail";
+import { fetchIntentAuthEvidence } from "../api/observability";
+import { useObsQuery } from "./observability/useObsQuery";
 import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useIntentThreats } from "../data/hooks";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
@@ -23,7 +26,7 @@ import { IntentIdChip } from "../context/IntentNumbersContext";
 import { branchName, compareInteractionIds, parseInteractionId } from "../lib/interactionBranch";
 import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
 
-type Tab = "interactions" | "participants";
+type Tab = "interactions" | "evidence" | "participants";
 
 export function IntentDetailPage() {
   const { intentId = "" } = useParams<{ intentId: string }>();
@@ -45,6 +48,7 @@ export function IntentDetailPage() {
   const [tab, setTab] = useState<Tab>("interactions");
   const [interactionsPage, setInteractionsPage] = useState(1);
   const intentState = useIntent(intentId);
+  const authEvidence = useObsQuery(intentId && `auth-evidence:${intentId}`, () => fetchIntentAuthEvidence(intentId));
   const { data: intent, loading } = intentState;
   const { data: interactionsPaged, loading: interactionsLoading } = useIntentInteractionsPaged(intentId, interactionsPage);
   const interactions = interactionsPaged.interactions;
@@ -93,6 +97,9 @@ export function IntentDetailPage() {
     if (to) navigate(to);
     else openDrawer("tool", p.entity as unknown as Tool);
   };
+
+  // Auth checks per interaction, for the Interactions table's Identity and Result columns.
+  const evidenceById = new Map((authEvidence.data?.interactions ?? []).map((x) => [x.interactionID, x.evidence ?? []]));
 
   // Counted across the whole intent (every interaction), not just the page the table shows.
   const threatCount = threatsLoading || threatsError
@@ -347,6 +354,7 @@ export function IntentDetailPage() {
           onChange={(k) => setTab(k as Tab)}
           tabs={[
             { key: "interactions", label: "Interactions", count: interactionsTotal },
+            { key: "evidence", label: "Evidence trail" },
             { key: "participants", label: "Agents & Apps", count: participantRows.length },
           ]}
         />
@@ -359,10 +367,13 @@ export function IntentDetailPage() {
               onView={(r) => openDrawer("interaction", r)}
               // Every row here belongs to this intent — the column repeats the page.
               showIntent={false}
+              evidenceOf={(id) => (authEvidence.data ? evidenceById.get(id) ?? [] : undefined)}
             />
             <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} loading={interactionsLoading} onChange={setInteractionsPage} />
           </>
         )}
+
+        {tab === "evidence" && <IntentEvidenceTrail intentId={intent.id} />}
 
         {tab === "participants" && (
           <DataTable

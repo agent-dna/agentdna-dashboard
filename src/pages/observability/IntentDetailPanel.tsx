@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Check, Copy, ExternalLink, GitBranch, ShieldAlert, ShieldCheck, ShieldQuestion, X } from "lucide-react";
-import type { ObsInteraction, ObsPathIntent } from "../../api/observability";
+import { ArrowRight, Check, ChevronDown, Copy, ExternalLink, KeyRound, PanelRightOpen, GitBranch, ShieldAlert, ShieldCheck, ShieldQuestion, X } from "lucide-react";
+import type { AuthEvidence, IntentAuthEvidence, ObsInteraction, ObsPathIntent } from "../../api/observability";
+import { EvidenceCheck } from "./EvidencePanel";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useDrawer } from "../../context/DrawerContext";
 import type { Interaction } from "../../types";
@@ -10,7 +11,8 @@ import type { Interaction } from "../../types";
  * Intent Info tab of the observability detail box, laid out for a security review:
  * the verdict first, then who is accountable, what the intent reached and what proves it,
  * then the chain of custody (every interaction in order, with its time from the start and
- * its signature). Clicking a step opens that interaction in the drawer.
+ * its signature). Clicking a step opens that interaction in the drawer; "Credential info" at a
+ * step's right opens its auth checks under it, as the Evidence Trail tab shows them.
  * Data: `loadIntentDetail` (`/intent-info`).
  */
 
@@ -24,18 +26,20 @@ interface Props {
   onClose?: () => void;
   /** Display name for a DID the payload left unnamed (apps usually are), from the plane's nodes. */
   nameOf: (did: string) => string | undefined;
+  /** `/intent-auth-evidence`, when loaded: each step with evidence gets "Credential info". */
+  evidence?: IntentAuthEvidence | null;
 }
 
-const shortId = (id: string) => (id.length > 18 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id);
+export const shortId = (id: string) => (id.length > 18 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id);
 const isHash = (s: string) => /^[0-9a-f]{40,}$/i.test(s.trim());
 const titleCase = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
-const ms = (iso?: string) => {
+export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+export const ms = (iso?: string) => {
   const t = iso ? new Date(iso).getTime() : NaN;
   return Number.isNaN(t) ? null : t;
 };
 
-function fmtDuration(seconds?: number | null) {
+export function fmtDuration(seconds?: number | null) {
   if (seconds == null || seconds < 0) return "—";
   if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
   if (seconds < 60) return `${seconds < 10 ? seconds.toFixed(1).replace(/\.0$/, "") : Math.round(seconds)}s`;
@@ -43,7 +47,7 @@ function fmtDuration(seconds?: number | null) {
   return m < 60 ? `${m}m ${String(Math.round(seconds % 60)).padStart(2, "0")}s` : `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
-function fmtDate(iso?: string) {
+export function fmtDate(iso?: string) {
   const t = ms(iso);
   return t == null ? "—" : new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" });
 }
@@ -63,11 +67,9 @@ function fmtAgo(iso?: string) {
 
 const REVIEW_TONE: Record<string, string> = { Flagged: "threat", Acknowledged: "safe" };
 
-export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, onClose, nameOf }: Props) {
+export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, onClose, nameOf, evidence }: Props) {
   const navigate = useNavigate();
-  const { openDrawer } = useDrawer();
   const resolve = useResolveName();
-  const [flaggedOnly, setFlaggedOnly] = useState(false);
   const name = (did: string, given?: string) => (given && !given.includes("…") ? given : nameOf(did) || resolve(did).name || shortId(did));
 
   const actions = (
@@ -112,7 +114,6 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
   const breached = !!intent.threatDetected || flagged > 0;
   const signed = steps.filter((s) => !!s.signature).length;
   const totalIx = intent.interactionsCount ?? steps.length;
-  const start = ms(intent.firstInteractionAt ?? intent.startedAt) ?? ms(steps[0]?.time);
   const initiator = intent.initiatorDID ? name(intent.initiatorDID, intent.initiatorName) : intent.initiatorName || "Unknown initiator";
 
   const verdict = breached
@@ -134,26 +135,6 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
       {reach.length > 0 && <> and reached {reach.join(" and ")}</>}.
     </>
   );
-
-  const openStep = (s: ObsInteraction) => {
-    const t = ms(s.time);
-    const ix: Interaction = {
-      id: s.interactionID,
-      initiator: { id: s.from, name: name(s.from, s.fromName) },
-      target: { id: s.to, name: name(s.to, s.toName) },
-      targetType: resolve(s.to).kind === "tool" ? "tool" : "agent",
-      intent: { id: intent.id, name: intent.title },
-      runtime: 0,
-      threat: s.threat,
-      created: minutesAgo(t),
-      threatID: s.threatID || undefined,
-      raw: s.raw,
-      ...(s.message ? { payload: s.message } : {}),
-    };
-    openDrawer("interaction", ix);
-  };
-
-  const shown = flaggedOnly ? steps.map((s, k) => [s, k] as const).filter(([s]) => s.threat) : steps.map((s, k) => [s, k] as const);
 
   return (
     <section className="ix">
@@ -213,33 +194,85 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
           </FactGroup>
         </div>
 
-        <div className="ix-chain-head">
-          <h4>
-            Chain of custody <span className="ix-count">{steps.length}</span>
-          </h4>
-          {flagged > 0 && (
-            <div className="seg" role="group" aria-label="Interactions shown">
-              <button type="button" className={!flaggedOnly ? "active" : ""} onClick={() => setFlaggedOnly(false)}>All</button>
-              <button type="button" className={flaggedOnly ? "active" : ""} onClick={() => setFlaggedOnly(true)}>Flagged ({flagged})</button>
-            </div>
-          )}
-        </div>
-
-        {steps.length === 0 ? (
-          <div className="ix-empty">No interactions were recorded for this intent.</div>
-        ) : (
-          <ol className="ix-chain">
-            {shown.map(([s, k]) => (
-              <Step key={s.interactionID || k} s={s} n={k + 1} start={start} name={name} onOpen={() => openStep(s)} />
-            ))}
-          </ol>
-        )}
+        <CustodyChain intent={intent} name={name} evidence={evidence} />
       </div>
     </section>
   );
 }
 
 /* ---------------- Pieces ---------------- */
+
+/**
+ * The chain of custody: every interaction in order, with its time from the start, and
+ * "Credential info" for its auth checks when there are any. Clicking a step opens that
+ * interaction in the drawer. Shared by this panel and the intent page's Evidence trail tab.
+ */
+export function CustodyChain({
+  intent,
+  name,
+  evidence,
+  viewMore = false,
+}: {
+  intent: ObsPathIntent;
+  name: (did: string, given?: string) => string;
+  evidence?: IntentAuthEvidence | null;
+  /** Adds "View more" to every step, opening it in the drawer (the intent page). */
+  viewMore?: boolean;
+}) {
+  const { openDrawer } = useDrawer();
+  const resolve = useResolveName();
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const steps = intent.interactions ?? [];
+  const flagged = steps.filter((s) => s.threat).length;
+  const start = ms(intent.firstInteractionAt ?? intent.startedAt) ?? ms(steps[0]?.time);
+
+  const openStep = (s: ObsInteraction) => {
+    const t = ms(s.time);
+    const ix: Interaction = {
+      id: s.interactionID,
+      initiator: { id: s.from, name: name(s.from, s.fromName) },
+      target: { id: s.to, name: name(s.to, s.toName) },
+      targetType: resolve(s.to).kind === "tool" ? "tool" : "agent",
+      intent: { id: intent.id, name: intent.title },
+      runtime: 0,
+      threat: s.threat,
+      created: minutesAgo(t),
+      threatID: s.threatID || undefined,
+      raw: s.raw,
+      ...(s.message ? { payload: s.message } : {}),
+    };
+    openDrawer("interaction", ix);
+  };
+
+  const evidenceOf = new Map((evidence?.interactions ?? []).map((x) => [x.interactionID, x.evidence ?? []]));
+  const shown = flaggedOnly ? steps.map((s, k) => [s, k] as const).filter(([s]) => s.threat) : steps.map((s, k) => [s, k] as const);
+
+  return (
+    <>
+      <div className="ix-chain-head">
+        <h4>
+          Chain of custody <span className="ix-count">{steps.length}</span>
+        </h4>
+        {flagged > 0 && (
+          <div className="seg" role="group" aria-label="Interactions shown">
+            <button type="button" className={!flaggedOnly ? "active" : ""} onClick={() => setFlaggedOnly(false)}>All</button>
+            <button type="button" className={flaggedOnly ? "active" : ""} onClick={() => setFlaggedOnly(true)}>Flagged ({flagged})</button>
+          </div>
+        )}
+      </div>
+
+      {steps.length === 0 ? (
+        <div className="ix-empty">No interactions were recorded for this intent.</div>
+      ) : (
+        <ol className="ix-chain">
+          {shown.map(([s, k]) => (
+            <Step key={s.interactionID || k} s={s} n={k + 1} start={start} name={name} onOpen={() => openStep(s)} evidence={evidenceOf.get(s.interactionID)} viewMore={viewMore} />
+          ))}
+        </ol>
+      )}
+    </>
+  );
+}
 
 function FactGroup({ heading, children }: { heading: string; children: ReactNode }) {
   return (
@@ -268,7 +301,7 @@ function Figure({ n, label, tone }: { n?: number; label: string; tone?: "threat"
   );
 }
 
-function CopyId({ value, label }: { value: string; label: string }) {
+export function CopyId({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () =>
     navigator.clipboard?.writeText(value).then(() => {
@@ -288,52 +321,99 @@ function Step({
   start,
   name,
   onOpen,
+  evidence,
+  viewMore = false,
 }: {
   s: ObsInteraction;
   n: number;
   start: number | null;
   name: (did: string, given?: string) => string;
   onOpen: () => void;
+  /** This step's auth checks; none or not loaded hides "Credential info". */
+  evidence?: AuthEvidence[];
+  /** Shows "View more" (opens the interaction in the drawer, as clicking the step does). */
+  viewMore?: boolean;
 }) {
+  const [credOpen, setCredOpen] = useState(false);
+  const hasCred = !!evidence && evidence.length > 0;
+  /** Any of this step's auth checks came back other than "ok". */
+  const credFailed = hasCred && evidence.some((e) => e.authStatus?.toLowerCase() !== "ok");
   const t = ms(s.time);
   const offset = t != null && start != null ? (t - start) / 1000 : null;
   const self = s.from === s.to;
   return (
     <li className={`ix-step${s.threat ? " threat" : ""}`}>
-      <button type="button" className="ix-step-btn" onClick={onOpen} title="Open interaction">
-        <span className="ix-step-n">{n}</span>
-        <span className="ix-step-t" title={fmtDate(s.time)}>
-          {offset == null ? "—" : n === 1 || offset <= 0 ? "Start" : `+${fmtDuration(offset)}`}
-        </span>
-        <span className="ix-step-main">
-          <span className="ix-step-flow">
-            {/* Delegate / Response labels hidden for now; only the trigger is marked. */}
-            {s.type === "trigger" && <span className={`ix-type ${s.type}`}>{titleCase(s.type)}</span>}
-            <span className="ix-party" title={s.from}>{name(s.from, s.fromName)}</span>
-            {!self && (
-              <>
-                <ArrowRight size={13} className="ix-arrow" aria-label="to" />
-                <span className="ix-party" title={s.to}>{name(s.to, s.toName)}</span>
-              </>
-            )}
-            {s.threat && (
-              <span className="chip threat ix-incident" title={s.threatID || undefined}>
-                <ShieldAlert size={12} /> Incident{s.threatID ? ` ${shortId(s.threatID)}` : ""}
+      {/* The step and its actions side by side, the actions centred on the step. */}
+      <div className="ix-step-row">
+        <button type="button" className="ix-step-btn" onClick={onOpen} title="Open interaction">
+          <span className="ix-step-n">{n}</span>
+          <span className="ix-step-t" title={fmtDate(s.time)}>
+            {offset == null ? "—" : n === 1 || offset <= 0 ? "Start" : `+${fmtDuration(offset)}`}
+          </span>
+          <span className="ix-step-main">
+            <span className="ix-step-flow">
+              {/* Delegate / Response labels hidden for now; only the trigger is marked. */}
+              {s.type === "trigger" && <span className={`ix-type ${s.type}`}>{titleCase(s.type)}</span>}
+              <span className="ix-party" title={s.from}>{name(s.from, s.fromName)}</span>
+              {!self && (
+                <>
+                  <ArrowRight size={13} className="ix-arrow" aria-label="to" />
+                  <span className="ix-party" title={s.to}>{name(s.to, s.toName)}</span>
+                </>
+              )}
+              {s.threat && (
+                <span className="chip threat ix-incident" title={s.threatID || undefined}>
+                  <ShieldAlert size={12} /> Incident{s.threatID ? ` ${shortId(s.threatID)}` : ""}
+                </span>
+              )}
+            </span>
+            {/* Every hop shows its payload, the trigger included. */}
+            {s.message && (
+              <span className={`ix-msg${isHash(s.message) ? " hash" : ""}`} title={s.message}>
+                {isHash(s.message) ? `Payload hash ${shortId(s.message)}` : s.message}
               </span>
             )}
           </span>
-          {/* Every hop shows its payload, the trigger included. */}
-          {s.message && (
-            <span className={`ix-msg${isHash(s.message) ? " hash" : ""}`} title={s.message}>
-              {isHash(s.message) ? `Payload hash ${shortId(s.message)}` : s.message}
-            </span>
-          )}
-        </span>
-        <span className={`ix-seal${s.signature ? "" : " missing"}`} title={s.signature || "No signature recorded"}>
-          {s.signature ? <ShieldCheck size={14} /> : <ShieldQuestion size={14} />}
-          {s.signature ? "Signed" : "Unsigned"}
-        </span>
-      </button>
+        </button>
+        {(hasCred || viewMore) && (
+          <div className="ix-step-actions" role="group" aria-label={`Interaction ${n}`}>
+            {viewMore && (
+              <button type="button" className="ix-act" onClick={onOpen}>
+                <PanelRightOpen size={13} />
+                View more
+              </button>
+            )}
+            {hasCred && (
+              <button
+                type="button"
+                className={`ix-act ix-act-cred${credOpen ? " open" : ""}${credFailed ? " fail" : ""}`}
+                aria-expanded={credOpen}
+                onClick={() => setCredOpen((o) => !o)}
+                title={credFailed ? "An auth check failed" : undefined}
+              >
+                <KeyRound size={13} />
+                <span className="ix-act-label">Credential info</span>
+                {evidence.length > 1 && <span className="ix-act-count">{evidence.length}</span>}
+                <ChevronDown size={13} className="ix-act-chev" />
+              </button>
+            )}
+            {/* Holds the slot so "View more" lines up with the rows that have checks. */}
+            {viewMore && !hasCred && evidence && (
+              <span className="ix-act ix-act-cred none">
+                <KeyRound size={13} />
+                <span className="ix-act-label">No credential info</span>
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      {hasCred && credOpen && (
+        <div className="ix-cred">
+          <ul className="ev-checks">
+            {evidence.map((e, k) => <EvidenceCheck key={e.requestID || k} e={e} at={s.time} flat />)}
+          </ul>
+        </div>
+      )}
     </li>
   );
 }

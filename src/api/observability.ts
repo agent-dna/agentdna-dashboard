@@ -273,3 +273,47 @@ export const fetchObsIntents = (
 
 export const fetchObsPaths = (s: ObsScope, f: ObsPathFilter, pageSize = 50) =>
   apiRequest<ObsPathsPage>("/observability-paths", { query: { ...s, ...f, page: 1, pageSize } });
+
+/** One auth check recorded for an interaction: who presented which credential, where, and the result. */
+export interface AuthEvidence {
+  requestID: string;
+  /** Where the check was observed, e.g. "server_in". */
+  source: string;
+  runID: string;
+  /** e.g. "bearer". */
+  authMethod: string;
+  credentialID: string;
+  identityID: string;
+  /** "ok" when the check passed; anything else is a failure. */
+  authStatus: string;
+  keyVersion: string;
+  /** Empty when the check had no onward destination. */
+  destination: string;
+  observedAt: string;
+}
+
+export interface AuthEvidenceInteraction {
+  sequence: number;
+  interactionID: string;
+  signature: string;
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  type: string;
+  time: string;
+  evidence: AuthEvidence[];
+}
+
+export interface IntentAuthEvidence {
+  intentID: string;
+  /** Every interaction in the intent, with or without evidence. */
+  totalInteractions: number;
+  /** Interactions that have evidence (the ones listed). */
+  count: number;
+  interactions: AuthEvidenceInteraction[];
+}
+
+/** GET /intent-auth-evidence: the auth evidence recorded for each of an intent's interactions. */
+export const fetchIntentAuthEvidence = (intentID: string) =>
+  apiRequest<IntentAuthEvidence>("/intent-auth-evidence", { query: { intentID } });

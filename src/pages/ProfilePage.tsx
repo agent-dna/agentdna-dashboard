@@ -12,7 +12,8 @@ function maskKey(key: string) {
 }
 
 export function ProfilePage() {
-  const { user, patchUser } = useAuth();
+  const { user, patchUser, logout } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
@@ -136,6 +137,16 @@ export function ProfilePage() {
             {memberSince && <span style={pillStyle}>Since {memberSince}</span>}
           </div>
         </div>
+
+        <button
+          type="button"
+          className="btn signout-btn"
+          disabled={signingOut}
+          onClick={async () => { setSigningOut(true); await logout(); }}
+        >
+          <Icon name="arrowRight" size={14} />
+          {signingOut ? "Signing out…" : "Sign out"}
+        </button>
       </div>
 
       {/* ── Two-column layout ── */}

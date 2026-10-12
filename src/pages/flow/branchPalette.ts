@@ -1,11 +1,5 @@
 import type { FlowBranch } from "./flowData";
 
-/**
- * One hue per branch, by `FlowBranch.color`, shared by the timeline and the canvas so a branch
- * reads as the same thing in both. `ui` is the shade for the white timeline, `line` the brighter
- * one for the dark canvas. The hues stay clear of the canvas's own meanings: blue is the main
- * path (the trunk), red/orange a blocked hop, emerald the seal into the provenance layer.
- */
 export const BRANCH_TONES = [
   { ui: "#7c3aed", line: "#A78BFA" }, // violet
   { ui: "#db2777", line: "#F472B6" }, // pink

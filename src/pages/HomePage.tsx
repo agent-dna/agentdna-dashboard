@@ -1155,12 +1155,12 @@ export function HomePage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr", gap: 16, marginBottom: 20 }}>
-        <div className={`card${chartTab === "threats" ? " card-threat" : ""}`}>
+        <div className="card">
           <div className="card-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
               {chartTab === "threats" && (
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(220,38,38,0.14)", display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1 }}>
-                  <Icon name="shield" size={15} style={{ color: "var(--threat)" }} />
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: "var(--bg-2)", display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1 }}>
+                  <Icon name="shield" size={15} style={{ color: "var(--fg-muted)" }} />
                 </div>
               )}
               <div>
@@ -1226,7 +1226,7 @@ export function HomePage() {
             <InteractionsChart labels={labels} safe={data.safe} threats={data.threats} loading={seriesState.loading} />
           ) : (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "26px 1fr 80px 90px 24px", padding: "10px 20px 5px", borderBottom: "1px solid rgba(220,38,38,0.18)", marginTop: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "26px 1fr 80px 90px 24px", padding: "10px 20px 5px", borderBottom: "1px solid var(--line)", marginTop: 8 }}>
                 {["#", "INCIDENT", "SEVERITY", "OCCURRENCES", ""].map((h, i) => (
                   <div key={h} style={{ fontSize: 9.5, fontWeight: 840, letterSpacing: "0.07em", color: "var(--fg-muted)", textTransform: "uppercase" as const, textAlign: (i > 1 ? "right" : "left") as "right" | "left" }}>{h}</div>
                 ))}
@@ -1251,19 +1251,18 @@ export function HomePage() {
                       gridTemplateColumns: "26px 1fr 80px 90px 24px",
                       alignItems: "center",
                       padding: "10px 20px",
-                      borderBottom: "1px solid rgba(220,38,38,0.14)",
-                      background: i === 0 ? "rgba(220,38,38,0.09)" : "transparent",
-                      boxShadow: i === 0 ? "inset 3px 0 0 var(--threat)" : "none",
+                      borderBottom: "1px solid var(--line)",
+                      background: "transparent",
                       cursor: "pointer",
                       transition: "background 120ms",
                     }}
                     onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLDivElement).style.background = "rgba(220,38,38,0.12)";
+                      (e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)";
                       const arrow = e.currentTarget.querySelector(".arrow-icon") as HTMLElement;
                       if (arrow) arrow.style.transform = "rotate(-45deg)";
                     }}
                     onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLDivElement).style.background = i === 0 ? "rgba(220,38,38,0.09)" : "transparent";
+                      (e.currentTarget as HTMLDivElement).style.background = "transparent";
                       const arrow = e.currentTarget.querySelector(".arrow-icon") as HTMLElement;
                       if (arrow) arrow.style.transform = "rotate(0deg)";
                     }}
@@ -1278,8 +1277,8 @@ export function HomePage() {
                         fontFamily: "var(--font-mono)",
                         fontSize: 9.5,
                         fontWeight: 840,
-                        background: i === 0 ? "var(--threat)" : "rgba(220,38,38,0.12)",
-                        color: i === 0 ? "#fff" : "var(--threat)",
+                        background: i === 0 ? "var(--fg)" : "var(--bg-2)",
+                        color: i === 0 ? "var(--bg-1)" : "var(--fg-muted)",
                       }}
                     >
                       {String(i + 1).padStart(2, "0")}
@@ -1300,11 +1299,11 @@ export function HomePage() {
                 );
               })}
               {!topThreatsError && topThreats.length > 0 && (
-                <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(220,38,38,0.14)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ padding: "12px 20px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
                     Showing top {topThreatsShown.length} of {topThreats.length} incident type{topThreats.length === 1 ? "" : "s"}
                   </span>
-                  <button onClick={() => setBottomTab("threats")} style={{ background: "none", border: "none", fontSize: 12, fontWeight: 600, color: "var(--threat)", cursor: "pointer", padding: 0 }}>View all incidents →</button>
+                  <button onClick={() => setBottomTab("threats")} style={{ background: "none", border: "none", fontSize: 12, fontWeight: 600, color: "var(--fg)", cursor: "pointer", padding: 0 }}>View all incidents →</button>
                 </div>
               )}
             </>
