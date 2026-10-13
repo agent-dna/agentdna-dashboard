@@ -248,24 +248,16 @@ export function InteractionDetail({ interaction: i }: Props) {
           </div>
         </DrawerSection>
 
-        <DrawerSection title="Credential info">
-          {evidence.loading ? (
-            <div className="ixd-none">Loading credential info…</div>
-          ) : evidence.error ? (
-            <div className="ixd-none">
-              Couldn't load the credential info: {evidence.error}.{" "}
-              <button type="button" className="btn ghost" onClick={evidence.retry}>Try again</button>
-            </div>
-          ) : checks && checks.evidence.length > 0 ? (
+        {/* Only when this interaction has auth evidence; an intent without any shows no section. */}
+        {checks && checks.evidence.length > 0 && (
+          <DrawerSection title="Credential info">
             <ul className="ev-checks">
               {checks.evidence.map((e, k) => (
                 <EvidenceCheck key={e.requestID || k} e={e} at={checks.time} flat />
               ))}
             </ul>
-          ) : (
-            <div className="ixd-none">No auth evidence was recorded for this interaction.</div>
-          )}
-        </DrawerSection>
+          </DrawerSection>
+        )}
 
         <DrawerSection title="Raw data">
           <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>

@@ -2432,9 +2432,10 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ix-act-cred.fail svg { color: var(--threat); }
 .ix-act-cred.fail .ix-act-count { background: rgba(220,38,38,.12); color: var(--threat); }
 .ix-act-cred.fail:hover { background: rgba(220,38,38,.11); color: var(--threat); }
-.ix-act-cred.none { cursor: default; border-style: dashed; color: var(--fg-faint); }
+.ix-act-cred.none { cursor: not-allowed; background: var(--bg-2); border-color: var(--line); color: var(--fg-faint); }
 .ix-act-cred.none svg { color: var(--fg-faint); }
-.ix-act-cred.none:hover, .ix-act-cred.none:hover svg { background: none; color: var(--fg-faint); }
+.ix-act-cred.none:hover { background: var(--bg-2); color: var(--fg-faint); }
+.ix-act-cred.none:hover svg { color: var(--fg-faint); }
 .ix-act svg { color: var(--fg-muted); flex-shrink: 0; }
 .ix-act:hover { background: var(--bg-2); color: var(--fg); }
 .ix-act:hover svg { color: var(--fg-dim); }

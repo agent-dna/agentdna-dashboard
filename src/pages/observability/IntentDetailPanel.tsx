@@ -373,12 +373,19 @@ function Step({
                 <ChevronDown size={13} className="ix-act-chev" />
               </button>
             )}
-            {/* Holds the slot so "View more" lines up with the rows that have checks. */}
-            {viewMore && !hasCred && evidence && (
-              <span className="ix-act ix-act-cred none">
+            {/* No auth evidence for this interaction (or none for the whole intent): the button is
+                there but disabled, so "View more" still lines up with the rows that have checks. */}
+            {viewMore && !hasCred && (
+              <button
+                type="button"
+                className="ix-act ix-act-cred none"
+                disabled
+                title="No credential info was recorded for this interaction"
+              >
                 <KeyRound size={13} />
-                <span className="ix-act-label">No credential info</span>
-              </span>
+                <span className="ix-act-label">Credential info</span>
+                <ChevronDown size={13} className="ix-act-chev" />
+              </button>
             )}
             {viewMore && (
               <button type="button" className="ix-act ix-act-more" onClick={onOpen}>
