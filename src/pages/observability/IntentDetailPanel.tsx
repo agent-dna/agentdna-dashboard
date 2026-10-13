@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Check, ChevronDown, Copy, ExternalLink, KeyRound, PanelRightOpen, GitBranch, ShieldAlert, ShieldCheck, ShieldQuestion, X } from "lucide-react";
-import type { AuthEvidence, IntentAuthEvidence, ObsInteraction, ObsPathIntent } from "../../api/observability";
+import { authAccepted, type AuthEvidence, type IntentAuthEvidence, type ObsInteraction, type ObsPathIntent } from "../../api/observability";
 import { EvidenceCheck } from "./EvidenceCheck";
 import { fmtDate, fmtDuration, ms, plural, shortId } from "./format";
 import { useResolveName } from "../../context/DirectoryContext";
@@ -318,8 +318,8 @@ function Step({
 }) {
   const [credOpen, setCredOpen] = useState(false);
   const hasCred = !!evidence && evidence.length > 0;
-  /** Any of this step's auth checks came back other than "ok". */
-  const credFailed = hasCred && evidence.some((e) => e.authStatus?.toLowerCase() !== "ok");
+  /** Any of this step's auth checks was rejected or not seen. */
+  const credFailed = hasCred && evidence.some((e) => !authAccepted(e.authStatus));
   const t = ms(s.time);
   const offset = t != null && start != null ? (t - start) / 1000 : null;
   const self = s.from === s.to;

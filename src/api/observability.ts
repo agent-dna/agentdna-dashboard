@@ -284,7 +284,7 @@ export interface AuthEvidence {
   authMethod: string;
   credentialID: string;
   identityID: string;
-  /** "ok" when the check passed; anything else is a failure. */
+  /** "accepted", "rejected" or "unknown" (the check wasn't seen). Only "accepted" passes. */
   authStatus: string;
   keyVersion: string;
   /** Empty when the check had no onward destination. */
@@ -292,8 +292,15 @@ export interface AuthEvidence {
   observedAt: string;
 }
 
+/**
+ * One interaction's evidence. The array keeps the run's order (trunk first, then each branch
+ * from start to end); the frontend matches entries to interactions by `interactionID`.
+ */
 export interface AuthEvidenceInteraction {
-  sequence: number;
+  /** Step number in the run; can repeat across branches and skip hops with no evidence. */
+  position?: number;
+  /** "" on the trunk, else "a", "b", … */
+  branch?: string;
   interactionID: string;
   signature: string;
   from: string;
@@ -312,6 +319,22 @@ export interface IntentAuthEvidence {
   /** Interactions that have evidence (the ones listed). */
   count: number;
   interactions: AuthEvidenceInteraction[];
+}
+
+/** An auth check passed: "accepted" (or the older "ok"). "rejected" and "unknown" both count as failed. */
+export const authAccepted = (status?: string) => {
+  const s = (status || "").toLowerCase();
+  return s === "accepted" || s === "ok";
+};
+
+/** How an auth status reads in the UI. */
+export function authStatusLabel(status?: string): string {
+  const s = (status || "").toLowerCase();
+  if (s === "accepted" || s === "ok") return "Accepted";
+  if (s === "rejected") return "Rejected";
+  if (s === "unknown" || !s) return "Not seen";
+  const t = s.replace(/_/g, " ");
+  return t[0].toUpperCase() + t.slice(1);
 }
 
 /** GET /intent-auth-evidence: the auth evidence recorded for each of an intent's interactions. */

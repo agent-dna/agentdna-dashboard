@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
-import type { AuthEvidence } from "../../api/observability";
+import { authAccepted, authStatusLabel, type AuthEvidence } from "../../api/observability";
 import { CopyId } from "./IntentDetailPanel";
 import { fmtDuration, ms } from "./format";
 
@@ -9,7 +9,7 @@ import { fmtDuration, ms } from "./format";
  * the chain of custody (observability Intent Info and the intent page's Evidence trail).
  */
 
-const passed = (e: AuthEvidence) => e.authStatus?.toLowerCase() === "ok";
+const passed = (e: AuthEvidence) => authAccepted(e.authStatus);
 /** "server_in" → "Server in". */
 const sentence = (s: string) => {
   const t = (s || "").replace(/_/g, " ").trim();
@@ -48,7 +48,7 @@ export function EvidenceCheck({ e, at, flat = false }: {
           {!ok && (
             <span className="ev-result">
               <X size={12} strokeWidth={2.5} />
-              {sentence(e.authStatus || "failed")}
+              {authStatusLabel(e.authStatus)}
             </span>
           )}
           <ChevronDown size={14} className="ev-chev" />
@@ -61,7 +61,7 @@ export function EvidenceCheck({ e, at, flat = false }: {
             <dd>
               <span className="ev-result">
                 {ok ? <Check size={12} strokeWidth={2.5} /> : <X size={12} strokeWidth={2.5} />}
-                {ok ? "Passed" : sentence(e.authStatus || "failed")}
+                {authStatusLabel(e.authStatus)}
               </span>
             </dd>
           </div>
