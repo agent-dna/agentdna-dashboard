@@ -17,9 +17,19 @@ import type { Intent } from "../types";
 
 type Tab = "interactions" | "intents" | "threats" | "agents";
 
-export function UserDetailPage() {
-  const { userId = "" } = useParams<{ userId: string }>();
+/**
+ * A user's page (/users/:userId, from /user-info), or with `kind="admin"` an admin's
+ * (/admins/:adminId, from /admins/:id, which returns the same shape). An admin's page has no
+ * Users list to go back to and no "Revoke access".
+ */
+export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
+  const params = useParams<{ userId: string; adminId: string }>();
+  const isAdminPage = kind === "admin";
+  const userId = (isAdminPage ? params.adminId : params.userId) ?? "";
   const navigate = useNavigate();
+  // Users go back to the Users list; there is no list of admins, so an admin's page goes back.
+  const goBack = () => (isAdminPage ? navigate(-1) : navigate("/requests", { state: { tab: "users" } }));
+  const backLabel = isAdminPage ? "Back" : "Users";
   const { openDrawer } = useDrawer();
 
   const [tab, setTab] = useState<Tab>("interactions");
@@ -32,7 +42,7 @@ export function UserDetailPage() {
   const [confirmRevoke, setConfirmRevoke] = useState(false);
 
   const { data: result, loading } = useUserInfo(
-    userId, interactionsPage, intentsPage, threatsPage, agentsPage,
+    userId, interactionsPage, intentsPage, threatsPage, agentsPage, kind,
   );
 
   // ─── Loading ─────────────────────────────────────────────────────────────
@@ -50,23 +60,23 @@ export function UserDetailPage() {
       <div className="page">
         {/* Breadcrumb */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, fontSize: 13 }}>
-          <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 12.5 }} onClick={() => navigate("/requests", { state: { tab: "users" } })}>
-            <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> Users
+          <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 12.5 }} onClick={goBack}>
+            <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> {backLabel}
           </button>
           <span style={{ color: "var(--fg-faint)" }}>/</span>
           <span style={{ color: "var(--fg-muted)", fontFamily: "var(--font-mono)", fontSize: 12 }}>{userId}</span>
         </div>
 
         <div className="stub">
-          <h2>User not found</h2>
+          <h2>{isAdminPage ? "Admin not found" : "User not found"}</h2>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, marginTop: 6, color: "var(--fg-muted)" }}>{userId}</div>
-          <button className="btn" style={{ marginTop: 16 }} onClick={() => navigate("/requests", { state: { tab: "users" } })}>
-            <Icon name="arrowRight" size={14} style={{ transform: "rotate(180deg)" }} /> Back to users
+          <button className="btn" style={{ marginTop: 16 }} onClick={goBack}>
+            <Icon name="arrowRight" size={14} style={{ transform: "rotate(180deg)" }} /> {isAdminPage ? "Go back" : "Back to users"}
           </button>
         </div>
 
         {/* Coming soon notice */}
-        <div className="card" style={{ marginTop: 20, padding: "28px 28px" }}>
+        {!isAdminPage && <div className="card" style={{ marginTop: 20, padding: "28px 28px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.16)", display: "grid", placeItems: "center", flexShrink: 0 }}>
               <Icon name="activity" size={18} style={{ color: "var(--accent)" }} />
@@ -78,7 +88,7 @@ export function UserDetailPage() {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     );
   }
@@ -241,8 +251,8 @@ export function UserDetailPage() {
     <div className="page">
       {/* Breadcrumb */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, fontSize: 13 }}>
-        <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 12.5 }} onClick={() => navigate("/requests", { state: { tab: "users" } })}>
-          <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> Users
+        <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 12.5 }} onClick={goBack}>
+          <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> {backLabel}
         </button>
         <span style={{ color: "var(--fg-faint)" }}>/</span>
         <span style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600 }}>{user.userName}</span>
@@ -275,7 +285,7 @@ export function UserDetailPage() {
                 <span className={`dot-status ${user.isActive ? "safe" : "warn"}`} />
                 {user.isActive ? "active" : "suspended"}
               </span>
-              <span className="chip info" style={{ fontSize: 10.5, padding: "2px 7px" }}>user</span>
+              <span className="chip info" style={{ fontSize: 10.5, padding: "2px 7px" }}>{kind}</span>
             </div>
 
             {/* Every DID the user holds: the primary shows, the rest open from the arrow. */}
@@ -289,8 +299,8 @@ export function UserDetailPage() {
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* Action buttons (an admin's page has none: admins have no access to revoke) */}
+          {!isAdminPage && <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button
               className="btn"
               disabled={revoking}
@@ -300,7 +310,7 @@ export function UserDetailPage() {
               <Icon name="shield" size={14} />
               {revoking ? "Revoking…" : "Revoke access"}
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 

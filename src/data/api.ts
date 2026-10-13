@@ -1592,6 +1592,35 @@ export async function fetchUserInfo(
     const r = await apiRequest<ApiUserInfo>("/user-info", {
       query: { userID, interactionsPage, intentsPage, threatsPage, agentsPage },
     });
+    return mapUserInfo(r);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /admins/:id — an admin's page, in exactly the /user-info shape (same user object and
+ * paginated sections). Only admins in the caller's org; anyone else is a 404 ("admin not found").
+ * For an admin, `dids` is just their DID and `accessAgentCount` is always 0.
+ */
+export async function fetchAdminInfo(
+  adminID: string,
+  interactionsPage = 1,
+  intentsPage = 1,
+  threatsPage = 1,
+  agentsPage = 1,
+): Promise<UserDetailResult | null> {
+  try {
+    const r = await apiRequest<ApiUserInfo>(`/admins/${encodeURIComponent(adminID)}`, {
+      query: { interactionsPage, intentsPage, threatsPage, agentsPage },
+    });
+    return mapUserInfo(r);
+  } catch {
+    return null;
+  }
+}
+
+function mapUserInfo(r: ApiUserInfo): UserDetailResult {
     const u = r.user;
     return {
       user: {
@@ -1628,9 +1657,6 @@ export async function fetchUserInfo(
       agentsTotal: r.agents?.total || 0,
       agentsTotalPages: r.agents?.totalPages || 1,
     };
-  } catch {
-    return null;
-  }
 }
 
 export async function fetchToolInfo(

@@ -141,12 +141,13 @@ export function ProfilePage() {
         </div>
 
         <div className="profile-actions">
-          {/* Your own user page, the one admins open from the Users list: interactions, intents, incidents and agents. */}
+          {/* Your own page: a user's is the one admins open from the Users list, an admin's is /admins/:id.
+              Both show interactions, intents, incidents and agents. */}
           {user?.did && (
             <button
               type="button"
               className="btn primary"
-              onClick={() => navigate(`/users/${encodeURIComponent(user.did)}`)}
+              onClick={() => navigate(`/${user.is_admin ? "admins" : "users"}/${encodeURIComponent(user.did)}`)}
             >
               <Icon name="activity" size={14} />
               View my activity

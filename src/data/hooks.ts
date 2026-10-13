@@ -139,17 +139,20 @@ export const useIntentParticipants = (id: string) =>
 export const useLogs = (kind: "agent" | "intent", id: string) =>
   useAsync<LogEntry[]>(() => api.fetchLogs(kind, id), [], [kind, id]);
 
+/** A user's page (/user-info), or an admin's (/admins/:id) — the same response either way. */
 export const useUserInfo = (
   userID: string,
   interactionsPage = 1,
   intentsPage = 1,
   threatsPage = 1,
   agentsPage = 1,
+  kind: "user" | "admin" = "user",
 ) =>
   useAsync<api.UserDetailResult | null>(
-    () => api.fetchUserInfo(userID, interactionsPage, intentsPage, threatsPage, agentsPage),
+    () =>
+      (kind === "admin" ? api.fetchAdminInfo : api.fetchUserInfo)(userID, interactionsPage, intentsPage, threatsPage, agentsPage),
     null,
-    [userID, interactionsPage, intentsPage, threatsPage, agentsPage],
+    [userID, interactionsPage, intentsPage, threatsPage, agentsPage, kind],
   );
 
 export const useAgentPolicyHistory = (id: string) =>

@@ -54,6 +54,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="agents/:agentId/tools/:toolId" element={<AgentToolDetailPage />} />
                 <Route path="tools/:toolId" element={<ToolDetailPage />} />
                 <Route path="users/:userId" element={<UserDetailPage />} />
+                <Route path="admins/:adminId" element={<UserDetailPage kind="admin" />} />
                 <Route path="requests" element={<RequestsPage />} />
                 <Route path="graph" element={<FlowPage />} />
                 <Route path="graph/:intentId" element={<FlowPage />} />
