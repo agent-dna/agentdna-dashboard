@@ -10,7 +10,6 @@ import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { fmtRuntime, initials, timeAgo } from "../lib/format";
-import { ScoreBar } from "../components/ScoreBar";
 import { useUserInfo } from "../data/hooks";
 import type { DeployedAgent } from "../data/api";
 import type { Intent } from "../types";
@@ -158,17 +157,6 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
         r.threats > 0
           ? <span className="chip threat">{r.threats}</span>
           : <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>,
-    },
-    {
-      key: "score",
-      label: "Score",
-      align: "right",
-      render: (r) => {
-        const ix = r.agentsInteracted + r.toolsInteracted;
-        if (ix <= 0) return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
-        const pct = Math.max(0, Math.round((((ix - r.threats) / ix) * 100) * 100) / 100);
-        return <ScoreBar value={pct} />;
-      },
     },
     {
       key: "started",

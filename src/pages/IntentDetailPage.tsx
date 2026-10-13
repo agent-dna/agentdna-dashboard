@@ -45,7 +45,7 @@ export function IntentDetailPage() {
   const [incidentsOpen, setIncidentsOpen] = useState(false);
   const intentState = useIntent(intentId);
   const { data: intent, loading } = intentState;
-  // The intent's interactions: the Interactions tile, the incident count's fallback and Export use them.
+  // The first page of the intent's interactions: the incident count's fallback and Export use them.
   const { data: interactionsPaged } = useIntentInteractionsPaged(intentId, 1);
   const interactions = interactionsPaged.interactions;
   const { data: participants } = useIntentParticipants(intentId);
@@ -327,7 +327,8 @@ export function IntentDetailPage() {
 
       {/* Activity metrics */}
       <div className="metrics">
-        <MetricTile label="Interactions" value={interactions.length} icon="activity" sparkColor="#2563EB" spark={[]} />
+        {/* /intent-info's interactionsCount: the whole intent, not the first page of interactions. */}
+        <MetricTile label="Interactions" value={intent.interactionsCount || interactions.length} icon="activity" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Agents touched" value={intent.agentsInteracted} icon="agents" sparkColor="#0EA5E9" spark={[]} />
         <MetricTile label="Apps touched" value={intent.toolsInteracted} icon="box" sparkColor="#0A2240" spark={[]} />
         <MetricTile label="Incidents" value={threatCount} icon="shield" sparkColor="#DC2626" spark={[]} />
