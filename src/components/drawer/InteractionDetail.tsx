@@ -8,6 +8,9 @@ import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { useThreatByID } from "../../data/hooks";
 import { timeAgo, interactionRawData, titleOrUnknown } from "../../lib/format";
 import type { Interaction } from "../../types";
+import { fetchIntentAuthEvidence } from "../../api/observability";
+import { EvidenceCheck } from "../../pages/observability/EvidenceCheck";
+import { useObsQuery } from "../../pages/observability/useObsQuery";
 
 interface Props {
   interaction: Interaction;
@@ -28,6 +31,9 @@ export function InteractionDetail({ interaction: i }: Props) {
   // What was sent in this hop: the envelope's own payload when we have it, else the endpoint's message.
   const rawPayload = (i.raw as { payload?: unknown } | undefined)?.payload;
   const payload = typeof rawPayload === "string" ? rawPayload : i.payload ?? i.message;
+  // This hop's auth checks, from the intent's evidence trail.
+  const evidence = useObsQuery(i.intent?.id && `auth-evidence:${i.intent.id}`, () => fetchIntentAuthEvidence(i.intent.id));
+  const checks = evidence.data?.interactions.find((x) => x.interactionID === i.id);
 
   const openIntent = () => {
     if (!i.intent?.id) return;
@@ -198,7 +204,6 @@ export function InteractionDetail({ interaction: i }: Props) {
                 "—"
               )}
             </div>
-            <div className="v" style={{ fontFamily: "var(--font-body)" }}>{i.intent.name}</div>
           </div>
         </DrawerSection>
 
@@ -241,6 +246,25 @@ export function InteractionDetail({ interaction: i }: Props) {
               </div>
             </div>
           </div>
+        </DrawerSection>
+
+        <DrawerSection title="Credential info">
+          {evidence.loading ? (
+            <div className="ixd-none">Loading credential info…</div>
+          ) : evidence.error ? (
+            <div className="ixd-none">
+              Couldn't load the credential info: {evidence.error}.{" "}
+              <button type="button" className="btn ghost" onClick={evidence.retry}>Try again</button>
+            </div>
+          ) : checks && checks.evidence.length > 0 ? (
+            <ul className="ev-checks">
+              {checks.evidence.map((e, k) => (
+                <EvidenceCheck key={e.requestID || k} e={e} at={checks.time} flat />
+              ))}
+            </ul>
+          ) : (
+            <div className="ixd-none">No auth evidence was recorded for this interaction.</div>
+          )}
         </DrawerSection>
 
         <DrawerSection title="Raw data">

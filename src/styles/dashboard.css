@@ -2415,39 +2415,44 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ix-step.threat .ix-step-row { background: #FEF6F6; box-shadow: inset 3px 0 0 var(--threat); }
 .ix-step.threat .ix-step-row .ix-step-btn { background: transparent; box-shadow: none; }
 .ix-step.threat .ix-step-row:hover { background: #FDEEEE; }
-.ix-step-actions {
-  align-self: center; margin-right: 16px; display: inline-flex; align-items: stretch; height: 28px;
-  border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; overflow: hidden;
-}
+.ix-step-actions { align-self: center; margin-right: 16px; display: inline-flex; align-items: stretch; gap: 8px; height: 28px; }
 .ix-act {
-  display: inline-flex; align-items: center; gap: 6px; padding: 0 11px; border: 0; background: none; cursor: pointer;
-  white-space: nowrap; font: 500 12px var(--font-body); color: var(--fg-dim);
+  display: inline-flex; align-items: center; gap: 6px; padding: 0 11px; border: 1px solid var(--line-strong); border-radius: 8px;
+  background: #fff; cursor: pointer; white-space: nowrap; font: 500 12px var(--font-body); color: var(--fg-dim);
 }
-.ix-act + .ix-act { border-left: 1px solid var(--line); }
-/* Fixed widths so every row's control is the same size and the buttons line up down the chain. */
-.ix-act:not(.ix-act-cred) { width: 108px; justify-content: center; }
+/* Fixed widths so every row's buttons are the same size and line up down the chain. */
+.ix-act-more { width: 108px; justify-content: center; }
 .ix-act-cred { width: 170px; }
 .ix-act-label { flex: 1; text-align: left; }
 .ix-act-count {
   min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-grid; place-items: center;
   background: var(--bg-2); font: 600 10.5px var(--font-body); color: var(--fg-dim);
 }
-.ix-act-cred.fail { background: rgba(220,38,38,.06); color: var(--threat); }
+.ix-act-cred.fail { background: rgba(220,38,38,.06); border-color: rgba(220,38,38,.35); color: var(--threat); }
 .ix-act-cred.fail svg { color: var(--threat); }
 .ix-act-cred.fail .ix-act-count { background: rgba(220,38,38,.12); color: var(--threat); }
 .ix-act-cred.fail:hover { background: rgba(220,38,38,.11); color: var(--threat); }
-.ix-step-actions:has(.ix-act-cred.fail) { border-color: rgba(220,38,38,.35); }
-.ix-act-cred.none { cursor: default; color: var(--fg-faint); }
+.ix-act-cred.none { cursor: default; border-style: dashed; color: var(--fg-faint); }
 .ix-act-cred.none svg { color: var(--fg-faint); }
 .ix-act-cred.none:hover, .ix-act-cred.none:hover svg { background: none; color: var(--fg-faint); }
 .ix-act svg { color: var(--fg-muted); flex-shrink: 0; }
 .ix-act:hover { background: var(--bg-2); color: var(--fg); }
 .ix-act:hover svg { color: var(--fg-dim); }
-.ix-act:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 7px; }
-.ix-act-cred.open:not(.fail) { background: rgba(37,99,235,.07); color: var(--accent); }
-.ix-act-cred.open:not(.fail) svg { color: var(--accent); }
-.ix-act-cred.open:not(.fail) .ix-act-count { background: rgba(37,99,235,.12); color: var(--accent); }
+.ix-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ix-act-cred.open:not(.fail) { background: rgba(10,34,64,.06); }
 .ix-act-chev { margin-left: -1px; transition: transform 150ms; }
+/* "View more" is the step's main action: navy, the product's ink. */
+.ix-act-more, .ix-act-more svg { color: #fff; }
+.ix-act-more { background: #0A2240; border-color: #0A2240; }
+.ix-act-more:hover, .ix-act-more:hover svg { background: #16346A; border-color: #16346A; color: #fff; }
+/* "Credential info": outlined in the same navy; red still marks a failed check. */
+.ix-act-cred:not(.fail):not(.none), .ix-act-cred:not(.fail):not(.none) svg { color: #0A2240; }
+.ix-act-cred:not(.fail):not(.none) { border-color: #0A2240; }
+/* 15% heavier than the 1px default. */
+.ix-act-cred:not(.none) { border-width: 1.15px; }
+.ix-act-cred:not(.fail):not(.none):hover { background: rgba(10,34,64,.06); color: #0A2240; }
+.ix-act-cred:not(.fail):not(.none):hover svg { color: #0A2240; }
+.ix-act-cred:not(.fail):not(.none) .ix-act-count { background: rgba(10,34,64,.1); color: #0A2240; }
 .ix-act-cred.open .ix-act-chev { transform: rotate(180deg); }
 .ix-cred { position: relative; padding: 0 16px 10px 130px; background: #fff; }
 .ix-step.threat .ix-cred { background: #FEF6F6; box-shadow: inset 3px 0 0 var(--threat); }
@@ -2456,22 +2461,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ix-empty { padding: 16px 22px; font-size: 13px; color: var(--fg-muted); }
 .ix-body .ix-empty { padding: 16px; border: 1px dashed var(--line-strong); border-radius: 12px; }
 
-/* Evidence Trail tab: an amber verdict when interactions lack evidence, then the trail with each interaction's auth checks (or a dashed gap where there are none). */
-.ix-verdict.gap { --ix-tone: var(--warn); --ix-wash: #FFFAF0; }
-.ev-step-row { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; padding: 11px 16px; }
-.ev-step-row::before { content: ""; position: absolute; left: 28px; top: 0; bottom: 0; width: 1px; background: var(--line-strong); }
-.ev-step:first-child .ev-step-row::before { top: 20px; }
-.ev-step:last-child .ev-step-row::before { bottom: calc(100% - 20px); }
-.ev-step:only-child .ev-step-row::before { display: none; }
-.ev-step.fail .ix-step-n { background: var(--threat); border-color: var(--threat); color: #fff; }
-.ev-step.none .ix-step-n { border-style: dashed; color: var(--fg-faint); }
-.ev-step-main { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
-.ev-step-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.ev-step-time { font: 500 11.5px var(--font-mono); color: var(--fg-muted); white-space: nowrap; }
-.ev-none {
-  padding: 7px 10px; border: 1px dashed var(--line-strong); border-radius: 8px;
-  font-size: 12.5px; color: var(--warn);
-}
+/* An auth check under a step's "Credential info" (EvidenceCheck). */
 .ev-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .ev-check { border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .ev-check.fail { border-color: rgba(220,38,38,.3); background: #FEF6F6; }
@@ -2711,10 +2701,22 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 
 /* Intent page: every threat in the intent, under the header. */
 .it-threats { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
-.it-threats-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--threat); }
+/* Collapsed to one bar ("4 incidents detected"); "Show details" opens every incident's message. */
+.it-threats-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; cursor: pointer; text-align: left;
+  border: 1px solid rgba(220, 38, 38, 0.22); border-radius: 8px; background: #fff;
+  font: 600 13px var(--font-body); color: var(--threat);
+}
+.it-threats-head:hover { border-color: rgba(220, 38, 38, 0.4); }
+.it-threats-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.it-threats-count { flex: 1; }
+.it-threats-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; color: var(--fg-dim); }
+.it-threats-toggle svg { transition: transform 150ms; }
+.it-threats.open .it-threats-toggle svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .it-threats-toggle svg { transition: none; } }
 .it-threats-note { margin-top: 8px; font-size: 12.5px; color: var(--fg-muted); }
 .it-threats-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.it-threat { border: 1px solid rgba(220, 38, 38, 0.22); border-left: 3px solid var(--threat); border-radius: 8px; background: rgba(220, 38, 38, 0.04); padding: 10px 12px; min-width: 0; }
+.it-threat { border: 1px solid var(--line-strong); border-left: 3px solid var(--threat); border-radius: 8px; background: #fff; padding: 10px 12px; min-width: 0; }
 .it-threat-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
 .it-threat-title { font-size: 13px; font-weight: 600; color: var(--threat); }
 .it-threat-code { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-muted); }
@@ -2723,8 +2725,6 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .it-threat-time { margin-left: auto; font-size: 11.5px; color: var(--fg-faint, var(--fg-muted)); white-space: nowrap; }
 .it-threat-desc { margin-top: 4px; font-size: 12.5px; color: var(--fg-muted); }
 .it-threat-msg { margin-top: 6px; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.5; color: var(--fg); background: var(--bg-2); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.it-threat-msg.clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.it-threat-more { margin-top: 4px; padding: 0; border: 0; background: none; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; }
 
 /* Flow page: branches of one intent (see lib/interactionBranch). */
 .fl-paths { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -2773,20 +2773,6 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   padding: 2px 8px; border-radius: 999px;
 }
 
-/* Reliability: the fill is the clean share; the red-tinted track behind it is the flagged share. */
-.at-rel { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 200px; }
-.at-rel-track {
-  flex: 1; height: 8px; border-radius: 999px; overflow: hidden;
-  background: rgba(220,38,38,0.22);
-}
-.at-rel-fill { height: 100%; border-radius: 999px; }
-.at-rel.high .at-rel-fill { background: var(--safe); }
-.at-rel.mid .at-rel-fill { background: var(--warn); }
-.at-rel.low .at-rel-fill { background: var(--threat); }
-.at-rel-pct { min-width: 46px; text-align: right; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.at-rel.high .at-rel-pct { color: var(--safe); }
-.at-rel.mid .at-rel-pct { color: var(--warn); }
-.at-rel.low .at-rel-pct { color: var(--threat); }
 
 .row-actions .btn-mini.at-btn { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .row-actions .btn-mini:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -2973,8 +2959,10 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) { .status-trigger, .status-trigger svg { transition: none; } }
 
-/* Profile: sign out, at the right of the identity header. */
-.signout-btn { flex-shrink: 0; align-self: flex-start; color: var(--threat); border-color: rgba(220,38,38,0.3); }
+/* Profile: "View my activity" and sign out, at the right of the identity header. */
+.profile-actions { flex-shrink: 0; align-self: flex-start; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.profile-actions .btn { justify-content: center; }
+.signout-btn { color: var(--threat); border-color: rgba(220,38,38,0.3); }
 .signout-btn:hover:not(:disabled) { background: rgba(220,38,38,0.06); border-color: rgba(220,38,38,0.45); }
 
 /* Intent page, Evidence trail tab: the observability Intent Info chain (CustodyChain) at the
@@ -2984,4 +2972,3 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .et .ix-chain { zoom: 1.1; }
 .et-note { margin-top: 12px; font-size: 12.5px; color: var(--warn); }
 @media (max-width: 560px) { .et { padding: 4px 12px 12px; } }
-

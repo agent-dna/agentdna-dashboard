@@ -1,10 +1,9 @@
 import { Fragment, memo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AppWindow, Bot, ExternalLink, FileText, Fingerprint, UserRound, X, type LucideIcon } from "lucide-react";
+import { AppWindow, Bot, ExternalLink, FileText, UserRound, X, type LucideIcon } from "lucide-react";
 import { fetchIntentAuthEvidence, fetchObsPaths, type ObsPath, type ObsPathFilter, type ObsScope } from "../../api/observability";
 import { AgentInfoPanel, AppInfoPanel, UserInfoPanel } from "./ProfilePanels";
 import { IntentDetailPanel } from "./IntentDetailPanel";
-import { EvidencePanel } from "./EvidencePanel";
 import { loadIntentDetail, threatHopCounts } from "./intentDetail";
 import { STATUS_COLOR, STATUS_TINT, nodeId, refOf, worst, type PlaneColumn, type PlaneMode, type PlaneNode, type PlaneStatus } from "./planeModel";
 import { useObsQuery } from "./useObsQuery";
@@ -13,8 +12,8 @@ import type { Chain, Filter } from "./InteractionPlane";
 /**
  * Observability · detail box, the card under the interaction plane.
  *
- * Once something is picked it shows five tabs (User, Agents, Application, Intent Info, Evidence
- * Trail); a tab is enabled once its layer is picked, and the deepest pick's tab opens by default. With
+ * Once something is picked it shows four tabs (User, Agents, Application, Intent Info); a tab
+ * is enabled once its layer is picked, and the deepest pick's tab opens by default. With
  * nothing picked it shows the paths behind a risk filter. It owns its own
  * requests and loading state, so fetching here never re-renders the plane; the plane only
  * hands it the current selection.
@@ -58,14 +57,13 @@ const PATH_PARAM: Record<PlaneColumn, keyof ObsPathFilter> = {
   i: "intentID",
 };
 
-type TabKey = "user" | "agent" | "app" | "intent" | "evidence";
+type TabKey = "user" | "agent" | "app" | "intent";
 /** Each tab and the layer whose pick enables it. */
 const TABS: { key: TabKey; label: string; col: PlaneColumn; icon: LucideIcon }[] = [
   { key: "user", label: "User Info", col: "u", icon: UserRound },
   { key: "agent", label: "Agents Info", col: "a", icon: Bot },
   { key: "app", label: "Application Info", col: "p", icon: AppWindow },
   { key: "intent", label: "Intent Info", col: "i", icon: FileText },
-  { key: "evidence", label: "Evidence Trail", col: "i", icon: Fingerprint },
 ];
 const TAB_OF: Record<PlaneColumn, TabKey> = { u: "user", a: "agent", r: "agent", p: "app", i: "intent" };
 
@@ -100,7 +98,7 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, filter, n
         ? `/agents/${encodeURIComponent(refOf(shownAgent))}`
         : activeTab === "app" && chain.p
           ? `/tools/${encodeURIComponent(NODES[chain.p]?.name || refOf(chain.p))}`
-          : (activeTab === "intent" || activeTab === "evidence") && pickedIntent
+          : activeTab === "intent" && pickedIntent
             ? `/intents/${pickedIntent}`
             : null;
 
@@ -116,8 +114,8 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, filter, n
   const intentDetail = useObsQuery(pickedIntent && `intent-detail:${pickedIntent}`, () =>
     loadIntentDetail(pickedIntent!, NODES[chain.i!]?.name ?? pickedIntent!),
   );
-  // Fetched once the Intent Info or Evidence Trail tab is opened; both read the same entry.
-  const authEvidence = useObsQuery((activeTab === "evidence" || activeTab === "intent") && pickedIntent && `auth-evidence:${pickedIntent}`, () =>
+  // Fetched once the Intent Info tab is opened, for each step's "Credential info".
+  const authEvidence = useObsQuery(activeTab === "intent" && pickedIntent && `auth-evidence:${pickedIntent}`, () =>
     fetchIntentAuthEvidence(pickedIntent!),
   );
   const nameOf = (did: string) => (["u", "a", "p"] as const).map((t) => NODES[nodeId(t, did)]?.name).find(Boolean);
@@ -222,16 +220,6 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, filter, n
           onRetry={intentDetail.retry}
           nameOf={nameOf}
           evidence={authEvidence.data ?? null}
-        />
-      ) : activeTab === "evidence" && pickedIntent ? (
-        <EvidencePanel
-          intentId={pickedIntent}
-          evidence={authEvidence.data ?? null}
-          loading={authEvidence.loading}
-          error={authEvidence.error}
-          onRetry={authEvidence.retry}
-          intent={intentDetail.data ?? null}
-          nameOf={nameOf}
         />
       ) : activeTab === "user" && chain.u ? (
         <UserInfoPanel key={chain.u} did={refOf(chain.u)} name={panelName(chain.u)} />

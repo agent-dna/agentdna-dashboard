@@ -1,7 +1,8 @@
 import { fetchIntentAuthEvidence } from "../api/observability";
 import { useResolveName } from "../context/DirectoryContext";
 import { loadIntentDetail } from "../pages/observability/intentDetail";
-import { CustodyChain, shortId } from "../pages/observability/IntentDetailPanel";
+import { CustodyChain } from "../pages/observability/IntentDetailPanel";
+import { shortId } from "../pages/observability/format";
 import { useObsQuery } from "../pages/observability/useObsQuery";
 
 /**

@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Check, ChevronDown, Copy, ExternalLink, KeyRound, PanelRightOpen, GitBranch, ShieldAlert, ShieldCheck, ShieldQuestion, X } from "lucide-react";
 import type { AuthEvidence, IntentAuthEvidence, ObsInteraction, ObsPathIntent } from "../../api/observability";
-import { EvidenceCheck } from "./EvidencePanel";
+import { EvidenceCheck } from "./EvidenceCheck";
+import { fmtDate, fmtDuration, ms, plural, shortId } from "./format";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useDrawer } from "../../context/DrawerContext";
 import type { Interaction } from "../../types";
@@ -30,27 +31,8 @@ interface Props {
   evidence?: IntentAuthEvidence | null;
 }
 
-export const shortId = (id: string) => (id.length > 18 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id);
 const isHash = (s: string) => /^[0-9a-f]{40,}$/i.test(s.trim());
 const titleCase = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
-export const ms = (iso?: string) => {
-  const t = iso ? new Date(iso).getTime() : NaN;
-  return Number.isNaN(t) ? null : t;
-};
-
-export function fmtDuration(seconds?: number | null) {
-  if (seconds == null || seconds < 0) return "—";
-  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
-  if (seconds < 60) return `${seconds < 10 ? seconds.toFixed(1).replace(/\.0$/, "") : Math.round(seconds)}s`;
-  const m = Math.floor(seconds / 60);
-  return m < 60 ? `${m}m ${String(Math.round(seconds % 60)).padStart(2, "0")}s` : `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
-export function fmtDate(iso?: string) {
-  const t = ms(iso);
-  return t == null ? "—" : new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" });
-}
 
 /** Minutes since `t`, the unit the interaction drawer takes. */
 const minutesAgo = (t: number | null) => (t == null ? 0 : Math.max(0, Math.round((Date.now() - t) / 60000)));
@@ -377,12 +359,6 @@ function Step({
         </button>
         {(hasCred || viewMore) && (
           <div className="ix-step-actions" role="group" aria-label={`Interaction ${n}`}>
-            {viewMore && (
-              <button type="button" className="ix-act" onClick={onOpen}>
-                <PanelRightOpen size={13} />
-                View more
-              </button>
-            )}
             {hasCred && (
               <button
                 type="button"
@@ -403,6 +379,12 @@ function Step({
                 <KeyRound size={13} />
                 <span className="ix-act-label">No credential info</span>
               </span>
+            )}
+            {viewMore && (
+              <button type="button" className="ix-act ix-act-more" onClick={onOpen}>
+                <PanelRightOpen size={13} />
+                View more
+              </button>
             )}
           </div>
         )}

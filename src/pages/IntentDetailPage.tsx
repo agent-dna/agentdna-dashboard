@@ -8,25 +8,20 @@ import { EntityCell } from "../components/EntityCell";
 import { EntityLink } from "../components/EntityLink";
 import { entityPath } from "../lib/entityLinks";
 import { useResolveName, shortDid } from "../context/DirectoryContext";
-import { ScoreBar } from "../components/ScoreBar";
 import { InfoStat } from "../components/InfoStat";
 import { StatusPicker } from "../components/StatusPicker";
 import { IntentEvidenceTrail } from "../components/IntentEvidenceTrail";
-import { fetchIntentAuthEvidence } from "../api/observability";
-import { useObsQuery } from "./observability/useObsQuery";
 import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useIntentThreats } from "../data/hooks";
-import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { useIntentReview } from "../context/IntentReviewContext";
 import { timeAgo, titleOrUnknown } from "../lib/format";
-import { LedgerTable } from "../components/LedgerTable";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
 import { updateIntentStatus, type IntentThreat } from "../data/api";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { branchName, compareInteractionIds, parseInteractionId } from "../lib/interactionBranch";
 import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
 
-type Tab = "interactions" | "evidence" | "participants";
+type Tab = "evidence" | "participants";
 
 export function IntentDetailPage() {
   const { intentId = "" } = useParams<{ intentId: string }>();
@@ -45,15 +40,14 @@ export function IntentDetailPage() {
     return { text: resolved || "—", isDid: false };
   }
   const { refetch: refetchIntentReview } = useIntentReview();
-  const [tab, setTab] = useState<Tab>("interactions");
-  const [interactionsPage, setInteractionsPage] = useState(1);
+  const [tab, setTab] = useState<Tab>("evidence");
+  /** The incident list starts collapsed to its one-line summary. */
+  const [incidentsOpen, setIncidentsOpen] = useState(false);
   const intentState = useIntent(intentId);
-  const authEvidence = useObsQuery(intentId && `auth-evidence:${intentId}`, () => fetchIntentAuthEvidence(intentId));
   const { data: intent, loading } = intentState;
-  const { data: interactionsPaged, loading: interactionsLoading } = useIntentInteractionsPaged(intentId, interactionsPage);
+  // The intent's interactions: the Interactions tile, the incident count's fallback and Export use them.
+  const { data: interactionsPaged } = useIntentInteractionsPaged(intentId, 1);
   const interactions = interactionsPaged.interactions;
-  const interactionsTotal = interactionsPaged.total;
-  const interactionsTotalPages = interactionsPaged.totalPages;
   const { data: participants } = useIntentParticipants(intentId);
   const { data: threats, loading: threatsLoading, error: threatsError } = useIntentThreats(intentId);
   if (loading) {
@@ -98,17 +92,11 @@ export function IntentDetailPage() {
     else openDrawer("tool", p.entity as unknown as Tool);
   };
 
-  // Auth checks per interaction, for the Interactions table's Identity and Result columns.
-  const evidenceById = new Map((authEvidence.data?.interactions ?? []).map((x) => [x.interactionID, x.evidence ?? []]));
 
   // Counted across the whole intent (every interaction), not just the page the table shows.
   const threatCount = threatsLoading || threatsError
     ? interactions.filter((i: { threat: boolean }) => i.threat).length
     : threats.length;
-
-  // Interaction IDs carry their place in the intent's branch tree (`-1`, `-2-b-1`, …) —
-  // list them in tree order rather than however the backend returned the page.
-  const sortedInteractions = [...interactions].sort((a, b) => compareInteractionIds(a.id, b.id));
 
   const participantCols: DataTableColumn<IntentParticipant & { id: string }>[] = [
     {
@@ -140,18 +128,6 @@ export function IntentDetailPage() {
         ) : (
           <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>
         ),
-    },
-    {
-      key: "score",
-      label: "Reliability",
-      align: "right",
-      render: (r) => {
-        if (r.count <= 0) {
-          return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
-        }
-        const pct = Math.max(0, Math.round((((r.count - r.threats) / r.count) * 100) * 100) / 100);
-        return <ScoreBar value={pct} />;
-      },
     },
     {
       key: "actions",
@@ -315,19 +291,29 @@ export function IntentDetailPage() {
         </div>
 
         {threatCount > 0 && (
-          <div className="it-threats">
-            <div className="it-threats-head">
+          <div className={`it-threats${incidentsOpen ? " open" : ""}`}>
+            <button
+              type="button"
+              className="it-threats-head"
+              aria-expanded={incidentsOpen}
+              aria-controls="intent-incidents"
+              onClick={() => setIncidentsOpen((o) => !o)}
+            >
               <Icon name="shield" size={15} />
-              <span>
-                {threatCount} incident{threatCount === 1 ? "" : "s"} detected in this intent
+              <span className="it-threats-count">
+                {threatCount} incident{threatCount === 1 ? "" : "s"} detected
               </span>
-            </div>
-            {threatsLoading ? (
+              <span className="it-threats-toggle">
+                {incidentsOpen ? "Hide details" : "Show details"}
+                <Icon name="chevronDown" size={13} />
+              </span>
+            </button>
+            {!incidentsOpen ? null : threatsLoading ? (
               <div className="it-threats-note">Loading incident details…</div>
             ) : threatsError ? (
               <div className="it-threats-note">Couldn't load threat details: {threatsError.message}</div>
             ) : (
-              <ol className="it-threats-list">
+              <ol id="intent-incidents" className="it-threats-list">
                 {[...threats]
                   .sort((a, b) => compareInteractionIds(a.interactionID, b.interactionID))
                   .map((t) => (
@@ -353,25 +339,10 @@ export function IntentDetailPage() {
           active={tab}
           onChange={(k) => setTab(k as Tab)}
           tabs={[
-            { key: "interactions", label: "Interactions", count: interactionsTotal },
             { key: "evidence", label: "Evidence trail" },
             { key: "participants", label: "Agents & Apps", count: participantRows.length },
           ]}
         />
-
-        {tab === "interactions" && (
-          <>
-            <LedgerTable
-              rows={sortedInteractions}
-              emptyText={interactionsLoading ? "Loading…" : "No interactions recorded for this intent yet."}
-              onView={(r) => openDrawer("interaction", r)}
-              // Every row here belongs to this intent — the column repeats the page.
-              showIntent={false}
-              evidenceOf={(id) => (authEvidence.data ? evidenceById.get(id) ?? [] : undefined)}
-            />
-            <Pagination page={interactionsPage} totalPages={interactionsTotalPages} total={interactionsTotal} pageSize={10} loading={interactionsLoading} onChange={setInteractionsPage} />
-          </>
-        )}
 
         {tab === "evidence" && <IntentEvidenceTrail intentId={intent.id} />}
 
@@ -419,11 +390,10 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /** One threat in the intent header: what it was, its code, which hop raised it, and the raw message. */
+/** One incident, shown in full: the list it sits in is itself the collapsed view. */
 function ThreatRow({ t }: { t: IntentThreat }) {
-  const [open, setOpen] = useState(false);
   const d = t.detail;
   const message = d?.message || "";
-  const long = message.length > 220;
   const hop = [t.fromName || shortDid(t.from), t.toName || shortDid(t.to)].join(" → ");
   const pos = parseInteractionId(t.interactionID);
   return (
@@ -438,14 +408,7 @@ function ThreatRow({ t }: { t: IntentThreat }) {
       </div>
       {d?.description && <div className="it-threat-desc">{d.description}</div>}
       {message ? (
-        <>
-          <div className={`it-threat-msg${open || !long ? "" : " clamped"}`}>{message}</div>
-          {long && (
-            <button type="button" className="it-threat-more" onClick={() => setOpen((o) => !o)}>
-              {open ? "Show less" : "Show full message"}
-            </button>
-          )}
-        </>
+        <div className="it-threat-msg">{message}</div>
       ) : (
         !d && <div className="it-threat-desc">{t.error ?? "No details for this incident."}</div>
       )}
