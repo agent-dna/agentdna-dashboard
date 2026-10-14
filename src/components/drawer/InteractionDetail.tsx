@@ -9,6 +9,8 @@ import { useThreatByID } from "../../data/hooks";
 import { timeAgo, interactionRawData, titleOrUnknown } from "../../lib/format";
 import type { Interaction } from "../../types";
 import { authAccepted, authStatusLabel, fetchIntentAuthEvidence } from "../../api/observability";
+import { parseDestination } from "../../lib/destination";
+import { DestinationLogo } from "../DestinationLogo";
 import { EvidenceCheck } from "../../pages/observability/EvidenceCheck";
 import { useObsQuery } from "../../pages/observability/useObsQuery";
 
@@ -61,8 +63,22 @@ export function InteractionDetail({ interaction: i }: Props) {
   const target = pickName(i.target.id, i.target.name);
   const targetKind = target.kind || i.targetType;
   const isSelfInteraction = i.initiator.id === i.target.id;
-  // When an app sent this hop, where it actually went: the destinations of its onward calls.
-  const destinations = initiator.kind !== "agent" && initiator.kind !== "user" ? i.backendCalls ?? [] : [];
+  // Where this hop's calls went (from its auth evidence), one entry per destination: the
+  // client_out / server_in records of one call share it. A failed check on any of them wins.
+  const destinations = Object.values(
+    (i.backendCalls ?? []).reduce<Record<string, NonNullable<Interaction["backendCalls"]>[number]>>((acc, c) => {
+      const seen = acc[c.destination];
+      acc[c.destination] = !seen
+        ? c
+        : {
+            ...seen,
+            authMethod: seen.authMethod || c.authMethod,
+            credentialID: seen.credentialID || c.credentialID,
+            authStatus: !authAccepted(c.authStatus) ? c.authStatus : seen.authStatus,
+          };
+      return acc;
+    }, {}),
+  );
   return (
     <>
       <div className="drawer-head">
@@ -181,18 +197,31 @@ export function InteractionDetail({ interaction: i }: Props) {
               <>
                 <div className="k">Destination</div>
                 <div className="v ixd-dests">
-                  {destinations.map((d, k) => (
-                    <div key={k} className="ixd-dest">
-                      <span className="ixd-dest-v" title={d.destination}>{d.destination}</span>
-                      <span className="ixd-dest-meta">
-                        {d.authMethod && <span className="ixd-dest-tag">{authMethodLabel(d.authMethod)}</span>}
-                        {d.authStatus && (
-                          <span className={`ixd-dest-tag${authAccepted(d.authStatus) ? "" : " bad"}`}>{authStatusLabel(d.authStatus)}</span>
-                        )}
-                        {d.credentialID && <span className="ixd-dest-cred" title={d.credentialID}>{truncateId(d.credentialID)}</span>}
-                      </span>
-                    </div>
-                  ))}
+                  {destinations.map((d) => {
+                    const dest = parseDestination(d.destination);
+                    return (
+                      <div key={d.destination} className="ixd-dest" title={d.destination}>
+                        <DestinationLogo entity={dest.entity} />
+                        <div className="ixd-dest-body">
+                          <span className="ixd-dest-name">{dest.name}</span>
+                          <span className="ixd-dest-url">
+                            {dest.method && <span className="ixd-dest-method">{dest.method}</span>}
+                            <span className="ixd-dest-path">
+                              {dest.entity === "local" || dest.entity === "web" ? `${dest.host}${dest.port ? `:${dest.port}` : ""}` : ""}
+                              {dest.path || (dest.entity === "local" || dest.entity === "web" ? "" : dest.host)}
+                            </span>
+                          </span>
+                          <span className="ixd-dest-meta">
+                            {d.authMethod && <span className="ixd-dest-tag">{authMethodLabel(d.authMethod)}</span>}
+                            {d.authStatus && (
+                              <span className={`ixd-dest-tag${authAccepted(d.authStatus) ? "" : " bad"}`}>{authStatusLabel(d.authStatus)}</span>
+                            )}
+                            {d.credentialID && <span className="ixd-dest-cred" title={d.credentialID}>{truncateId(d.credentialID)}</span>}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}

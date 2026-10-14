@@ -17,8 +17,30 @@ interface IntentInfo {
   status?: string;
   reviewStatus?: string;
   threatDetected?: boolean;
-  interactions?: (Partial<ObsInteraction> & { rawData?: unknown; authEvidence?: { backendCalls?: BackendCall[] } })[];
+  interactions?: (Partial<ObsInteraction> & { rawData?: unknown; authEvidence?: unknown })[];
 }
+
+/**
+ * The calls an interaction's `authEvidence` says it made, with their destinations. It comes as
+ * an array of evidence records (each with its own `destination`; empty when nothing was
+ * observed) or, from older servers, as `{ backendCalls: [...] }`. Entries without a destination
+ * are dropped; the drawer folds repeats (the client_out / server_in pair of one call).
+ */
+function destinationCalls(ev: unknown): BackendCall[] {
+  const list = Array.isArray(ev)
+    ? ev
+    : ev && typeof ev === "object" && Array.isArray((ev as { backendCalls?: unknown }).backendCalls)
+      ? (ev as { backendCalls: unknown[] }).backendCalls
+      : [];
+  return list.flatMap((c) => {
+    const r = (c ?? {}) as Record<string, unknown>;
+    const destination = typeof r.destination === "string" ? r.destination.trim() : "";
+    if (!destination) return [];
+    const str = (k: string) => (typeof r[k] === "string" && r[k] ? (r[k] as string) : undefined);
+    return [{ destination, authMethod: str("authMethod"), credentialID: str("credentialID"), authStatus: str("authStatus") }];
+  });
+}
+const withCalls = (calls: BackendCall[]) => (calls.length ? { backendCalls: calls } : {});
 
 /**
  * The picked intent's detail, from `/intent-info` (what the Intent page uses). The endpoint
@@ -42,7 +64,7 @@ export async function loadIntentDetail(intentID: string, title: string): Promise
     threatID: x.threatID ?? "",
     time: x.time ?? "",
     raw: x.rawData,
-    ...(x.authEvidence?.backendCalls?.length ? { backendCalls: x.authEvidence.backendCalls } : {}),
+    ...withCalls(destinationCalls(x.authEvidence)),
   })).sort((a, b) => compareInteractionIds(a.interactionID, b.interactionID));
   // Every branch shares the intent's first block, so its message is the intent's title.
   const first = interactions.find((x) => parseInteractionId(x.interactionID)?.path.join("-") === "1");
