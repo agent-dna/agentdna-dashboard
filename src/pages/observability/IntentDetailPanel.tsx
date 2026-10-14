@@ -222,6 +222,7 @@ export function CustodyChain({
       threatID: s.threatID || undefined,
       raw: s.raw,
       ...(s.message ? { payload: s.message } : {}),
+      ...(s.backendCalls ? { backendCalls: s.backendCalls } : {}),
     };
     openDrawer("interaction", ix);
   };

@@ -81,6 +81,11 @@ export interface Interaction {
    * `rawData`; earlier envelopes nest in `parent_envelope`). Shown as the interaction's raw data.
    */
   raw?: unknown;
+  /**
+   * Onward calls the sending app made while handling this hop (/intent-info's
+   * `authEvidence.backendCalls`); the drawer shows their destinations when the sender is an app.
+   */
+  backendCalls?: { destination: string; authMethod?: string; credentialID?: string; authStatus?: string }[];
 }
 
 export interface TimeSeries {

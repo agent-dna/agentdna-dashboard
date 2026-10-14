@@ -1,5 +1,5 @@
 import { getIntentInfo } from "../../data/api";
-import type { ObsInteraction, ObsPathIntent } from "../../api/observability";
+import type { BackendCall, ObsInteraction, ObsPathIntent } from "../../api/observability";
 import { compareInteractionIds, parseInteractionId } from "../../lib/interactionBranch";
 
 /** GET /intent-info: the intent's summary and every interaction in its chain. */
@@ -17,7 +17,7 @@ interface IntentInfo {
   status?: string;
   reviewStatus?: string;
   threatDetected?: boolean;
-  interactions?: (Partial<ObsInteraction> & { rawData?: unknown })[];
+  interactions?: (Partial<ObsInteraction> & { rawData?: unknown; authEvidence?: { backendCalls?: BackendCall[] } })[];
 }
 
 /**
@@ -42,6 +42,7 @@ export async function loadIntentDetail(intentID: string, title: string): Promise
     threatID: x.threatID ?? "",
     time: x.time ?? "",
     raw: x.rawData,
+    ...(x.authEvidence?.backendCalls?.length ? { backendCalls: x.authEvidence.backendCalls } : {}),
   })).sort((a, b) => compareInteractionIds(a.interactionID, b.interactionID));
   // Every branch shares the intent's first block, so its message is the intent's title.
   const first = interactions.find((x) => parseInteractionId(x.interactionID)?.path.join("-") === "1");

@@ -169,6 +169,19 @@ export interface ObsIntentsPage extends Paged {
   intentsList: ObsIntent[];
 }
 
+/**
+ * A call an app made onward while handling an interaction (/intent-info's
+ * `authEvidence.backendCalls`): where it went and how it authenticated.
+ */
+export interface BackendCall {
+  /** e.g. "POST https://learn.microsoft.com/api/mcp", or just a host. */
+  destination: string;
+  authMethod?: string;
+  credentialID?: string;
+  /** "accepted", "rejected" or "unknown". */
+  authStatus?: string;
+}
+
 export interface ObsInteraction {
   interactionID: string;
   from: string;
@@ -185,6 +198,8 @@ export interface ObsInteraction {
   time: string;
   /** The sender's original envelope (from /intent-info's `rawData`), when the source has it. */
   raw?: unknown;
+  /** Onward calls the sending app made (/intent-info's `authEvidence.backendCalls`). */
+  backendCalls?: BackendCall[];
 }
 
 /** The intent on a path row. The detail fields come back when the paths call is filtered by `intentID`. */

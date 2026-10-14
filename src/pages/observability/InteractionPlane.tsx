@@ -766,6 +766,8 @@ export function InteractionPlane() {
               const tagged = e.st === "flagged" && a.t !== "a";
               const muted = vis === "muted";
               if (offscreen) return null;
+              // Lines into the intent column carry no count; the line's colour and dash still show its status.
+              if (nodeAt(e.to)?.t === "i") return null;
               if (e.st === "allowed" && e.n < PILL_THRESHOLD && vis !== "lit") {
                 return (
                   <div key={e.id} className="ip-dot" style={{ left: cx, top: my, opacity: muted ? 0.25 : 1 }} {...edgeHover(e.id)} />
@@ -856,7 +858,7 @@ export function InteractionPlane() {
                   <div className="ip-glyph ip-glyph-agent"><Bot size={20} strokeWidth={1.8} /></div>
                   <div className="ip-node-text">
                     <div className="ip-node-name ip-display">{n.name}</div>
-                    <div className="ip-node-sub ip-mono">{n.sub}</div>
+                    {n.sub && <div className="ip-node-sub ip-mono">{n.sub}</div>}
                   </div>
                 </div>
               ))}

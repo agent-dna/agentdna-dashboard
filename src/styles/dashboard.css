@@ -2973,3 +2973,14 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .et .ix-chain { zoom: 1.1; }
 .et-note { margin-top: 12px; font-size: 12.5px; color: var(--warn); }
 @media (max-width: 560px) { .et { padding: 4px 12px 12px; } }
+
+/* Interaction drawer: where an app's hop actually went (its onward calls' destinations). */
+.ixd-dests { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ixd-dest { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ixd-dest + .ixd-dest { padding-top: 8px; border-top: 1px solid var(--line); }
+.ixd-dest-v { font: 500 12.5px/1.45 var(--font-mono); color: var(--fg); overflow-wrap: anywhere; }
+.ixd-dest-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ixd-dest-tag { font-size: 11px; padding: 1px 7px; border-radius: 5px; background: var(--bg-2); color: var(--fg-dim); }
+.ixd-dest-tag.bad { background: rgba(220,38,38,.08); color: var(--threat); }
+.ixd-dest-cred { font: 11px var(--font-mono); color: var(--fg-muted); }
+

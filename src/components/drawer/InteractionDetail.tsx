@@ -8,7 +8,7 @@ import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { useThreatByID } from "../../data/hooks";
 import { timeAgo, interactionRawData, titleOrUnknown } from "../../lib/format";
 import type { Interaction } from "../../types";
-import { fetchIntentAuthEvidence } from "../../api/observability";
+import { authAccepted, authStatusLabel, fetchIntentAuthEvidence } from "../../api/observability";
 import { EvidenceCheck } from "../../pages/observability/EvidenceCheck";
 import { useObsQuery } from "../../pages/observability/useObsQuery";
 
@@ -61,6 +61,8 @@ export function InteractionDetail({ interaction: i }: Props) {
   const target = pickName(i.target.id, i.target.name);
   const targetKind = target.kind || i.targetType;
   const isSelfInteraction = i.initiator.id === i.target.id;
+  // When an app sent this hop, where it actually went: the destinations of its onward calls.
+  const destinations = initiator.kind !== "agent" && initiator.kind !== "user" ? i.backendCalls ?? [] : [];
   return (
     <>
       <div className="drawer-head">
@@ -175,6 +177,25 @@ export function InteractionDetail({ interaction: i }: Props) {
                 )}
               </>
             )}
+            {destinations.length > 0 && (
+              <>
+                <div className="k">Destination</div>
+                <div className="v ixd-dests">
+                  {destinations.map((d, k) => (
+                    <div key={k} className="ixd-dest">
+                      <span className="ixd-dest-v" title={d.destination}>{d.destination}</span>
+                      <span className="ixd-dest-meta">
+                        {d.authMethod && <span className="ixd-dest-tag">{authMethodLabel(d.authMethod)}</span>}
+                        {d.authStatus && (
+                          <span className={`ixd-dest-tag${authAccepted(d.authStatus) ? "" : " bad"}`}>{authStatusLabel(d.authStatus)}</span>
+                        )}
+                        {d.credentialID && <span className="ixd-dest-cred" title={d.credentialID}>{truncateId(d.credentialID)}</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
             <div className="k">Intent ID</div>
             <div className="v" style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {i.intent?.id ? (
@@ -287,6 +308,8 @@ const KIND_LABEL: Record<string, string> = { agent: "Agent", tool: "App", user: 
 const KIND_ICON = { agent: "agents", tool: "apps", user: "user" } as const;
 
 const capitalize = (v: string) => (v ? v[0].toUpperCase() + v.slice(1) : v);
+/** "api_key" → "Api key", "none" → "No auth". */
+const authMethodLabel = (m: string) => (m.toLowerCase() === "none" ? "No auth" : capitalize(m.replace(/_/g, " ")));
 
 /** One end of the hop: what it is, which end, and its name, with the DID on hover. */
 function Party({ role, name, kind, did }: { role: string; name: string; kind?: string; did: string }) {
