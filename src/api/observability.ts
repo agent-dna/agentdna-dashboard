@@ -342,6 +342,15 @@ export const authAccepted = (status?: string) => {
   return s === "accepted" || s === "ok";
 };
 
+/** How an auth status is coloured: accepted normal, unknown (not seen) yellow, rejected or anything else red. */
+export type AuthTone = "ok" | "warn" | "bad";
+export function authTone(status?: string): AuthTone {
+  const s = (status || "").toLowerCase();
+  if (s === "accepted" || s === "ok") return "ok";
+  if (s === "unknown" || !s) return "warn";
+  return "bad";
+}
+
 /** How an auth status reads in the UI. */
 export function authStatusLabel(status?: string): string {
   const s = (status || "").toLowerCase();

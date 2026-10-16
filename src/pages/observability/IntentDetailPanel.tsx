@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Check, ChevronDown, Copy, ExternalLink, KeyRound, PanelRightOpen, GitBranch, ShieldAlert, ShieldCheck, ShieldQuestion, X } from "lucide-react";
 import { authAccepted, type AuthEvidence, type IntentAuthEvidence, type ObsInteraction, type ObsPathIntent } from "../../api/observability";
-import { EvidenceCheck } from "./EvidenceCheck";
+import { EvidenceTable } from "./EvidenceTable";
 import { fmtDate, fmtDuration, ms, plural, shortId } from "./format";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useDrawer } from "../../context/DrawerContext";
@@ -399,9 +399,7 @@ function Step({
       </div>
       {hasCred && credOpen && (
         <div className="ix-cred">
-          <ul className="ev-checks">
-            {evidence.map((e, k) => <EvidenceCheck key={e.requestID || k} e={e} at={s.time} flat />)}
-          </ul>
+          <EvidenceTable checks={evidence} name={(did) => name(did)} />
         </div>
       )}
     </li>
