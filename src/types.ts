@@ -53,6 +53,8 @@ export interface Intent {
   appsInteracted?: EntityRef[];
   /** Human review state — separate from the pipeline `status` field. Defaults to "Unreviewed" server-side. */
   reviewStatus: IntentReviewStatus;
+  /** DID of the participant that executed the intent (/intent-info's `executor`); may differ from the initiator. */
+  executor?: string;
 }
 
 export type IntentReviewStatus = "Unreviewed" | "Acknowledged" | "Flagged";

@@ -353,25 +353,28 @@ export function groupParallelRounds(steps: FlowStep[]): number[][] {
 export const PROVENANCE_ID = "nd_provenance";
 
 /**
- * Every flow terminates in the provenance layer — and the seal is always
- * drawn from the intent's initiator, never from whichever node happened to
- * be holding the envelope on the last (or a blocked) hop. The envelope is
- * the initiator's the whole time; the chain in between is just delegation.
- * That's true whether the flow completed cleanly or was halted by a threat —
- * the seal still runs from the initiator, just colored red instead of green.
+ * Every flow terminates in the provenance layer. The seal is drawn from the intent's executor
+ * (/intent-info's `executor`), which may be the initiator or any other participant. Only when
+ * the executor isn't known or isn't in the flow does it fall back to the initiator. It never
+ * comes from whichever node happened to hold the envelope on the last (or a blocked) hop, and
+ * it runs the same way whether the flow completed or was halted by a threat.
  *
  * The node is positioned directly rather than by the layout pass — it isn't a
  * participant in the call chain, it's the ledger the chain drops into, so it
  * sits centred beneath the graph instead of taking a depth column.
  */
-function attachProvenance(steps: FlowStep[], nodes: FlowNode[]): { node: FlowNode | null; sealEdges: SealEdge[] } {
+function attachProvenance(
+  steps: FlowStep[],
+  nodes: FlowNode[],
+  executorDid?: string,
+): { node: FlowNode | null; sealEdges: SealEdge[] } {
   if (steps.length === 0) return { node: null, sealEdges: [] };
 
   const last = steps[steps.length - 1];
-  // Prefer the explicit human node; a purely agent-to-agent chain (no human
-  // in it) falls back to whoever sent the very first hop. Same helper the layout
-  // uses, so the seal always drops from the node sitting in the first column.
-  const initiatorId = flowOriginId(nodes, steps) ?? last?.to;
+  const executorId = executorDid ? nodes.find((n) => n.did === executorDid)?.id : undefined;
+  // Without a known executor: prefer the explicit human node; a purely agent-to-agent chain
+  // (no human in it) falls back to whoever sent the very first hop.
+  const initiatorId = executorId ?? flowOriginId(nodes, steps) ?? last?.to;
   const anyBlocked = steps.some((s) => s.verdict === "blocked");
 
   const sealEdges: SealEdge[] = initiatorId
@@ -654,7 +657,7 @@ export function buildFlowFromIntent({ intent, interactions, resolve }: BuildArgs
   }));
 
   // Appended after layout so the ledger keeps its fixed position.
-  const { node: provNode, sealEdges } = attachProvenance(steps, nodes);
+  const { node: provNode, sealEdges } = attachProvenance(steps, nodes, intent.executor);
   if (provNode) nodes.push(provNode);
 
   return {
@@ -968,7 +971,7 @@ export function buildFlowFromDiagram(intent: Intent, diagram: IntentDiagram): Fl
   }));
 
   // Appended after layout so the ledger keeps its fixed position.
-  const { node: provNode, sealEdges } = attachProvenance(steps, nodes);
+  const { node: provNode, sealEdges } = attachProvenance(steps, nodes, intent.executor);
   if (provNode) nodes.push(provNode);
 
   const flowTrace: FlowTrace = {

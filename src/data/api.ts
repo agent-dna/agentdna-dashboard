@@ -860,6 +860,8 @@ export interface ApiIntentInfo {
   agentsCount?: number;
   toolsCount?: number;
   interactionsCount?: number;
+  /** DID of the participant that executed the intent; can be the initiator or anyone else in it. */
+  executor?: string;
   /** Every interaction of the intent, oldest first — never paged. */
   interactions?: ApiInteraction[];
 }
@@ -960,7 +962,7 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     }
   }
 
-  return mapIntent({
+  const intent = mapIntent({
     intentID: r.intentID,
     initiatorDID: ownerDID,
     initiatorName: ownerName,
@@ -973,6 +975,7 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     interactionsCount: r.interactionsCount ?? allInteractions.length,
     reviewStatus: r.reviewStatus,
   });
+  return r.executor ? { ...intent, executor: r.executor } : intent;
 }
 
 interface PagedAgentInteractions {
