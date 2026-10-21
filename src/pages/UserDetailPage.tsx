@@ -27,7 +27,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   const userId = (isAdminPage ? params.adminId : params.userId) ?? "";
   const navigate = useNavigate();
   // Users go back to the Users list; there is no list of admins, so an admin's page goes back.
-  const goBack = () => (isAdminPage ? navigate(-1) : navigate("/requests", { state: { tab: "users" } }));
+  const goBack = () => (isAdminPage ? navigate(-1) : navigate("/users"));
   const backLabel = isAdminPage ? "Back" : "Users";
   const { openDrawer } = useDrawer();
 
@@ -83,7 +83,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg)", marginBottom: 4 }}>API endpoint required</div>
               <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.6, maxWidth: 500 }}>
-                This page is scaffolded and ready. Once the <code style={{ fontFamily: "var(--font-mono)", fontSize: 12, background: "var(--surface-raised)", padding: "1px 5px", borderRadius: 4 }}>GET /dashboard/v1/user-info</code> endpoint is live, the full user profile, activity metrics and interaction history will appear here.
+                PAGE NOT FOUND
               </div>
             </div>
           </div>
