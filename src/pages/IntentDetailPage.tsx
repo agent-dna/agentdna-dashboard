@@ -30,14 +30,13 @@ export function IntentDetailPage() {
   const resolve = useResolveName();
 
   /**
-   * Owner label: a real display name when the backend or the directory has one, otherwise the
-   * initiator's full DID (not the "did:abc…1234" short form, and never a bare "—").
+   * Owner label: /intent-info's initiatorName, otherwise its full initiatorDID (not the
+   * "did:abc…1234" short form, and never a bare "—").
    */
   function ownerLabel(initiator: { id: string; name: string }): { text: string; isDid: boolean } {
-    const resolved = resolve(initiator.id, initiator.name).name;
-    const unresolved = !resolved || resolved === "—" || resolved === shortDid(initiator.id);
-    if (unresolved && initiator.id) return { text: initiator.id, isDid: true };
-    return { text: resolved || "—", isDid: false };
+    const named = !!initiator.name && initiator.name !== shortDid(initiator.id);
+    if (!named && initiator.id) return { text: initiator.id, isDid: true };
+    return { text: initiator.name || "—", isDid: false };
   }
   const { refetch: refetchIntentReview } = useIntentReview();
   const [tab, setTab] = useState<Tab>("evidence");

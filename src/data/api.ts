@@ -932,13 +932,9 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
   // /intent-info carries every interaction, so participant counts come from it directly.
   const allInteractions = intentInfoInteractions(r);
 
-  // "Owner" is the sender of the intent's very first interaction, not the
-  // top-level initiatorDID/initiatorName — those two can disagree (e.g. the
-  // human user who kicked things off vs. the first agent in the chain), and
-  // the Intent page's Owner card should reflect who actually triggered it.
-  const firstInteraction = r.interactions?.[0];
-  const ownerDID = firstInteraction?.from || r.initiatorDID;
-  const ownerName = firstInteraction?.fromName || r.initiatorName;
+  // "Owner" is the intent's initiator exactly as /intent-info reports it.
+  const ownerDID = r.initiatorDID;
+  const ownerName = r.initiatorName;
 
   // Wait for the org directory before classifying — otherwise a request that
   // races ahead of DirectoryProvider's initial load falls back to the
