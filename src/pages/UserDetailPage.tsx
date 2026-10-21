@@ -83,7 +83,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg)", marginBottom: 4 }}>API endpoint required</div>
               <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.6, maxWidth: 500 }}>
-                PAGE NOT FOUND
+                PAGE NOT FOUND 
               </div>
             </div>
           </div>
