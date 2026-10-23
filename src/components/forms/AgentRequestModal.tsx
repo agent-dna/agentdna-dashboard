@@ -166,8 +166,8 @@ export function AgentRequestModal({ open, editTarget, isAdmin, onClose, onSucces
             </div>
             <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.55, maxWidth: 360 }}>
               {isAdmin
-                ? "The request is now pending. Approve it from the Requests page to deploy the agent."
-                : "An admin needs to review and approve your request. You'll see status updates on the Requests page."}
+                ? "The request is now pending. Approve it from the Approvals page to deploy the agent."
+                : "An admin needs to review and approve your request. You'll see status updates on the Approvals page."}
             </div>
           </div>
         </div>

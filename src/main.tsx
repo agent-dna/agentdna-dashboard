@@ -17,6 +17,7 @@ import { IntentDetailPage } from "./pages/IntentDetailPage";
 import { InteractionsPage } from "./pages/InteractionsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RequestsPage } from "./pages/RequestsPage";
+import { UsersPage } from "./pages/UsersPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { LandingPage } from "./pages/LockedPage";
 // import { LandingPage } from "./pages/LandingPage";
@@ -56,9 +57,11 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="agents/:agentId" element={<AgentDetailPage />} />
                 <Route path="agents/:agentId/tools/:toolId" element={<AgentToolDetailPage />} />
                 <Route path="tools/:toolId" element={<ToolDetailPage />} />
+                <Route path="users" element={<UsersPage />} />
                 <Route path="users/:userId" element={<UserDetailPage />} />
                 <Route path="admins/:adminId" element={<UserDetailPage kind="admin" />} />
-                <Route path="requests" element={<RequestsPage />} />
+                <Route path="approvals" element={<RequestsPage />} />
+                <Route path="requests" element={<Navigate to="/approvals" replace />} />
                 <Route path="graph" element={<FlowPage />} />
                 <Route path="graph/:intentId" element={<FlowPage />} />
                 <Route path="interactions" element={<InteractionsPage />} />
