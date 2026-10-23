@@ -75,8 +75,8 @@ export interface TraceHop {
   op: string;
   checks: AuthEvidence[];
   cred: null | {
-    /** "Reused" when a credential on this hop was already presented on an earlier one. */
-    label: "Credential" | "Reused";
+    /** "Forwarded" when a credential on this hop was already presented on an earlier one. */
+    label: "Credential" | "Forwarded";
     tone: AuthTone;
     reusedFrom?: number;
   };
@@ -223,7 +223,7 @@ export function buildTrace(flow: Flow, ixById: Map<string, Interaction>): TraceM
       op: opOf(ix),
       checks,
       cred: checks.some(hasCredential)
-        ? { label: reusedFrom != null ? "Reused" : "Credential", tone: worstAuthTone(checks.filter(hasCredential).map((c) => c.authStatus)), reusedFrom }
+        ? { label: reusedFrom != null ? "Forwarded" : "Credential", tone: worstAuthTone(checks.filter(hasCredential).map((c) => c.authStatus)), reusedFrom }
         : null,
       outside,
       onward,

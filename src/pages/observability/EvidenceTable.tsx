@@ -177,12 +177,23 @@ export function EvidenceTable({ checks, tokens, name, to }: {
     const d = parseDestination(raw);
     return { label: d.entity === "web" ? d.host || raw : d.name, raw };
   };
-  const rows = [...checks].sort((a, b) => (ms(a.observedAt) ?? 0) - (ms(b.observedAt) ?? 0));
+  const seen = [...checks].sort((a, b) => (ms(a.observedAt) ?? 0) - (ms(b.observedAt) ?? 0));
+  // A credential seen as sent (client_out) and as received (server_in) with nothing else different
+  // is one row: the first, caller-side one, which also carries the right token activity.
+  const sameAs = (e: AuthEvidence) =>
+    [e.credentialID, e.keyVersion, e.authMethod, e.identityID, e.authStatus, destinationOf(e).label].join("\u0000");
+  const rank = (e: AuthEvidence) => SOURCE_ORDER[(e.source || "").toLowerCase()] ?? 9;
+  const rows = seen.filter((e) => {
+    // Of identical checks, keep the caller-side one, whatever order their clocks put them in.
+    const twins = seen.filter((x) => sameAs(x) === sameAs(e));
+    const keep = twins.reduce((best, x) => (rank(x) < rank(best) ? x : best), twins[0]);
+    return keep === e;
+  });
   // When each request was seen: its first check's time (rows are already in that order). Checks
   // without a request ID count on their own, so their time still shows.
   const times: { key: string; iso: string; label: string }[] = [];
   const seenReq = new Set<string>();
-  rows.forEach((e, k) => {
+  seen.forEach((e, k) => {
     const key = e.requestID || `row${k}`;
     if (seenReq.has(key)) return;
     seenReq.add(key);

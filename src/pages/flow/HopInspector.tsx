@@ -275,7 +275,7 @@ function CredentialTab({ model, hop, c }: { model: TraceModel; hop: TraceHop; c:
   const env = envelopeOf(hop);
   const tone = hop.cred!.tone;
   const flags = [
-    { label: hop.cred!.label === "Reused" ? "Reused" : "Credential use", cls: "warn" },
+    { label: hop.cred!.label === "Forwarded" ? "Forwarded" : "Credential use", cls: "warn" },
     ...(tone === "bad" ? [{ label: "Rejected", cls: "bad" }] : tone === "warn" ? [{ label: "Not seen", cls: "warn" }] : []),
   ];
 
