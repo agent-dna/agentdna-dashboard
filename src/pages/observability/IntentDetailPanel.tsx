@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Check, ChevronDown, Copy, ExternalLink, KeyRound, PanelRightOpen, GitBranch, ShieldAlert, ShieldCheck, ShieldQuestion, X } from "lucide-react";
-import { authAccepted, type AuthEvidence, type IntentAuthEvidence, type ObsInteraction, type ObsPathIntent } from "../../api/observability";
-import { EvidenceTable } from "./EvidenceTable";
+import { worstAuthTone, type AuthEvidence, type IntentAuthEvidence, type ObsInteraction, type ObsPathIntent } from "../../api/observability";
+import { StepEvidence, buildTokenTrail, type TokenTrail } from "./EvidenceTable";
+import { DestinationLogo } from "../../components/DestinationLogo";
+import { parseDestination, type ParsedDestination } from "../../lib/destination";
 import { fmtDate, fmtDuration, ms, plural, shortId } from "./format";
 import { useResolveName } from "../../context/DirectoryContext";
 import { useDrawer } from "../../context/DrawerContext";
@@ -29,6 +31,8 @@ interface Props {
   nameOf: (did: string) => string | undefined;
   /** `/intent-auth-evidence`, when loaded: each step with evidence gets "Credential info". */
   evidence?: IntentAuthEvidence | null;
+  /** Shows "View flow"; off on the flow page itself. Defaults to true. */
+  showFlowLink?: boolean;
 }
 
 const isHash = (s: string) => /^[0-9a-f]{40,}$/i.test(s.trim());
@@ -49,17 +53,19 @@ function fmtAgo(iso?: string) {
 
 const REVIEW_TONE: Record<string, string> = { Flagged: "threat", Acknowledged: "safe" };
 
-export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, onClose, nameOf, evidence }: Props) {
+export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, onClose, nameOf, evidence, showFlowLink = true }: Props) {
   const navigate = useNavigate();
   const resolve = useResolveName();
   const name = (did: string, given?: string) => (given && !given.includes("…") ? given : nameOf(did) || resolve(did).name || shortId(did));
 
   const actions = (
     <div className="ix-actions">
-      <button type="button" className="btn" onClick={() => navigate(`/graph/${intentId}`)}>
-        <GitBranch size={14} />
-        View flow
-      </button>
+      {showFlowLink && (
+        <button type="button" className="btn" onClick={() => navigate(`/graph/${intentId}`)}>
+          <GitBranch size={14} />
+          View flow
+        </button>
+      )}
       <button type="button" className="btn primary" onClick={() => navigate(`/intents/${intentId}`)}>
         Open intent <ExternalLink size={13} />
       </button>
@@ -94,7 +100,6 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
   const steps = intent.interactions ?? [];
   const flagged = steps.filter((s) => s.threat).length;
   const breached = !!intent.threatDetected || flagged > 0;
-  const signed = steps.filter((s) => !!s.signature).length;
   const totalIx = intent.interactionsCount ?? steps.length;
   const initiator = intent.initiatorDID ? name(intent.initiatorDID, intent.initiatorName) : intent.initiatorName || "Unknown initiator";
 
@@ -157,23 +162,6 @@ export function IntentDetailPanel({ intentId, intent, loading, error, onRetry, o
             </div>
             <Fact k="Runtime">{fmtDuration(intent.runtimeSeconds)}</Fact>
           </FactGroup>
-
-          <FactGroup heading="Evidence">
-            <Fact k="Signed interactions">
-              <span className={signed === steps.length && steps.length > 0 ? "ix-ok" : "ix-warn"}>
-                {steps.length ? `${signed} of ${steps.length}` : "—"}
-              </span>
-              {steps.length > 0 && (
-                <span className="ix-meter" aria-hidden>
-                  <span style={{ width: `${(signed / steps.length) * 100}%` }} />
-                </span>
-              )}
-            </Fact>
-            <Fact k="Intent ID">
-              <span className="ix-mono" title={intent.id}>{shortId(intent.id)}</span>
-              <CopyId value={intent.id} label="intent ID" />
-            </Fact>
-          </FactGroup>
         </div>
 
         <CustodyChain intent={intent} name={name} evidence={evidence} />
@@ -228,6 +216,8 @@ export function CustodyChain({
   };
 
   const evidenceOf = new Map((evidence?.interactions ?? []).map((x) => [x.interactionID, x.evidence ?? []]));
+  // Followed across the whole chain, so each check knows if its token was issued, forwarded or switched.
+  const tokens = buildTokenTrail(steps, evidenceOf);
   const shown = flaggedOnly ? steps.map((s, k) => [s, k] as const).filter(([s]) => s.threat) : steps.map((s, k) => [s, k] as const);
 
   return (
@@ -249,7 +239,7 @@ export function CustodyChain({
       ) : (
         <ol className="ix-chain">
           {shown.map(([s, k]) => (
-            <Step key={s.interactionID || k} s={s} n={k + 1} start={start} name={name} onOpen={() => openStep(s)} evidence={evidenceOf.get(s.interactionID)} viewMore={viewMore} />
+            <Step key={s.interactionID || k} s={s} n={k + 1} start={start} name={name} onOpen={() => openStep(s)} evidence={evidenceOf.get(s.interactionID)} tokens={tokens} viewMore={viewMore} />
           ))}
         </ol>
       )}
@@ -298,6 +288,28 @@ export function CopyId({ value, label }: { value: string; label: string }) {
   );
 }
 
+/**
+ * Where a step's receiver went next: the destinations of its server_out checks (the credential the
+ * receiver used on its own backend), in the order first seen. Other sources never count: their
+ * `destination` is just the receiver itself.
+ */
+function onwardDestinations(evidence: AuthEvidence[] | undefined): string[] {
+  const out: string[] = [];
+  for (const e of evidence ?? []) {
+    if ((e.source || "").toLowerCase() !== "server_out") continue;
+    const d = (e.destination || "").trim();
+    if (d && !out.includes(d)) out.push(d);
+  }
+  return out;
+}
+
+/** A destination as the chain names it: a known service's name, else its host; a DID, its owner's name. */
+function destinationLabel(raw: string, name: (did: string) => string): { label: string; dest: ParsedDestination | null } {
+  if (raw.toLowerCase().startsWith("bafy")) return { label: name(raw), dest: null };
+  const dest = parseDestination(raw);
+  return { label: dest.entity === "web" ? dest.host || raw : dest.name, dest };
+}
+
 function Step({
   s,
   n,
@@ -305,6 +317,7 @@ function Step({
   name,
   onOpen,
   evidence,
+  tokens,
   viewMore = false,
 }: {
   s: ObsInteraction;
@@ -314,16 +327,22 @@ function Step({
   onOpen: () => void;
   /** This step's auth checks; none or not loaded hides "Credential info". */
   evidence?: AuthEvidence[];
+  /** The intent's token trail (issued / forwarded / switched, and who holds each token). */
+  tokens?: TokenTrail;
   /** Shows "View more" (opens the interaction in the drawer, as clicking the step does). */
   viewMore?: boolean;
 }) {
   const [credOpen, setCredOpen] = useState(false);
   const hasCred = !!evidence && evidence.length > 0;
-  /** Any of this step's auth checks was rejected or not seen. */
-  const credFailed = hasCred && evidence.some((e) => !authAccepted(e.authStatus));
+  /** The worst of this step's checks: red if any was rejected, yellow if any wasn't seen. */
+  const credTone = hasCred ? worstAuthTone(evidence.map((e) => e.authStatus)) : "ok";
   const t = ms(s.time);
   const offset = t != null && start != null ? (t - start) / 1000 : null;
   const self = s.from === s.to;
+  // from → to → destination when the receiver made an onward (server_out) call; from → destination
+  // when from and to are the same party.
+  const onward = onwardDestinations(evidence);
+  const firstDest = onward.length ? destinationLabel(onward[0], (did) => name(did)) : null;
   return (
     <li className={`ix-step${s.threat ? " threat" : ""}`}>
       {/* The step and its actions side by side, the actions centred on the step. */}
@@ -342,6 +361,22 @@ function Step({
                 <>
                   <ArrowRight size={13} className="ix-arrow" aria-label="to" />
                   <span className="ix-party" title={s.to}>{name(s.to, s.toName)}</span>
+                </>
+              )}
+              {firstDest && (
+                <>
+                  <ArrowRight size={13} className="ix-arrow" aria-label="then to" />
+                  <span className="ix-party ix-dest" title={onward[0]}>
+                    {firstDest.dest && (
+                      <span className="ix-dest-logo"><DestinationLogo entity={firstDest.dest.entity} size={12} /></span>
+                    )}
+                    {firstDest.label}
+                  </span>
+                  {onward.length > 1 && (
+                    <span className="ix-dest-more" title={onward.slice(1).map((d) => destinationLabel(d, (did) => name(did)).label).join(", ")}>
+                      +{onward.length - 1}
+                    </span>
+                  )}
                 </>
               )}
               {s.threat && (
@@ -363,28 +398,14 @@ function Step({
             {hasCred && (
               <button
                 type="button"
-                className={`ix-act ix-act-cred${credOpen ? " open" : ""}${credFailed ? " fail" : ""}`}
+                className={`ix-act ix-act-cred${credOpen ? " open" : ""}${credTone === "bad" ? " fail" : credTone === "warn" ? " warn" : ""}`}
                 aria-expanded={credOpen}
                 onClick={() => setCredOpen((o) => !o)}
-                title={credFailed ? "An auth check failed" : undefined}
+                title={credTone === "bad" ? "An auth check was rejected" : credTone === "warn" ? "An auth check wasn't seen" : undefined}
               >
                 <KeyRound size={13} />
                 <span className="ix-act-label">Credential info</span>
                 {evidence.length > 1 && <span className="ix-act-count">{evidence.length}</span>}
-                <ChevronDown size={13} className="ix-act-chev" />
-              </button>
-            )}
-            {/* No auth evidence for this interaction (or none for the whole intent): the button is
-                there but disabled, so "View more" still lines up with the rows that have checks. */}
-            {viewMore && !hasCred && (
-              <button
-                type="button"
-                className="ix-act ix-act-cred none"
-                disabled
-                title="No credential info was recorded for this interaction"
-              >
-                <KeyRound size={13} />
-                <span className="ix-act-label">Credential info</span>
                 <ChevronDown size={13} className="ix-act-chev" />
               </button>
             )}
@@ -399,7 +420,7 @@ function Step({
       </div>
       {hasCred && credOpen && (
         <div className="ix-cred">
-          <EvidenceTable checks={evidence} name={(did) => name(did)} />
+          <StepEvidence checks={evidence} from={name(s.from, s.fromName)} to={name(s.to, s.toName)} name={(did) => name(did)} tokens={tokens} />
         </div>
       )}
     </li>

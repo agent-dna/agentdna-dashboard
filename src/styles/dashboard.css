@@ -2395,6 +2395,15 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ix-step-flow { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 13px; color: var(--fg); }
 .ix-party { font-weight: 500; overflow-wrap: anywhere; }
 .ix-arrow { color: var(--fg-faint); flex-shrink: 0; }
+/* The receiver's onward (server_out) destination, after "from → to". */
+.ix-dest { display: inline-flex; align-items: center; gap: 5px; }
+.ix-dest-logo {
+  width: 18px; height: 18px; flex-shrink: 0; display: grid; place-items: center; border-radius: 5px;
+  background: #FFFBEB; border: 1px solid rgba(234,179,8,.32);
+}
+.ix-dest-logo .dest-logo { margin: 0; }
+.ix-dest-logo .dest-logo-icon { background: transparent; color: #A16207; }
+.ix-dest-more { font: 600 11px var(--font-mono); color: var(--fg-muted); background: var(--bg-2); border-radius: 999px; padding: 1px 6px; }
 .ix-type { font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 5px; background: var(--bg-2); color: var(--fg-dim); }
 .ix-type.trigger { background: rgba(37,99,235,.08); color: var(--accent); }
 .ix-type.delegate { background: rgba(14,165,233,.10); color: #0369A1; }
@@ -2432,28 +2441,29 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ix-act-cred.fail svg { color: var(--threat); }
 .ix-act-cred.fail .ix-act-count { background: rgba(220,38,38,.12); color: var(--threat); }
 .ix-act-cred.fail:hover { background: rgba(220,38,38,.11); color: var(--threat); }
-.ix-act-cred.none { cursor: not-allowed; background: var(--bg-2); border-color: var(--line); color: var(--fg-faint); }
-.ix-act-cred.none svg { color: var(--fg-faint); }
-.ix-act-cred.none:hover { background: var(--bg-2); color: var(--fg-faint); }
-.ix-act-cred.none:hover svg { color: var(--fg-faint); }
+/* Unknown (not seen) checks: yellow, not red. */
+.ix-act-cred.warn { background: rgba(217,119,6,.07); border-color: rgba(217,119,6,.45); color: var(--warn); }
+.ix-act-cred.warn svg { color: var(--warn); }
+.ix-act-cred.warn .ix-act-count { background: rgba(217,119,6,.14); color: var(--warn); }
+.ix-act-cred.warn:hover { background: rgba(217,119,6,.12); color: var(--warn); }
 .ix-act svg { color: var(--fg-muted); flex-shrink: 0; }
 .ix-act:hover { background: var(--bg-2); color: var(--fg); }
 .ix-act:hover svg { color: var(--fg-dim); }
 .ix-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.ix-act-cred.open:not(.fail) { background: rgba(10,34,64,.06); }
+.ix-act-cred.open:not(.fail):not(.warn) { background: rgba(10,34,64,.06); }
 .ix-act-chev { margin-left: -1px; transition: transform 150ms; }
 /* "View more" is the step's main action: navy, the product's ink. */
 .ix-act-more, .ix-act-more svg { color: #fff; }
 .ix-act-more { background: #0A2240; border-color: #0A2240; }
 .ix-act-more:hover, .ix-act-more:hover svg { background: #16346A; border-color: #16346A; color: #fff; }
 /* "Credential info": outlined in the same navy; red still marks a failed check. */
-.ix-act-cred:not(.fail):not(.none), .ix-act-cred:not(.fail):not(.none) svg { color: #0A2240; }
-.ix-act-cred:not(.fail):not(.none) { border-color: #0A2240; }
+.ix-act-cred:not(.fail):not(.warn):not(.none), .ix-act-cred:not(.fail):not(.warn):not(.none) svg { color: #0A2240; }
+.ix-act-cred:not(.fail):not(.warn):not(.none) { border-color: #0A2240; }
 /* 15% heavier than the 1px default. */
 .ix-act-cred:not(.none) { border-width: 1.15px; }
-.ix-act-cred:not(.fail):not(.none):hover { background: rgba(10,34,64,.06); color: #0A2240; }
-.ix-act-cred:not(.fail):not(.none):hover svg { color: #0A2240; }
-.ix-act-cred:not(.fail):not(.none) .ix-act-count { background: rgba(10,34,64,.1); color: #0A2240; }
+.ix-act-cred:not(.fail):not(.warn):not(.none):hover { background: rgba(10,34,64,.06); color: #0A2240; }
+.ix-act-cred:not(.fail):not(.warn):not(.none):hover svg { color: #0A2240; }
+.ix-act-cred:not(.fail):not(.warn):not(.none) .ix-act-count { background: rgba(10,34,64,.1); color: #0A2240; }
 .ix-act-cred.open .ix-act-chev { transform: rotate(180deg); }
 .ix-cred { position: relative; padding: 0 16px 10px 130px; background: #fff; }
 .ix-step.threat .ix-cred { background: #FEF6F6; box-shadow: inset 3px 0 0 var(--threat); }
@@ -2462,7 +2472,23 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ix-empty { padding: 16px 22px; font-size: 13px; color: var(--fg-muted); }
 .ix-body .ix-empty { padding: 16px; border: 1px dashed var(--line-strong); border-radius: 12px; }
 
-/* A step's auth checks as a table, under its "Credential info" (EvidenceTable). */
+/* A step's checks under "Credential info" (StepEvidence): the interaction's table, then each
+   onward call (receiver → destination) with its own table. */
+.evs { display: flex; flex-direction: column; gap: 14px; }
+.evs-block { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.evs-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; padding: 0 2px; }
+.evs-party { font-family: var(--font-display); font-size: 13px; font-weight: 600; color: var(--fg); }
+.evs-arrow { color: var(--fg-faint); flex-shrink: 0; }
+.evs-dest { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.evs-logo {
+  width: 20px; height: 20px; flex-shrink: 0; display: grid; place-items: center; border-radius: 5px;
+  background: #FFFBEB; border: 1px solid rgba(234,179,8,.32);
+}
+.evs-logo .dest-logo { margin: 0; }
+.evs-logo .dest-logo-icon { background: transparent; color: #A16207; }
+.evs-path { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.evs-note { margin-left: auto; font-size: 12px; color: var(--fg-muted); }
+/* A step's auth checks as a table (EvidenceTable). */
 .evt { border: 1px solid var(--line); border-radius: 10px; background: #fff; overflow: hidden; }
 .evt-scroll { overflow-x: auto; }
 .evt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -2476,8 +2502,12 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .evt-table tbody tr:hover td { background: rgba(37, 99, 235, 0.03); }
 .evt-mono { font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .evt-key { color: var(--fg); }
-.evt-dest { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
 .evt-none { color: var(--fg-faint); }
+/* Token activity: issued (where the token starts), forwarded (passed on as is), switched (a new one). */
+.evt-tok { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+.evt-tok.issued { color: var(--accent); background: rgba(37,99,235,.08); }
+.evt-tok.forwarded { color: var(--fg-dim); background: var(--bg-2); }
+.evt-tok.switched { color: #B45309; background: rgba(217,119,6,.10); }
 .evt-status.ok { color: var(--safe); font-weight: 600; }
 .evt-status.warn { color: var(--warn); font-weight: 600; }
 .evt-status.bad { color: var(--threat); font-weight: 600; }
