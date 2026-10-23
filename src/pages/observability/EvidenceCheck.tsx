@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Check, ChevronDown, X } from "lucide-react";
-import { authAccepted, authStatusLabel, type AuthEvidence } from "../../api/observability";
+import { Check, ChevronDown, CircleHelp, X } from "lucide-react";
+import { authStatusLabel, authTone, type AuthEvidence } from "../../api/observability";
 import { CopyId } from "./IntentDetailPanel";
 import { fmtDuration, ms } from "./format";
 
@@ -9,7 +9,6 @@ import { fmtDuration, ms } from "./format";
  * the chain of custody (observability Intent Info and the intent page's Evidence trail).
  */
 
-const passed = (e: AuthEvidence) => authAccepted(e.authStatus);
 /** "server_in" → "Server in". */
 const sentence = (s: string) => {
   const t = (s || "").replace(/_/g, " ").trim();
@@ -25,7 +24,10 @@ export function EvidenceCheck({ e, at, flat = false }: {
 }) {
   const [opened, setOpened] = useState(false);
   const open = flat || opened;
-  const ok = passed(e);
+  // Accepted reads normal, unknown (not seen) yellow, rejected red.
+  const tone = authTone(e.authStatus);
+  const ok = tone === "ok";
+  const toneIcon = ok ? <Check size={12} strokeWidth={2.5} /> : tone === "warn" ? <CircleHelp size={12} strokeWidth={2.5} /> : <X size={12} strokeWidth={2.5} />;
   const t0 = ms(at);
   const t1 = ms(e.observedAt);
   const delay = t0 != null && t1 != null ? (t1 - t0) / 1000 : null;
@@ -39,7 +41,7 @@ export function EvidenceCheck({ e, at, flat = false }: {
     ] as [string, string][]
   ).filter(([, v]) => !!v);
   return (
-    <li className={`ev-check${ok ? "" : " fail"}${open ? " open" : ""}${flat ? " flat" : ""}`}>
+    <li className={`ev-check${tone === "bad" ? " fail" : tone === "warn" ? " warn" : ""}${open ? " open" : ""}${flat ? " flat" : ""}`}>
       {!flat && (
         <button type="button" className="ev-check-line" aria-expanded={open} onClick={() => setOpened((o) => !o)}>
           {/* Collapsed, a check is its credential; a failure still says so. Everything else opens below. */}
@@ -47,7 +49,7 @@ export function EvidenceCheck({ e, at, flat = false }: {
           <span className="ev-cred-v ix-mono" title={e.credentialID || undefined}>{e.credentialID || "None recorded"}</span>
           {!ok && (
             <span className="ev-result">
-              <X size={12} strokeWidth={2.5} />
+              {toneIcon}
               {authStatusLabel(e.authStatus)}
             </span>
           )}
@@ -60,7 +62,7 @@ export function EvidenceCheck({ e, at, flat = false }: {
             <dt>Auth status</dt>
             <dd>
               <span className="ev-result">
-                {ok ? <Check size={12} strokeWidth={2.5} /> : <X size={12} strokeWidth={2.5} />}
+                {toneIcon}
                 {authStatusLabel(e.authStatus)}
               </span>
             </dd>

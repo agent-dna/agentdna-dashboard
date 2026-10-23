@@ -336,7 +336,7 @@ export interface IntentAuthEvidence {
   interactions: AuthEvidenceInteraction[];
 }
 
-/** An auth check passed: "accepted" (or the older "ok"). "rejected" and "unknown" both count as failed. */
+/** An auth check passed: "accepted" (or the older "ok"). "rejected" and "unknown" don't (see authTone for colour). */
 export const authAccepted = (status?: string) => {
   const s = (status || "").toLowerCase();
   return s === "accepted" || s === "ok";
@@ -350,6 +350,12 @@ export function authTone(status?: string): AuthTone {
   if (s === "unknown" || !s) return "warn";
   return "bad";
 }
+/** The worse of several checks' tones (red over yellow over normal). */
+export const worstAuthTone = (statuses: (string | undefined)[]): AuthTone =>
+  statuses.reduce<AuthTone>((w, st) => {
+    const t = authTone(st);
+    return w === "bad" || t === "bad" ? "bad" : w === "warn" || t === "warn" ? "warn" : "ok";
+  }, "ok");
 
 /** How an auth status reads in the UI. */
 export function authStatusLabel(status?: string): string {

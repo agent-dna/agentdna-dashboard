@@ -1,5 +1,5 @@
 import type { Interaction } from "../types";
-import { authAccepted, authStatusLabel, type AuthEvidence } from "../api/observability";
+import { authStatusLabel, authTone, worstAuthTone, type AuthEvidence } from "../api/observability";
 import { useResolveName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { timeAgo } from "../lib/format";
@@ -177,12 +177,13 @@ function EvidenceCells({ checks }: { checks: AuthEvidence[] | undefined }) {
 
   const identities = [...new Set(checks.map((c) => c.identityID).filter(Boolean))];
   const methods = [...new Set(checks.map((c) => c.authMethod).filter(Boolean))].map(sentence);
-  const failed = checks.filter((c) => !authAccepted(c.authStatus));
+  const tone = worstAuthTone(checks.map((c) => c.authStatus));
+  const failed = checks.filter((c) => authTone(c.authStatus) === tone && tone !== "ok");
   const result =
     checks.length === 0
       ? { text: "No evidence", color: "var(--warn)", bg: "rgba(217,119,6,0.10)" }
       : failed.length > 0
-        ? { text: authStatusLabel(failed[0].authStatus), color: "var(--threat)", bg: "rgba(220,38,38,0.10)" }
+        ? { text: authStatusLabel(failed[0].authStatus), color: tone === "warn" ? "var(--warn)" : "var(--threat)", bg: tone === "warn" ? "rgba(217,119,6,0.10)" : "rgba(220,38,38,0.10)" }
         : { text: "Accepted", color: "var(--safe)", bg: "rgba(5,150,105,0.10)" };
 
   return (
