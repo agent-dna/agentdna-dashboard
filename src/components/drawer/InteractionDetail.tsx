@@ -8,7 +8,7 @@ import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { useThreatByID } from "../../data/hooks";
 import { timeAgo, interactionRawData, titleOrUnknown } from "../../lib/format";
 import type { Interaction } from "../../types";
-import { authAccepted, authStatusLabel, fetchIntentAuthEvidence } from "../../api/observability";
+import { authStatusLabel, authTone, fetchIntentAuthEvidence } from "../../api/observability";
 import { parseDestination } from "../../lib/destination";
 import { DestinationLogo } from "../DestinationLogo";
 import { EvidenceCheck } from "../../pages/observability/EvidenceCheck";
@@ -74,7 +74,8 @@ export function InteractionDetail({ interaction: i }: Props) {
             ...seen,
             authMethod: seen.authMethod || c.authMethod,
             credentialID: seen.credentialID || c.credentialID,
-            authStatus: !authAccepted(c.authStatus) ? c.authStatus : seen.authStatus,
+            // Keep the worse status: rejected over not seen over accepted.
+            authStatus: TONE_RANK[authTone(c.authStatus)] > TONE_RANK[authTone(seen.authStatus)] ? c.authStatus : seen.authStatus,
           };
       return acc;
     }, {}),
@@ -214,7 +215,7 @@ export function InteractionDetail({ interaction: i }: Props) {
                           <span className="ixd-dest-meta">
                             {d.authMethod && <span className="ixd-dest-tag">{authMethodLabel(d.authMethod)}</span>}
                             {d.authStatus && (
-                              <span className={`ixd-dest-tag${authAccepted(d.authStatus) ? "" : " bad"}`}>{authStatusLabel(d.authStatus)}</span>
+                              <span className={`ixd-dest-tag ${authTone(d.authStatus)}`}>{authStatusLabel(d.authStatus)}</span>
                             )}
                             {d.credentialID && <span className="ixd-dest-cred" title={d.credentialID}>{truncateId(d.credentialID)}</span>}
                           </span>
@@ -336,6 +337,7 @@ export function InteractionDetail({ interaction: i }: Props) {
 const KIND_LABEL: Record<string, string> = { agent: "Agent", tool: "App", user: "User" };
 const KIND_ICON = { agent: "agents", tool: "apps", user: "user" } as const;
 
+const TONE_RANK = { ok: 0, warn: 1, bad: 2 } as const;
 const capitalize = (v: string) => (v ? v[0].toUpperCase() + v.slice(1) : v);
 /** "api_key" → "Api key", "none" → "No auth". */
 const authMethodLabel = (m: string) => (m.toLowerCase() === "none" ? "No auth" : capitalize(m.replace(/_/g, " ")));
@@ -366,9 +368,12 @@ function toolCallName(v: unknown): string | null {
   return o.method === "tools/call" && typeof o.params?.name === "string" ? o.params.name : null;
 }
 
+/** Messages longer than this many lines open folded, with "See more". */
+const PAYLOAD_FOLD_LINES = 14;
+
 /**
- * The hop's message. JSON can be read formatted or exactly as received (what Copy copies);
- * anything else is shown as received.
+ * The hop's message: JSON formatted and coloured, anything else as received. Copy always copies
+ * it exactly as received. A long message opens folded, with "See more" to read the rest.
  */
 function Payload({ text }: { text: string }) {
   const parsed = (() => {
@@ -377,9 +382,13 @@ function Payload({ text }: { text: string }) {
     try { return JSON.parse(t) as unknown; } catch { return undefined; }
   })();
   const isJson = parsed !== undefined;
-  const [view, setView] = useState<"formatted" | "exact">("formatted");
+  const [expanded, setExpanded] = useState(false);
   const tool = toolCallName(parsed);
-  const shown = isJson && view === "formatted" ? JSON.stringify(parsed, null, 2) : text;
+  const shown = isJson ? JSON.stringify(parsed, null, 2) : text;
+  // Wrapped lines count too, roughly: a line longer than the panel is wide reads as several.
+  const lines = shown.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 60)), 0);
+  const long = lines > PAYLOAD_FOLD_LINES;
+  const folded = long && !expanded;
   return (
     <div className="ixd-msg">
       <div className="ixd-msg-head">
@@ -388,18 +397,17 @@ function Payload({ text }: { text: string }) {
             <>Tool call <code>{tool}</code></>
           ) : isJson ? "JSON" : "Text"}
         </span>
-        {isJson && (
-          <div className="ixd-seg" role="group" aria-label="Message view">
-            <button type="button" className={view === "formatted" ? "on" : ""} aria-pressed={view === "formatted"} onClick={() => setView("formatted")}>Formatted</button>
-            <button type="button" className={view === "exact" ? "on" : ""} aria-pressed={view === "exact"} onClick={() => setView("exact")}>Exact</button>
-          </div>
-        )}
         <CopyButton text={text} />
       </div>
-      {isJson && view === "formatted" ? (
-        <pre className="ixd-msg-body json" dangerouslySetInnerHTML={{ __html: colorizeLight(shown) }} />
+      {isJson ? (
+        <pre className={`ixd-msg-body json${folded ? " folded" : ""}`} dangerouslySetInnerHTML={{ __html: colorizeLight(shown) }} />
       ) : (
-        <pre className="ixd-msg-body">{shown}</pre>
+        <pre className={`ixd-msg-body${folded ? " folded" : ""}`}>{shown}</pre>
+      )}
+      {long && (
+        <button type="button" className="ixd-msg-more" aria-expanded={expanded} onClick={() => setExpanded((e) => !e)}>
+          {expanded ? "See less" : "See more"}
+        </button>
       )}
     </div>
   );
