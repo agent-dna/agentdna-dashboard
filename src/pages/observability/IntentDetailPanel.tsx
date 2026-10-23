@@ -405,7 +405,6 @@ function Step({
               >
                 <KeyRound size={13} />
                 <span className="ix-act-label">Credential info</span>
-                {evidence.length > 1 && <span className="ix-act-count">{evidence.length}</span>}
                 <ChevronDown size={13} className="ix-act-chev" />
               </button>
             )}

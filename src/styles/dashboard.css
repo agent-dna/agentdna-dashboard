@@ -2519,18 +2519,12 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ix-act-more { width: 108px; justify-content: center; }
 .ix-act-cred { width: 170px; }
 .ix-act-label { flex: 1; text-align: left; }
-.ix-act-count {
-  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-grid; place-items: center;
-  background: var(--bg-2); font: 600 10.5px var(--font-body); color: var(--fg-dim);
-}
 .ix-act-cred.fail { background: rgba(220,38,38,.06); border-color: rgba(220,38,38,.35); color: var(--threat); }
 .ix-act-cred.fail svg { color: var(--threat); }
-.ix-act-cred.fail .ix-act-count { background: rgba(220,38,38,.12); color: var(--threat); }
 .ix-act-cred.fail:hover { background: rgba(220,38,38,.11); color: var(--threat); }
 /* Unknown (not seen) checks: yellow, not red. */
 .ix-act-cred.warn { background: rgba(217,119,6,.07); border-color: rgba(217,119,6,.45); color: var(--warn); }
 .ix-act-cred.warn svg { color: var(--warn); }
-.ix-act-cred.warn .ix-act-count { background: rgba(217,119,6,.14); color: var(--warn); }
 .ix-act-cred.warn:hover { background: rgba(217,119,6,.12); color: var(--warn); }
 .ix-act svg { color: var(--fg-muted); flex-shrink: 0; }
 .ix-act:hover { background: var(--bg-2); color: var(--fg); }
@@ -2549,7 +2543,6 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .ix-act-cred:not(.none) { border-width: 1.15px; }
 .ix-act-cred:not(.fail):not(.warn):not(.none):hover { background: rgba(10,34,64,.06); color: #0A2240; }
 .ix-act-cred:not(.fail):not(.warn):not(.none):hover svg { color: #0A2240; }
-.ix-act-cred:not(.fail):not(.warn):not(.none) .ix-act-count { background: rgba(10,34,64,.1); color: #0A2240; }
 .ix-act-cred.open .ix-act-chev { transform: rotate(180deg); }
 .ix-cred { position: relative; padding: 0 16px 10px 130px; background: #fff; }
 .ix-step.threat .ix-cred { background: #FEF6F6; box-shadow: inset 3px 0 0 var(--threat); }
