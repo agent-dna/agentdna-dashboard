@@ -1,3 +1,5 @@
+import type { AuthEvidence } from "./api/observability";
+
 export type Status = "safe" | "warn" | "threat";
 
 export interface Agent {
@@ -88,6 +90,12 @@ export interface Interaction {
    * `authEvidence.backendCalls`); the drawer shows their destinations when the sender is an app.
    */
   backendCalls?: { destination: string; authMethod?: string; credentialID?: string; authStatus?: string }[];
+  /** The hop's auth checks (/intent-info's `authEvidence`); absent when it has none. */
+  authEvidence?: AuthEvidence[];
+  /** ISO time of the hop, when the endpoint gives one. */
+  time?: string;
+  /** What kind of hop it was, as /intent-info names it: "trigger", "delegate", "response", … */
+  kind?: string;
 }
 
 export interface TimeSeries {

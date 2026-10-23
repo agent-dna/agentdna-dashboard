@@ -1069,6 +1069,21 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   color: #6EE7B7;
 }
 .flow-node.provenance .nt .nm { color: #A7F3D0; }
+/* Outside resources: the service's own logo on a light tile, ringed in blue dots like the line
+   that reaches it, so it reads as somewhere beyond the agents rather than one of them. */
+.flow-node.external .nv {
+  background: #F4F8FF; border: 1.5px dotted #60A5FA; border-radius: 50%;
+  box-shadow: 0 6px 16px rgba(4,10,26,0.45);
+}
+.flow-node.external .ring { border-radius: 50%; }
+.flow-node.external .nt .nm { color: #BFDBFE; }
+.flow-node.external .nt .lb { text-transform: none; letter-spacing: 0; font-size: 9.5px; font-weight: 500; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.flow-node.external .dest-logo { margin: 0; }
+.flow-canvas .out-line.lit { animation: outMarch 0.9s linear infinite; }
+@keyframes outMarch { to { stroke-dashoffset: -13; } }
+@media (prefers-reduced-motion: reduce) {
+  .flow-canvas .out-line.lit { animation: none; }
+}
 .flow-node .nt {
   position: absolute; top: calc(100% + 7px); left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 1px; white-space: nowrap;
@@ -1117,6 +1132,53 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
   box-shadow: 0 0 10px 3px rgba(120,200,255,0.8), 0 0 22px 6px rgba(56,189,248,0.45);
 }
 .flow-packet.blk { background: #FFD3D3; box-shadow: 0 0 10px 3px rgba(255,150,150,0.8), 0 0 22px 6px rgba(248,113,113,0.5); }
+
+/* ---- Credential message box: rides a hop's line with the packet when the hop carries auth checks ---- */
+.flow-cred {
+  position: absolute; top: 0; left: 0; z-index: 3; padding: 0; border: 0; background: none;
+  cursor: pointer; will-change: transform;
+}
+.flow-cred .fc-box {
+  position: relative; display: grid; place-items: center;
+  width: 26px; height: 20px; margin: -10px 0 0 -13px; border-radius: 6px 6px 6px 2px;
+  color: var(--lane); background: rgba(8,20,45,0.92);
+  border: 1px solid var(--lane);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lane) 22%, transparent), 0 4px 12px rgba(4,10,26,0.5);
+  transition: transform 140ms;
+}
+.flow-cred:hover .fc-box, .flow-cred.open .fc-box { transform: scale(1.15); }
+.flow-cred:focus-visible { outline: none; }
+.flow-cred:focus-visible .fc-box { outline: 2px solid #fff; outline-offset: 2px; }
+/* A check that wasn't seen or failed marks the box's corner. */
+.flow-cred.warn .fc-box::after, .flow-cred.bad .fc-box::after {
+  content: ""; position: absolute; top: -4px; right: -4px; width: 7px; height: 7px; border-radius: 50%;
+  border: 1.5px solid #081730;
+}
+.flow-cred.warn .fc-box::after { background: #FBBF24; }
+.flow-cred.bad .fc-box::after { background: #F87171; }
+
+.flow-cred-card {
+  position: absolute; z-index: 4; display: flex; flex-direction: column;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 18px 44px rgba(4,10,26,0.45), 0 2px 6px rgba(4,10,26,0.25);
+  animation: fcc-in 150ms cubic-bezier(.2,.8,.2,1);
+}
+.flow-cred-card:focus { outline: none; }
+@keyframes fcc-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+.fcc-head { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px 14px; border-bottom: 1px solid var(--line); }
+.fcc-icon { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; color: var(--accent); background: rgba(37,99,235,0.08); }
+.fcc-title { min-width: 0; flex: 1; }
+.fcc-name { font-size: 13px; font-weight: 700; color: var(--fg); }
+.fcc-pair { font-size: 12px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fcc-close { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--fg-muted); cursor: pointer; }
+.fcc-close:hover { background: #F1F5F9; color: var(--fg); }
+.fcc-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fcc-body { overflow-y: auto; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 12px; }
+.fcc-hop-head { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--fg); margin-bottom: 6px; }
+.fcc-hop-head span { font-weight: 400; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  .flow-cred .fc-box, .flow-cred-card { transition: none; animation: none; }
+}
 
 /* Empty */
 .flow-empty { display: grid; place-items: center; height: 100%; color: #6E8AC4; font-size: 14px; }

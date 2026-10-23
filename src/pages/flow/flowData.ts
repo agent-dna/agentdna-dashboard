@@ -1,6 +1,6 @@
 /**
  * Flow data — adapts a real Intent + its Interactions into the structure the
- * FlowCanvas + step rail consume.
+ * trace graph (traceModel, TraceGraph) and timeline consume.
  *
  * Inputs:
  *   - intent: from /intent-info or /intent-list

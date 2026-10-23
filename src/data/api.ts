@@ -2,6 +2,7 @@
 // Shapes defined in src/types.ts; API contracts in the middleware README.
 
 import { apiRequest } from "../api/client";
+import type { AuthEvidence } from "../api/observability";
 import { compareInteractionIds } from "../lib/interactionBranch";
 import { getDirectorySnapshot, waitForDirectoryReady } from "./directoryCache";
 import type {
@@ -87,6 +88,10 @@ export interface ApiInteraction {
   rawData?: unknown;
   /** What the sender sent in this hop, when the endpoint includes it. */
   message?: string;
+  /** /intent-info only: the auth checks recorded for this hop; null or empty when there are none. */
+  authEvidence?: AuthEvidence[] | null;
+  /** /intent-info only: "trigger", "delegate", "response", … */
+  type?: string;
 }
 
 function mapInteraction(i: ApiInteraction): Interaction {
@@ -105,6 +110,9 @@ function mapInteraction(i: ApiInteraction): Interaction {
     threatID: i.threatID || undefined,
     ...(i.rawData !== undefined ? { raw: i.rawData } : {}),
     ...(i.message ? { payload: i.message } : {}),
+    ...(Array.isArray(i.authEvidence) && i.authEvidence.length > 0 ? { authEvidence: i.authEvidence } : {}),
+    ...(i.time ? { time: i.time } : {}),
+    ...(i.type ? { kind: i.type } : {}),
   };
 }
 
