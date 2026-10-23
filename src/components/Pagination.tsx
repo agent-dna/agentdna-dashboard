@@ -7,15 +7,20 @@ interface PaginationProps {
   pageSize?: number;
   loading?: boolean;
   inline?: boolean;
+  /** Button colour: "primary" (royal blue, default) or "navy". */
+  variant?: "primary" | "navy";
   onChange: (page: number) => void;
 }
 
-export function Pagination({ page, totalPages, total, pageSize, loading, inline, onChange }: PaginationProps) {
+export function Pagination({ page, totalPages, total, pageSize, loading, inline, variant = "primary", onChange }: PaginationProps) {
   const [input, setInput] = useState(String(page));
 
   useEffect(() => { setInput(String(page)); }, [page]);
 
   if (totalPages <= 1) return null;
+
+  const navy = variant === "navy";
+  const btnClass = `btn ${navy ? "navy" : "primary"}`;
 
   const from = pageSize ? (page - 1) * pageSize + 1 : null;
   const to = pageSize && total ? Math.min(page * pageSize, total) : null;
@@ -34,7 +39,7 @@ export function Pagination({ page, totalPages, total, pageSize, loading, inline,
         </span>
       )}
       <button
-        className="btn primary"
+        className={btnClass}
         style={{ padding: "4px 12px", fontSize: 12.5 }}
         disabled={page <= 1 || loading}
         onClick={() => onChange(page - 1)}
@@ -59,15 +64,15 @@ export function Pagination({ page, totalPages, total, pageSize, loading, inline,
           fontFamily: "var(--font-mono)",
           color: "var(--fg)",
           background: "var(--bg)",
-          border: "2px solid var(--accent)",
+          border: `2px solid ${navy ? "var(--accent-2)" : "var(--accent)"}`,
           borderRadius: 6,
-          boxShadow: "0 0 0 3px rgba(37,99,235,0.12)",
+          boxShadow: navy ? "0 0 0 3px rgba(10,34,64,0.12)" : "0 0 0 3px rgba(37,99,235,0.12)",
           textAlign: "center",
           outline: "none",
         }}
       />
       <button
-        className="btn primary"
+        className={btnClass}
         style={{ padding: "4px 12px", fontSize: 12.5 }}
         disabled={page >= totalPages || loading}
         onClick={() => onChange(page + 1)}

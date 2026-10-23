@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
+import { InspectButton } from "../components/InspectButton";
 import { Modal } from "../components/Modal";
 
 import { InteractionsChart } from "../components/InteractionsChart";
@@ -349,43 +350,11 @@ export function HomePage() {
       key: "actions",
       label: "",
       align: "right",
-      width: 90,
+      // Fits the Inspect button plus cell padding, so it can't push the table into a scroll.
+      width: 112,
       render: (r) => (
         <div className="row-actions">
-          <button
-            style={{
-              whiteSpace: "nowrap",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 12px",
-              fontSize: 11.5,
-              fontWeight: 600,
-              borderRadius: 7,
-              border: "1px solid rgba(37,99,235,0.25)",
-              background: "rgba(37,99,235,0.06)",
-              color: "var(--accent)",
-              cursor: "pointer",
-              transition: "all 120ms ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--accent)";
-              e.currentTarget.style.borderColor = "var(--accent)";
-              e.currentTarget.style.color = "#fff";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(37,99,235,0.06)";
-              e.currentTarget.style.borderColor = "rgba(37,99,235,0.25)";
-              e.currentTarget.style.color = "var(--accent)";
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/intents/${r.id}`);
-            }}
-          >
-            <Icon name="arrowUpRight" size={11} />
-            Inspect
-          </button>
+          <InspectButton onClick={() => navigate(`/intents/${r.id}`)} />
         </div>
       ),
     },
@@ -442,75 +411,20 @@ export function HomePage() {
       align: "right",
       width: "26%",
       render: (r) => (
-        <div className="row-actions" style={{ flexWrap: "nowrap", gap: 6 }}>
+        <div className="row-actions" style={{ flexWrap: "nowrap" }}>
           <button
-            style={{
-              whiteSpace: "nowrap",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "6px 11px",
-              fontSize: 11.5,
-              fontWeight: 600,
-              borderRadius: 7,
-              border: "1px solid rgba(220,38,38,0.28)",
-              background: "rgba(220,38,38,0.06)",
-              color: "var(--threat)",
-              cursor: "pointer",
-              transition: "all 120ms ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--threat)";
-              e.currentTarget.style.borderColor = "var(--threat)";
-              e.currentTarget.style.color = "#fff";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(220,38,38,0.06)";
-              e.currentTarget.style.borderColor = "rgba(220,38,38,0.28)";
-              e.currentTarget.style.color = "var(--threat)";
-            }}
+            type="button"
+            className="message-btn"
+            title="Read the message that raised this incident"
             onClick={(e) => {
               e.stopPropagation();
               setThreatMessage(r);
             }}
           >
-            <Icon name="eye" size={11} />
+            <Icon name="message" size={11} />
             Message
           </button>
-          <button
-            style={{
-              whiteSpace: "nowrap",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "6px 11px",
-              fontSize: 11.5,
-              fontWeight: 600,
-              borderRadius: 7,
-              border: "1px solid rgba(37,99,235,0.25)",
-              background: "rgba(37,99,235,0.06)",
-              color: "var(--accent)",
-              cursor: "pointer",
-              transition: "all 120ms ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--accent)";
-              e.currentTarget.style.borderColor = "var(--accent)";
-              e.currentTarget.style.color = "#fff";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(37,99,235,0.06)";
-              e.currentTarget.style.borderColor = "rgba(37,99,235,0.25)";
-              e.currentTarget.style.color = "var(--accent)";
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              openDrawer("interaction", threatToInteraction(r));
-            }}
-          >
-            <Icon name="arrowUpRight" size={11} />
-            Inspect
-          </button>
+          <InspectButton title="Open the interaction in the side panel" onClick={() => openDrawer("interaction", threatToInteraction(r))} />
         </div>
       ),
     },
@@ -1535,8 +1449,6 @@ export function HomePage() {
                   ? "No incidents detected"
                   : "No incidents match this filter on this page"
             }
-            // Every row here is a threat by definition.
-            rowStyle={() => THREAT_ROW_STYLE}
           />
         )}
       </div>

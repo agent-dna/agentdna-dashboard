@@ -16,6 +16,7 @@ import { ThreatPill } from "../components/ThreatPill";
 import { StatusPicker } from "../components/StatusPicker";
 import { AppIcon } from "../components/AppIcon";
 import type { Intent, IntentReviewStatus } from "../types";
+import { InspectButton } from "../components/InspectButton";
 
 export function IntentsPage() {
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
@@ -156,18 +157,11 @@ export function IntentsPage() {
       key: "actions",
       label: "",
       align: "right",
-      width: 76,
+      // Fits the Inspect button (≈85px) plus the cell's 12px side padding, so nothing spills into a scroll.
+      width: 112,
       render: (r) => (
         <div className="row-actions">
-          <button
-            className="btn-mini"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/intents/${r.id}`);
-            }}
-          >
-            Inspect
-          </button>
+          <InspectButton onClick={() => navigate(`/intents/${r.id}`)} />
         </div>
       ),
     },

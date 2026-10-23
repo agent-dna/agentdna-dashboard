@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pagination } from "../components/Pagination";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Icon } from "../components/Icon";
+import { InspectButton } from "../components/InspectButton";
 import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
@@ -112,16 +113,7 @@ export function AgentsToolsPage() {
             <Icon name="eye" size={12} />
             Policy
           </button>
-          <button
-            className="btn-mini info at-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/agents/${r.id}`);
-            }}
-          >
-            <Icon name="search" size={12} />
-            Inspect
-          </button>
+          <InspectButton onClick={() => navigate(`/agents/${r.id}`)} />
         </div>
       ),
     },
@@ -166,16 +158,7 @@ export function AgentsToolsPage() {
       width: "14%",
       render: (r) => (
         <div className="row-actions">
-          <button
-            className="btn-mini info at-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/tools/${encodeURIComponent(r.name)}`);
-            }}
-          >
-            <Icon name="search" size={12} />
-            Inspect
-          </button>
+          <InspectButton onClick={() => navigate(`/tools/${encodeURIComponent(r.name)}`)} />
         </div>
       ),
     },
