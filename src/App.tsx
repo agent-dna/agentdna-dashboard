@@ -69,7 +69,8 @@ export function App() {
     { to: "/intents", label: "Intents", icon: "intents", badge: unacknowledgedCount > 0 ? unacknowledgedCount : undefined },
     { to: "/agents", label: "Agents & Apps", icon: "agents" },
     { to: "/observability", label: "Observability", icon: "activity" },
-    { to: "/resources", label: "Resources", icon: "globe" },
+    // Hidden from the sidebar for now; the /resources routes still work.
+    // { to: "/resources", label: "Resources", icon: "globe" },
     { to: "/approvals", label: "Approvals", icon: "box", badge: pendingCount > 0 ? pendingCount : undefined },
     { to: "/users", label: "Users", icon: "user", adminOnly: true },
     // Hidden from the sidebar for now; the /interactions route still works.
