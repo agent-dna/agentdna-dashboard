@@ -6,7 +6,8 @@ import { AppIcon } from "../components/AppIcon";
 import { ThreatPill } from "../components/ThreatPill";
 import { LedgerTable } from "../components/LedgerTable";
 import { Pagination } from "../components/Pagination";
-import { useToolInfo, useToolAgentScores } from "../data/hooks";
+import { useToolInfo, useToolAgentScores, useAppCredentials } from "../data/hooks";
+import { AppCredentialsTable } from "../components/AppCredentialsTable";
 import { useDrawer } from "../context/DrawerContext";
 import { useResolveName } from "../context/DirectoryContext";
 import { timeAgo } from "../lib/format";
@@ -14,7 +15,7 @@ import { IntentIdChip } from "../context/IntentNumbersContext";
 import type { Intent, IntentReviewStatus } from "../types";
 import type { ToolAgentScore } from "../data/api";
 
-type Tab = "interactions" | "intents" | "agents";
+type Tab = "interactions" | "intents" | "agents" | "credentials";
 
 // Matches the pill styling used on the main Intents page (IntentsPage.tsx) so
 // review status looks identical everywhere it's shown.
@@ -36,6 +37,7 @@ export function ToolDetailPage() {
 
   const { data: result, loading } = useToolInfo(toolId, interactionsPage, intentsPage);
   const { data: agentScores } = useToolAgentScores(result?.tool.id);
+  const { data: appCreds, loading: credsLoading, error: credsError } = useAppCredentials(result?.tool.id);
 
   if (loading) {
     return (
@@ -239,7 +241,7 @@ export function ToolDetailPage() {
       <div className="card">
         <div className="tb-toolbar">
           <div className="filters">
-            {([{ key: "interactions", label: "Interactions", count: interactionsTotal }, { key: "intents", label: "Intents", count: intentsTotal }, { key: "agents", label: "Agents", count: agentScores.length }] as const).map((t) => (
+            {([{ key: "interactions", label: "Interactions", count: interactionsTotal }, { key: "intents", label: "Intents", count: intentsTotal }, { key: "agents", label: "Agents", count: agentScores.length }, { key: "credentials", label: "Credentials", count: appCreds?.credentials.length ?? 0 }] as const).map((t) => (
               <div
                 key={t.key}
                 className={`tab ${tab === t.key ? "active" : ""}`}
@@ -274,6 +276,8 @@ export function ToolDetailPage() {
             emptyText="No intents yet."
           />
         )}
+
+        {tab === "credentials" && <AppCredentialsTable data={appCreds} loading={credsLoading} error={credsError} />}
 
         {tab === "agents" && (
           <DataTable

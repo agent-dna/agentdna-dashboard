@@ -1185,6 +1185,328 @@ function mapToolAgentScore(e: ApiToolAgentScoreEntry): ToolAgentScore {
  * agents_list, batched into one LHI-scores lookup on the backend. Agents with
  * no score entry for this tool yet still come back, with all scores at 0.
  */
+/* ============ Resources (outside services agents and apps call) ============ */
+
+/** A row of GET /resources-list. */
+export interface ResourceSummary {
+  /** The resource's URL; pass it (URL-encoded) to /resource-info. */
+  resourceID: string;
+  name: string;
+  url: string;
+  intentCount: number;
+  credentialCount: number;
+}
+
+export interface PagedResources {
+  items: ResourceSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface ApiPaged<T> {
+  list?: T[] | null;
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
+}
+
+const paged = <T,>(p: ApiPaged<T> | undefined, pageSize: number) => ({
+  items: p?.list ?? [],
+  total: p?.total ?? 0,
+  page: p?.page ?? 1,
+  pageSize: p?.pageSize ?? pageSize,
+  totalPages: p?.totalPages ?? 1,
+});
+
+/** GET /resources-list: the org's resources, a page at a time. */
+export async function fetchResources(page = 1, pageSize = 10): Promise<PagedResources> {
+  const r = await apiRequest<{ resourcesList?: ResourceSummary[] | null; total?: number; page?: number; pageSize?: number; totalPages?: number }>(
+    "/resources-list",
+    { query: { page, pageSize } },
+  );
+  return paged({ list: r.resourcesList, total: r.total, page: r.page, pageSize: r.pageSize, totalPages: r.totalPages }, pageSize);
+}
+
+/** An intent that reached a resource, with the credentials it presented there (empty if none). */
+export interface ResourceIntent {
+  intentID: string;
+  initiatorDID: string;
+  initiatorName: string;
+  status: string;
+  reviewStatus: string;
+  flowType: string;
+  threatDetected: boolean;
+  startedAt: string;
+  credentialIDs: string[];
+}
+
+/** A credential presented to a resource, with how many intents used it there. */
+export interface ResourceCredential {
+  credentialID: string;
+  authMethod: string;
+  intentCount: number;
+  /** A plain value here, not the object the credential endpoints send. */
+  status: CredentialStatusValue;
+}
+
+export interface ResourceInfo extends ResourceSummary {
+  /** Newest first. */
+  intents: { items: ResourceIntent[]; total: number; page: number; pageSize: number; totalPages: number };
+  /** Most-used first. */
+  credentials: { items: ResourceCredential[]; total: number; page: number; pageSize: number; totalPages: number };
+}
+
+/**
+ * GET /resource-info: one resource with its intents and credentials, each paged on its own.
+ * A 404 means the resource doesn't exist or only other orgs' intents reached it.
+ */
+export async function fetchResourceInfo(
+  resourceID: string,
+  { intentsPage = 1, intentsPageSize = 10, credentialsPage = 1, credentialsPageSize = 10 } = {},
+): Promise<ResourceInfo> {
+  const r = await apiRequest<ResourceSummary & { intents?: ApiPaged<ResourceIntent>; credentials?: ApiPaged<ResourceCredential> }>(
+    "/resource-info",
+    { query: { resourceID, intentsPage, intentsPageSize, credentialsPage, credentialsPageSize } },
+  );
+  const intents = paged(r.intents, intentsPageSize);
+  return {
+    resourceID: r.resourceID,
+    name: r.name,
+    url: r.url,
+    intentCount: r.intentCount ?? 0,
+    credentialCount: r.credentialCount ?? 0,
+    intents: { ...intents, items: intents.items.map((i) => ({ ...i, credentialIDs: i.credentialIDs ?? [] })) },
+    credentials: (() => {
+      const c = paged(r.credentials, credentialsPageSize);
+      return { ...c, items: c.items.map((i) => ({ ...i, status: credentialStatusValue(i.status) })) };
+    })(),
+  };
+}
+
+/* ============ Credentials (seen across the org) ============ */
+
+export type CredentialStatusValue = "active" | "flagged" | "compromised";
+export const CREDENTIAL_STATUSES: CredentialStatusValue[] = ["active", "flagged", "compromised"];
+
+/** A credential's triage status. Until an admin sets one it is "active" with no author or time. */
+export interface CredentialStatus {
+  value: CredentialStatusValue;
+  reason: string;
+  updatedBy: string;
+  updatedAt: string | null;
+}
+
+/** Anything unrecognised (or missing) reads as "active", as the server treats an unset status. */
+const credentialStatusValue = (v: unknown): CredentialStatusValue =>
+  CREDENTIAL_STATUSES.includes(v as CredentialStatusValue) ? (v as CredentialStatusValue) : "active";
+
+const credentialStatus = (s: Partial<CredentialStatus> | null | undefined): CredentialStatus => ({
+  value: credentialStatusValue(s?.value),
+  reason: s?.reason ?? "",
+  updatedBy: s?.updatedBy ?? "",
+  updatedAt: s?.updatedAt ?? null,
+});
+
+/** A row of GET /credentials-list. */
+export interface CredentialSummary {
+  credentialID: string;
+  authMethod: string;
+  /** The person behind it, when the evidence named one. */
+  identityID: string | null;
+  /** Where its checks were observed, e.g. "client_out", "server_in". */
+  sources: string[];
+  requestCount: number;
+  intentCount: number;
+  userCount: number;
+  agentCount: number;
+  toolCount: number;
+  firstUsedAt: string;
+  lastUsedAt: string;
+  status: CredentialStatus;
+}
+
+export interface PagedCredentials {
+  items: CredentialSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+type ApiCredentialSummary = Partial<Omit<CredentialSummary, "status">> & {
+  credentialID: string;
+  status?: Partial<CredentialStatus> | null;
+};
+
+const credentialSummary = (c: ApiCredentialSummary): CredentialSummary => ({
+  credentialID: c.credentialID,
+  authMethod: c.authMethod ?? "",
+  identityID: c.identityID ?? null,
+  sources: c.sources ?? [],
+  requestCount: c.requestCount ?? 0,
+  intentCount: c.intentCount ?? 0,
+  userCount: c.userCount ?? 0,
+  agentCount: c.agentCount ?? 0,
+  toolCount: c.toolCount ?? 0,
+  firstUsedAt: c.firstUsedAt ?? "",
+  lastUsedAt: c.lastUsedAt ?? "",
+  status: credentialStatus(c.status),
+});
+
+/**
+ * GET /credentials-list: every credential seen in the org, most recently used first. `status`
+ * narrows it to one status ("active" includes credentials nobody has set); totals follow the filter.
+ */
+export async function fetchCredentials(page = 1, pageSize = 10, status?: CredentialStatusValue): Promise<PagedCredentials> {
+  const r = await apiRequest<{ credentialsList?: ApiCredentialSummary[] | null; total?: number; page?: number; pageSize?: number; totalPages?: number }>(
+    "/credentials-list",
+    { query: { page, pageSize, status } },
+  );
+  const p = paged({ list: r.credentialsList, total: r.total, page: r.page, pageSize: r.pageSize, totalPages: r.totalPages }, pageSize);
+  return { ...p, items: p.items.map(credentialSummary) };
+}
+
+/** An intent a credential was used in. */
+export interface CredentialIntent {
+  intentID: string;
+  initiatorDID: string;
+  initiatorName: string;
+  status: string;
+  reviewStatus: string;
+  threatDetected: boolean;
+  startedAt: string;
+  requestCount: number;
+  lastUsedAt: string;
+}
+
+/** A user, agent or app that used a credential. */
+export interface CredentialParty {
+  did: string;
+  name: string;
+  requestCount: number;
+  intentCount: number;
+  lastUsedAt: string;
+}
+
+export interface CredentialInfo extends CredentialSummary {
+  /** Most recently used first. */
+  intents: { items: CredentialIntent[]; total: number; page: number; pageSize: number; totalPages: number };
+  users: CredentialParty[];
+  agents: CredentialParty[];
+  tools: CredentialParty[];
+  /** DIDs that matched no user, agent or app; expected to stay empty. */
+  unknown: CredentialParty[];
+}
+
+/** A list the endpoint may send bare or wrapped as { list }. */
+const listOf = <T,>(v: T[] | ApiPaged<T> | null | undefined): T[] => (Array.isArray(v) ? v : v?.list ?? []);
+
+/**
+ * GET /credential-info: one credential with the intents it was used in (paged) and the users,
+ * agents and apps that used it. 400 without an ID; 404 for an ID never seen.
+ */
+export async function fetchCredentialInfo(credentialID: string, intentsPage = 1, intentsPageSize = 10): Promise<CredentialInfo> {
+  type Wire = ApiCredentialSummary & {
+    intents?: ApiPaged<CredentialIntent> | CredentialIntent[] | null;
+    users?: CredentialParty[] | ApiPaged<CredentialParty> | null;
+    agents?: CredentialParty[] | ApiPaged<CredentialParty> | null;
+    tools?: CredentialParty[] | ApiPaged<CredentialParty> | null;
+    unknown?: CredentialParty[] | ApiPaged<CredentialParty> | null;
+  };
+  const r = await apiRequest<Wire>("/credential-info", { query: { credentialID, intentsPage, intentsPageSize } });
+  const intents = Array.isArray(r.intents)
+    ? paged({ list: r.intents, total: r.intents.length, page: 1, pageSize: r.intents.length || intentsPageSize, totalPages: 1 }, intentsPageSize)
+    : paged(r.intents ?? undefined, intentsPageSize);
+  return {
+    ...credentialSummary(r),
+    intents,
+    users: listOf(r.users),
+    agents: listOf(r.agents),
+    tools: listOf(r.tools),
+    unknown: listOf(r.unknown),
+  };
+}
+
+/**
+ * POST /update-credential-status (admins only): replaces the credential's status and reason; the
+ * server records who set it. It's for triage only; a compromised credential is still accepted.
+ */
+export async function updateCredentialStatus(
+  credentialID: string,
+  status: CredentialStatusValue,
+  reason = "",
+): Promise<{ credentialID: string; status: CredentialStatus }> {
+  const r = await apiRequest<{ credentialID: string; status?: Partial<CredentialStatus> | null }>("/update-credential-status", {
+    method: "POST",
+    body: { credentialID, status, reason },
+  });
+  return { credentialID: r.credentialID ?? credentialID, status: credentialStatus(r.status) };
+}
+
+/** One intent a credential was presented in (GET /app-credentials). */
+export interface AppCredentialIntent {
+  intentID: string;
+  initiatorName: string;
+  initiatorDID?: string;
+  /** e.g. "completed", "halted". */
+  status: string;
+  /** ISO time the intent started; "" when not sent. */
+  startedAt: string;
+}
+
+/** A credential presented to an app, with the intents it was used in, most recent first. */
+export interface AppCredential {
+  credentialID: string;
+  /** e.g. "bearer_opaque". */
+  authMethod: string;
+  intents: AppCredentialIntent[];
+}
+
+export interface AppCredentials {
+  appDID: string;
+  appName: string;
+  credentials: AppCredential[];
+}
+
+interface ApiAppCredentialIntent {
+  intentID: string;
+  initiatorName?: string;
+  initiatorDID?: string;
+  status?: string;
+  startedAt?: string;
+  startTime?: string;
+  createdAt?: string;
+}
+
+interface ApiAppCredentials {
+  appDID: string;
+  appName?: string;
+  credentials?: { credentialID: string; authMethod?: string; intents?: ApiAppCredentialIntent[] | null }[] | null;
+}
+
+/** GET /app-credentials: every credential presented to an app and the intents it appeared in. */
+export async function fetchAppCredentials(appDID: string): Promise<AppCredentials> {
+  const r = await apiRequest<ApiAppCredentials>("/app-credentials", { query: { appDID } });
+  return {
+    appDID: r.appDID,
+    appName: r.appName ?? "",
+    credentials: (r.credentials ?? []).map((c) => ({
+      credentialID: c.credentialID,
+      authMethod: c.authMethod ?? "",
+      intents: (c.intents ?? []).map((i) => ({
+        intentID: i.intentID,
+        initiatorName: i.initiatorName ?? "",
+        initiatorDID: i.initiatorDID,
+        status: i.status ?? "",
+        startedAt: i.startedAt ?? i.startTime ?? i.createdAt ?? "",
+      })),
+    })),
+  };
+}
+
 export async function fetchToolAgentScores(toolDID: string): Promise<ToolAgentScore[]> {
   const res = await apiRequest<ApiToolAgentScores>("/tool-agent-scores", { query: { toolDID } });
   return (res.agents || []).map(mapToolAgentScore);

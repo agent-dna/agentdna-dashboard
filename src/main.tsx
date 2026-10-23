@@ -9,6 +9,9 @@ import { AgentsToolsPage } from "./pages/AgentsToolsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { AgentToolDetailPage } from "./pages/AgentToolDetailPage";
 import { ToolDetailPage } from "./pages/ToolDetailPage";
+import { ResourcesPage } from "./pages/resources/ResourcesPage";
+import { ResourceDetailPage } from "./pages/resources/ResourceDetailPage";
+import { CredentialDetailPage } from "./pages/resources/CredentialDetailPage";
 import { UserDetailPage } from "./pages/UserDetailPage";
 import { IntentDetailPage } from "./pages/IntentDetailPage";
 import { InteractionsPage } from "./pages/InteractionsPage";
@@ -60,6 +63,9 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="graph/:intentId" element={<FlowPage />} />
                 <Route path="interactions" element={<InteractionsPage />} />
                 <Route path="observability" element={<ObservabilityPage />} />
+                <Route path="resources" element={<ResourcesPage />} />
+                <Route path="resources/credentials/:credentialId" element={<CredentialDetailPage />} />
+                <Route path="resources/:resourceId" element={<ResourceDetailPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 {/* <Route path="locked" element={<LockedPage />} /> */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
