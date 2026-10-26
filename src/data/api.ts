@@ -858,6 +858,9 @@ export async function fetchAgent(id: string): Promise<Agent | null> {
 
 export interface ApiIntentInfo {
   intentID: string;
+  /** The apps the intent called, as /intent-list sends them. */
+  appDIDs?: string[];
+  apps?: { did: string; name?: string }[];
   initiatorDID: string;
   initiatorName?: string;
   startedAt: string;
@@ -978,6 +981,8 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     toolsCount: toolDids.size,
     interactionsCount: r.interactionsCount ?? allInteractions.length,
     reviewStatus: r.reviewStatus,
+    apps: r.apps,
+    appDIDs: r.appDIDs,
   });
   return r.executor ? { ...intent, executor: r.executor } : intent;
 }

@@ -3,17 +3,16 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { Pagination } from "../../components/Pagination";
-import { ThreatPill } from "../../components/ThreatPill";
 import { DestinationLogo } from "../../components/DestinationLogo";
-import { useResourceInfo } from "../../data/hooks";
+import { useIntentsByIds, useResourceInfo } from "../../data/hooks";
+import { intentTableColumns } from "../../components/intentTableColumns";
 import { ApiError } from "../../api/client";
-import { IntentIdChip } from "../../context/IntentNumbersContext";
-import { useResolveName } from "../../context/DirectoryContext";
 import { CopyId } from "../observability/IntentDetailPanel";
 import { authMethodLabel } from "../../lib/credFormat";
 import { CredentialStatusChip } from "../../components/CredentialStatusChip";
-import { credentialPath, resourceLabel, whenShort } from "../../lib/resource";
-import type { ResourceCredential, ResourceIntent } from "../../data/api";
+import { credentialPath, resourceLabel } from "../../lib/resource";
+import type { ResourceCredential } from "../../data/api";
+import type { Intent } from "../../types";
 
 /**
  * One resource (GET /resource-info): which service it is, the intents that reached it (newest
@@ -23,27 +22,18 @@ import type { ResourceCredential, ResourceIntent } from "../../data/api";
 
 type Tab = "intents" | "credentials";
 
-const REVIEW_STYLE: Record<string, { color: string; bg: string }> = {
-  Unreviewed: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
-  Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
-  Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
-};
-
 const shortId = (s: string) => (s.length > 22 ? `${s.slice(0, 10)}…${s.slice(-6)}` : s);
-
-const sentence = (s: string) => {
-  const t = (s || "").replace(/_/g, " ").trim();
-  return t ? t[0].toUpperCase() + t.slice(1) : "";
-};
 
 export function ResourceDetailPage() {
   const { resourceId = "" } = useParams<{ resourceId: string }>();
   const navigate = useNavigate();
-  const resolve = useResolveName();
   const [tab, setTab] = useState<Tab>("intents");
   const [intentsPage, setIntentsPage] = useState(1);
   const [credentialsPage, setCredentialsPage] = useState(1);
   const { data: res, loading, error, refetch } = useResourceInfo(resourceId, intentsPage, credentialsPage);
+  // The intents table matches Home's, which needs each intent's own details (interactions, apps).
+  const pageIntentIds = res?.intents.items.map((i) => i.intentID) ?? [];
+  const { data: pageIntents, loading: pageIntentsLoading } = useIntentsByIds(pageIntentIds);
 
   const back = (
     <button className="btn" style={{ marginTop: 16 }} onClick={() => navigate("/resources")}>
@@ -80,71 +70,10 @@ export function ResourceDetailPage() {
   }
 
   const { title, dest } = resourceLabel(res.url, res.name);
-  const credName = (id: string) => shortId(id);
 
-  const intentCols: DataTableColumn<ResourceIntent & { id: string }>[] = [
-    {
-      key: "intent",
-      label: "Intent",
-      render: (r) => <IntentIdChip id={r.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }} />,
-    },
-    {
-      key: "initiator",
-      label: "Initiator",
-      render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>
-          {r.initiatorDID ? resolve(r.initiatorDID, r.initiatorName).name : r.initiatorName || "Unknown"}
-        </span>
-      ),
-    },
-    { key: "flow", label: "Flow", render: (r) => <span className="res-dim">{sentence(r.flowType) || "—"}</span> },
-    {
-      key: "credentials",
-      label: "Credentials used",
-      render: (r) =>
-        r.credentialIDs.length ? (
-          <span className="res-chips">
-            {r.credentialIDs.slice(0, 2).map((c) => (
-              <button
-                key={c}
-                type="button"
-                className="res-chip mono"
-                title={c}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(credentialPath(c));
-                }}
-              >
-                <Icon name="key" size={10} />
-                {credName(c)}
-              </button>
-            ))}
-            {r.credentialIDs.length > 2 && <span className="res-more">+{r.credentialIDs.length - 2}</span>}
-          </span>
-        ) : (
-          <span className="res-faint">None</span>
-        ),
-    },
-    { key: "incident", label: "Incidents", render: (r) => <ThreatPill threat={r.threatDetected} /> },
-    {
-      key: "review",
-      label: "Review",
-      render: (r) => {
-        const st = REVIEW_STYLE[r.reviewStatus] ?? { color: "var(--fg-muted)", bg: "var(--bg-2)" };
-        return (
-          <span style={{ fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: st.color, background: st.bg }}>
-            {r.reviewStatus || "Unreviewed"}
-          </span>
-        );
-      },
-    },
-    {
-      key: "started",
-      label: "Started",
-      align: "right",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>{whenShort(r.startedAt)}</span>,
-    },
-  ];
+  const intentCols = intentTableColumns(navigate);
+  // Each row is the intent as /intent-info has it; one that failed to load is skipped.
+  const intentRows = pageIntents.filter((i): i is Intent => !!i);
 
   const credentialCols: DataTableColumn<ResourceCredential & { id: string }>[] = [
     {
@@ -232,10 +161,10 @@ export function ResourceDetailPage() {
 
         {tab === "intents" ? (
           <DataTable
-            rows={res.intents.items.map((i) => ({ ...i, id: i.intentID }))}
+            rows={intentRows}
             columns={intentCols}
-            onRowClick={(r) => navigate(`/intents/${encodeURIComponent(r.intentID)}`)}
-            emptyText="No intents have reached this resource."
+            onRowClick={(r) => navigate(`/intents/${encodeURIComponent(r.id)}`)}
+            emptyText={pageIntentsLoading || (pageIntentIds.length > 0 && pageIntents.length === 0) ? "Loading intents…" : "No intents have reached this resource."}
           />
         ) : (
           <DataTable
