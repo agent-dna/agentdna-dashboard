@@ -8,11 +8,9 @@ import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { useThreatByID } from "../../data/hooks";
 import { timeAgo, interactionRawData, titleOrUnknown } from "../../lib/format";
 import type { Interaction } from "../../types";
-import { authStatusLabel, authTone, fetchIntentAuthEvidence } from "../../api/observability";
+import { authStatusLabel, authTone } from "../../api/observability";
 import { parseDestination } from "../../lib/destination";
 import { DestinationLogo } from "../DestinationLogo";
-import { EvidenceCheck } from "../../pages/observability/EvidenceCheck";
-import { useObsQuery } from "../../pages/observability/useObsQuery";
 
 interface Props {
   interaction: Interaction;
@@ -33,9 +31,6 @@ export function InteractionDetail({ interaction: i }: Props) {
   // What was sent in this hop: the envelope's own payload when we have it, else the endpoint's message.
   const rawPayload = (i.raw as { payload?: unknown } | undefined)?.payload;
   const payload = typeof rawPayload === "string" ? rawPayload : i.payload ?? i.message;
-  // This hop's auth checks, from the intent's evidence trail.
-  const evidence = useObsQuery(i.intent?.id && `auth-evidence:${i.intent.id}`, () => fetchIntentAuthEvidence(i.intent.id));
-  const checks = evidence.data?.interactions.find((x) => x.interactionID === i.id);
 
   const openIntent = () => {
     if (!i.intent?.id) return;
@@ -257,58 +252,6 @@ export function InteractionDetail({ interaction: i }: Props) {
             </div>
           </div>
         </DrawerSection>
-
-        <DrawerSection title="Audit trail">
-          <div className="timeline">
-            <div className="tl-item">
-              <div className="dot" />
-              <div className="line" />
-              <div className="body">
-                <div className="nm">Identity authorized</div>
-                <div className="desc">Signature {i.initiator.id.slice(-6)} matched against registered key</div>
-              </div>
-            </div>
-
-            <div className="tl-item">
-              <div className="dot" />
-              <div className="line" />
-              <div className="body">
-                <div className="nm">Access verified</div>
-                <div className="desc">Policies checked and verified for {i.target.name || i.target.id}</div>
-              </div>
-            </div>
-
-            {i.threat && (
-              <div className="tl-item threat">
-                <div className="dot" />
-                <div className="line" />
-                <div className="body">
-                  <div className="nm">Incident detected</div>
-                  <div className="desc">{threatMessage || "Interaction flagged for review"}</div>
-                </div>
-              </div>
-            )}
-
-            <div className="tl-item">
-              <div className="dot" />
-              <div className="body">
-                <div className="nm">Envelope sealed</div>
-                <div className="desc">Interaction recorded, signed and committed</div>
-              </div>
-            </div>
-          </div>
-        </DrawerSection>
-
-        {/* Only when this interaction has auth evidence; an intent without any shows no section. */}
-        {checks && checks.evidence.length > 0 && (
-          <DrawerSection title="Credential info">
-            <ul className="ev-checks">
-              {checks.evidence.map((e, k) => (
-                <EvidenceCheck key={e.requestID || k} e={e} at={checks.time} flat />
-              ))}
-            </ul>
-          </DrawerSection>
-        )}
 
         <DrawerSection title="Raw data">
           <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
