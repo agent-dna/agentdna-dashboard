@@ -185,6 +185,20 @@ export const useResourceInfo = (resourceID: string, intentsPage = 1, credentials
     null,
     [resourceID, intentsPage, credentialsPage],
   );
+/** The credentials a user, admin or agent presented, a page at a time. */
+export const usePresentedCredentials = (owner: api.CredentialOwner, page = 1) =>
+  useAsync<api.PagedPresentedCredentials>(
+    () => (owner.id ? api.fetchPresentedCredentials(owner, page) : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 10, totalPages: 0 })),
+    { items: [], total: 0, page: 1, pageSize: 10, totalPages: 0 },
+    [owner.kind, owner.id, page],
+  );
+/** Several intents at once (each from the cached /intent-info); a failed one comes back as null. */
+export const useIntentsByIds = (ids: string[]) =>
+  useAsync<(Intent | null)[]>(
+    () => Promise.all(ids.map((id) => api.fetchIntent(id).catch(() => null))),
+    [],
+    [ids.join(",")],
+  );
 export const useCredentialsPaged = (page = 1, pageSize = 10, status?: api.CredentialStatusValue) =>
   useAsync<api.PagedCredentials>(
     () => api.fetchCredentials(page, pageSize, status),

@@ -10,7 +10,9 @@ import { InfoStat } from "../components/InfoStat";
 import { EditAgentPolicyModal } from "../components/forms/EditAgentPolicyModal";
 import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { RevokeAgentModal } from "../components/forms/RevokeAgentModal";
-import { useAgent, useAgentInteractions, useAgentIntents, /* useAgentTools, */ useAgentPolicyHistory } from "../data/hooks";
+import { useAgent, useAgentInteractions, useAgentIntents, /* useAgentTools, */ useAgentPolicyHistory, usePresentedCredentials } from "../data/hooks";
+import { PresentedCredentialsTable } from "../components/PresentedCredentialsTable";
+import { Pagination } from "../components/Pagination";
 // import type { AgentToolLink } from "../data/api";
 import { useAuth } from "../context/AuthContext";
 import { useDrawer } from "../context/DrawerContext";
@@ -30,7 +32,7 @@ const THREAT_ROW_STYLE: CSSProperties = {
   boxShadow: "inset 3px 0 0 var(--threat)",
 };
 
-type Tab = "interactions" | "intents" | "tools" | "history";
+type Tab = "interactions" | "intents" | "tools" | "history" | "credentials";
 
 export function AgentDetailPage() {
   const { agentId = "" } = useParams<{ agentId: string }>();
@@ -53,6 +55,9 @@ export function AgentDetailPage() {
   const { data: agent, loading } = agentState;
   const { data: interactions } = useAgentInteractions(agentId);
   const { data: intents } = useAgentIntents(agentId);
+  // The credentials this agent presented, paged on their own.
+  const [credentialsPage, setCredentialsPage] = useState(1);
+  const creds = usePresentedCredentials({ kind: "agent", id: agentId }, credentialsPage);
   // const { data: tools } = useAgentTools(agentId);
   const { data: history } = useAgentPolicyHistory(agentId);
   const openHistoryRevision = (entry: PolicyHistoryEntry) => {
@@ -382,8 +387,22 @@ export function AgentDetailPage() {
             { key: "intents", label: "Intents", count: intents.length },
             // { key: "tools", label: "Tools", count: tools.length },
             { key: "history", label: "Policy History", count: history?.history?.length ?? 0 },
+            { key: "credentials", label: "Credentials", count: creds.data.total },
           ]}
         />
+
+        {tab === "credentials" && (
+          <>
+            <PresentedCredentialsTable rows={creds.data.items} loading={creds.loading} error={creds.error} hideRequests />
+            <Pagination
+              page={credentialsPage}
+              totalPages={creds.data.totalPages}
+              total={creds.data.total}
+              pageSize={creds.data.pageSize}
+              onChange={setCredentialsPage}
+            />
+          </>
+        )}
 
         {tab === "interactions" && (
           <LedgerTable

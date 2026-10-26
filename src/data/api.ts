@@ -1454,6 +1454,65 @@ export async function updateCredentialStatus(
   return { credentialID: r.credentialID ?? credentialID, status: credentialStatus(r.status) };
 }
 
+/* ============ Credentials a user, admin or agent presented ============ */
+
+/** A credential the user, admin or agent presented (sent), with their own use of it. */
+export interface PresentedCredential {
+  credentialID: string;
+  authMethod: string;
+  /** Where it was observed: client_out, gateway, server_in (and server_out for tools). */
+  sources: string[];
+  /** Requests / intents where this party presented it (not everyone's). */
+  requestCount: number;
+  intentCount: number;
+  firstUsedAt: string;
+  lastUsedAt: string;
+  status: CredentialStatus;
+}
+
+export interface PagedPresentedCredentials {
+  items: PresentedCredential[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+type ApiPresentedCredential = Partial<Omit<PresentedCredential, "status">> & {
+  credentialID: string;
+  status?: Partial<CredentialStatus> | null;
+};
+
+/** Whose credentials: a user (/user-info), an admin (/admins/:id) or an agent (/agent-info). */
+export type CredentialOwner = { kind: "user" | "admin" | "agent"; id: string };
+
+/**
+ * The credentials a user, admin or agent presented, most recently used first, a page at a time.
+ * Read from the `credentials` section those three endpoints now return; only the credentials
+ * page is asked for, so paging it doesn't reload the rest of the page.
+ */
+export async function fetchPresentedCredentials(owner: CredentialOwner, page = 1, pageSize = 10): Promise<PagedPresentedCredentials> {
+  const query = { credentialsPage: page, credentialsPageSize: pageSize };
+  const r = await apiRequest<{ credentials?: ApiPaged<ApiPresentedCredential> | null }>(
+    owner.kind === "agent" ? "/agent-info" : owner.kind === "admin" ? `/admins/${encodeURIComponent(owner.id)}` : "/user-info",
+    { query: owner.kind === "agent" ? { agentDID: owner.id, ...query } : owner.kind === "user" ? { userID: owner.id, ...query } : query },
+  );
+  const p = paged(r.credentials ?? undefined, pageSize);
+  return {
+    ...p,
+    items: p.items.map((c) => ({
+      credentialID: c.credentialID,
+      authMethod: c.authMethod ?? "",
+      sources: c.sources ?? [],
+      requestCount: c.requestCount ?? 0,
+      intentCount: c.intentCount ?? 0,
+      firstUsedAt: c.firstUsedAt ?? "",
+      lastUsedAt: c.lastUsedAt ?? "",
+      status: credentialStatus(c.status),
+    })),
+  };
+}
+
 /** One intent a credential was presented in (GET /app-credentials). */
 export interface AppCredentialIntent {
   intentID: string;

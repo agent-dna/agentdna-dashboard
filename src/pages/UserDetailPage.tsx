@@ -10,11 +10,12 @@ import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { fmtRuntime, initials, timeAgo } from "../lib/format";
-import { useUserInfo } from "../data/hooks";
+import { usePresentedCredentials, useUserInfo } from "../data/hooks";
+import { PresentedCredentialsTable } from "../components/PresentedCredentialsTable";
 import type { DeployedAgent } from "../data/api";
 import type { Intent } from "../types";
 
-type Tab = "interactions" | "intents" | "threats" | "agents";
+type Tab = "interactions" | "intents" | "threats" | "agents" | "credentials";
 
 /**
  * A user's page (/users/:userId, from /user-info), or with `kind="admin"` an admin's
@@ -36,6 +37,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   const [intentsPage, setIntentsPage] = useState(1);
   const [threatsPage, setThreatsPage] = useState(1);
   const [agentsPage, setAgentsPage] = useState(1);
+  const [credentialsPage, setCredentialsPage] = useState(1);
 
   const [revoking, setRevoking] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
@@ -43,6 +45,8 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   const { data: result, loading } = useUserInfo(
     userId, interactionsPage, intentsPage, threatsPage, agentsPage, kind,
   );
+  // The credentials this user (or admin) presented, paged on their own.
+  const creds = usePresentedCredentials({ kind, id: userId }, credentialsPage);
 
   // ─── Loading ─────────────────────────────────────────────────────────────
   if (loading) {
@@ -105,22 +109,26 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
     t === "interactions" ? interactionsPage
     : t === "intents" ? intentsPage
     : t === "threats" ? threatsPage
+    : t === "credentials" ? credentialsPage
     : agentsPage;
   const setPageFor = (t: Tab, p: number) => {
     if (t === "interactions") setInteractionsPage(p);
     else if (t === "intents") setIntentsPage(p);
     else if (t === "threats") setThreatsPage(p);
+    else if (t === "credentials") setCredentialsPage(p);
     else setAgentsPage(p);
   };
   const totalPagesFor = (t: Tab) =>
     t === "interactions" ? interactionsTotalPages
     : t === "intents" ? intentsTotalPages
     : t === "threats" ? threatsTotalPages
+    : t === "credentials" ? creds.data.totalPages
     : agentsTotalPages;
   const totalCountFor = (t: Tab) =>
     t === "interactions" ? interactionsTotal
     : t === "intents" ? intentsTotal
     : t === "threats" ? threatsTotal
+    : t === "credentials" ? creds.data.total
     : agentsTotal;
 
   const intentCols: DataTableColumn<Intent>[] = [
@@ -323,6 +331,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
                 { key: "intents", label: "Intents", count: intentsTotal },
                 { key: "threats", label: "Incidents", count: threatsTotal },
                 { key: "agents", label: "Agents Deployed", count: agentsTotal },
+                { key: "credentials", label: "Credentials", count: creds.data.total },
               ]}
             />
           </div>
@@ -361,6 +370,10 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
             emptyText="No incidents detected."
             onView={(r) => openDrawer("interaction", r)}
           />
+        )}
+
+        {tab === "credentials" && (
+          <PresentedCredentialsTable rows={creds.data.items} loading={creds.loading} error={creds.error} />
         )}
 
         {tab === "agents" && (
