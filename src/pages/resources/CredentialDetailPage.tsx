@@ -3,18 +3,18 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { Pagination } from "../../components/Pagination";
-import { ThreatPill } from "../../components/ThreatPill";
 import { CredentialStatusChip } from "../../components/CredentialStatusChip";
-import { CredentialStatusModal } from "../../components/forms/CredentialStatusModal";
+import { CredentialStatusPicker } from "../../components/CredentialStatusPicker";
+import { intentTableColumns } from "../../components/intentTableColumns";
 import { useAuth } from "../../context/AuthContext";
-import { useCredentialInfo } from "../../data/hooks";
+import { useCredentialInfo, useIntentsByIds } from "../../data/hooks";
 import { ApiError } from "../../api/client";
-import { IntentIdChip } from "../../context/IntentNumbersContext";
 import { useResolveName } from "../../context/DirectoryContext";
 import { CopyId } from "../observability/IntentDetailPanel";
 import { authMethodLabel, sentence } from "../../lib/credFormat";
 import { whenShort } from "../../lib/resource";
-import type { CredentialIntent, CredentialParty } from "../../data/api";
+import type { CredentialParty } from "../../data/api";
+import type { Intent } from "../../types";
 
 /**
  * One credential (GET /credential-info): how it authenticates, where its checks were seen, the
@@ -22,12 +22,6 @@ import type { CredentialIntent, CredentialParty } from "../../data/api";
  */
 
 type Tab = "intents" | "agents" | "tools" | "users" | "unknown";
-
-const REVIEW_STYLE: Record<string, { color: string; bg: string }> = {
-  Unreviewed: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
-  Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
-  Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
-};
 
 const shortId = (s: string) => (s.length > 22 ? `${s.slice(0, 10)}…${s.slice(-6)}` : s);
 const mono = (v: string, muted = false) => (
@@ -48,10 +42,12 @@ export function CredentialDetailPage() {
   const resolve = useResolveName();
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
-  const [statusOpen, setStatusOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("intents");
   const [intentsPage, setIntentsPage] = useState(1);
   const { data: cred, loading, error, refetch } = useCredentialInfo(credentialId, intentsPage);
+  // The intents table matches Home's, which needs each intent's own details (interactions, apps).
+  const pageIntentIds = cred?.intents.items.map((i) => i.intentID) ?? [];
+  const { data: pageIntents, loading: pageIntentsLoading } = useIntentsByIds(pageIntentIds);
 
   if (!cred && loading) {
     return (
@@ -83,7 +79,7 @@ export function CredentialDetailPage() {
     );
   }
 
-  const method = authMethodLabel(cred.authMethod) || "Unknown method";
+  const method = authMethodLabel(cred.authMethod);
   const seenBy = cred.sources.map(sentence).filter(Boolean).join(" → ");
   const parties: Record<Exclude<Tab, "intents">, CredentialParty[]> = {
     agents: cred.agents,
@@ -100,38 +96,9 @@ export function CredentialDetailPage() {
     ...(cred.unknown.length ? [{ key: "unknown" as const, label: "Unrecognised", count: cred.unknown.length }] : []),
   ];
 
-  const intentCols: DataTableColumn<CredentialIntent & { id: string }>[] = [
-    {
-      key: "intent",
-      label: "Intent",
-      render: (r) => <IntentIdChip id={r.intentID} style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }} />,
-    },
-    {
-      key: "initiator",
-      label: "Initiator",
-      render: (r) => (
-        <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>
-          {r.initiatorDID ? resolve(r.initiatorDID, r.initiatorName).name : r.initiatorName || "Unknown"}
-        </span>
-      ),
-    },
-    { key: "requests", label: "Requests", render: (r) => mono(r.requestCount.toLocaleString()) },
-    { key: "incident", label: "Incidents", render: (r) => <ThreatPill threat={r.threatDetected} /> },
-    {
-      key: "review",
-      label: "Review",
-      render: (r) => {
-        const st = REVIEW_STYLE[r.reviewStatus] ?? { color: "var(--fg-muted)", bg: "var(--bg-2)" };
-        return (
-          <span style={{ fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: st.color, background: st.bg }}>
-            {r.reviewStatus || "Unreviewed"}
-          </span>
-        );
-      },
-    },
-    { key: "started", label: "Started", render: (r) => mono(whenShort(r.startedAt), true) },
-    { key: "lastUsed", label: "Last used", align: "right", render: (r) => mono(whenShort(r.lastUsedAt), true) },
-  ];
+  const intentCols = intentTableColumns(navigate);
+  // Each row is the intent as /intent-info has it; one that failed to load is skipped.
+  const intentRows = pageIntents.filter((i): i is Intent => !!i);
 
   const partyCols = (t: Tab): DataTableColumn<CredentialParty & { id: string }>[] => [
     {
@@ -171,22 +138,25 @@ export function CredentialDetailPage() {
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-              <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--fg)" }}>
-                {method}
+              {/* The credential is named by its ID. */}
+              <h1
+                style={{ margin: 0, minWidth: 0, fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                title={cred.credentialID}
+              >
+                {cred.credentialID}
               </h1>
+              <CopyId value={cred.credentialID} label="credential ID" />
               <span className="chip warn" style={{ fontSize: 10.5, padding: "2px 7px" }}>credential</span>
-              <CredentialStatusChip value={cred.status.value} />
-              {isAdmin && (
-                <button className="btn ghost" style={{ padding: "3px 8px", fontSize: 12 }} onClick={() => setStatusOpen(true)}>
-                  Change status
-                </button>
+              {isAdmin ? (
+                <CredentialStatusPicker credentialID={cred.credentialID} current={cred.status} onSaved={refetch} />
+              ) : (
+                <CredentialStatusChip value={cred.status.value} />
               )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--fg-muted)", fontSize: 12.5, fontFamily: "var(--font-mono)", marginBottom: 6, minWidth: 0 }}>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={cred.credentialID}>{cred.credentialID}</span>
-              <CopyId value={cred.credentialID} label="credential ID" />
-            </div>
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontSize: 12.5, color: "var(--fg-muted)", marginBottom: 16 }}>
+              <span>
+                Auth method: <span style={{ color: method ? "var(--fg)" : "var(--fg-faint)" }}>{method || "Not reported"}</span>
+              </span>
               <span>
                 Person:{" "}
                 <span style={{ color: cred.identityID ? "var(--fg)" : "var(--fg-faint)", fontFamily: cred.identityID ? "var(--font-mono)" : undefined }}>
@@ -230,10 +200,10 @@ export function CredentialDetailPage() {
 
         {tab === "intents" ? (
           <DataTable
-            rows={cred.intents.items.map((i) => ({ ...i, id: i.intentID }))}
+            rows={intentRows}
             columns={intentCols}
-            onRowClick={(r) => navigate(`/intents/${encodeURIComponent(r.intentID)}`)}
-            emptyText="This credential hasn’t been used in an intent."
+            onRowClick={(r) => navigate(`/intents/${encodeURIComponent(r.id)}`)}
+            emptyText={pageIntentsLoading || (pageIntentIds.length > 0 && pageIntents.length === 0) ? "Loading intents…" : "This credential hasn’t been used in an intent."}
           />
         ) : (
           <DataTable
@@ -250,15 +220,6 @@ export function CredentialDetailPage() {
         )}
       </div>
 
-      {isAdmin && (
-        <CredentialStatusModal
-          open={statusOpen}
-          credentialID={cred.credentialID}
-          current={cred.status}
-          onClose={() => setStatusOpen(false)}
-          onSaved={refetch}
-        />
-      )}
     </div>
   );
 }
