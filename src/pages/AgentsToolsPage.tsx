@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pagination } from "../components/Pagination";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { InspectButton } from "../components/InspectButton";
 import { MetricTile } from "../components/MetricTile";
@@ -10,6 +10,7 @@ import { AccessRequestModal } from "../components/forms/AccessRequestModal";
 import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics, useHomeMetrics } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
+import { useDirectory } from "../context/DirectoryContext";
 import { AppIcon } from "../components/AppIcon";
 import { EmptyAgentsState } from "../components/EmptyAgentsState";
 import { timeAgo } from "../lib/format";
@@ -21,6 +22,7 @@ type Tab = "agents" | "tools";
 export function AgentsToolsPage() {
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
+  const directory = useDirectory();
   const location = useLocation();
   const [tab, setTab] = useState<Tab>((location.state as { tab?: Tab } | null)?.tab ?? "agents");
   const [agentsPage, setAgentsPage] = useState(1);
@@ -228,9 +230,10 @@ export function AgentsToolsPage() {
                   .map((a) => ({ id: a.id, name: a.name, interactions: a.interactions, threats: a.threats }))
           }
           totalAgents={isAdmin ? agentsAppsMetrics.metrics.totalAgents : homeMetrics.agentCount}
-          onRowClick={(r) => {
+          rowHref={(r) => {
             const match = agents.find((a) => a.id === r.id) || agents.find((a) => a.name === r.name);
-            if (match) navigate(`/agents/${match.id}`);
+            const id = match?.id ?? [...directory].find(([, entry]) => entry.kind === "agent" && entry.name === r.name)?.[0];
+            return id ? `/agents/${encodeURIComponent(id)}` : undefined;
           }}
           onViewAll={() => navigate("/agents", { state: { tab: "agents" } })}
         />
@@ -242,7 +245,7 @@ export function AgentsToolsPage() {
             threats: a.totalThreats,
           }))}
           totalApps={agentsAppsMetrics.metrics.totalApps}
-          onRowClick={(r) => navigate(`/tools/${encodeURIComponent(r.name)}`)}
+          rowHref={(r) => `/tools/${encodeURIComponent(r.name)}`}
           onViewAll={() => navigate("/agents", { state: { tab: "tools" } })}
         />
       </div>
@@ -359,12 +362,12 @@ interface VolumeRow {
 function TopAgentsList({
   rows,
   totalAgents,
-  onRowClick,
+  rowHref,
   onViewAll,
 }: {
   rows: VolumeRow[];
   totalAgents: number;
-  onRowClick: (r: VolumeRow) => void;
+  rowHref: (r: VolumeRow) => string | undefined;
   onViewAll: () => void;
 }) {
   return (
@@ -389,13 +392,16 @@ function TopAgentsList({
         )}
         {rows.map((r, i) => {
           const threats = r.threats ?? 0;
+          const href = rowHref(r);
           return (
-            <div
+            <Link
               key={r.id}
-              onClick={() => onRowClick(r)}
-              style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", alignItems: "center", padding: "10px 20px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+              to={href ?? "#"}
+              onClick={(e) => { if (!href) e.preventDefault(); }}
+              aria-disabled={!href}
+              style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", alignItems: "center", padding: "10px 20px", cursor: "pointer", textDecoration: "none", borderBottom: "1px solid var(--line)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-2)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               <div style={{ width: 28, height: 28, borderRadius: 8, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, background: i === 0 ? "#0a2240" : "var(--bg-3)", color: i === 0 ? "#fff" : "var(--fg-muted)" }}>
                 {String(i + 1).padStart(2, "0")}
@@ -411,7 +417,7 @@ function TopAgentsList({
                   {threats.toLocaleString()}
                 </span>
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>
@@ -427,12 +433,12 @@ function TopAgentsList({
 function TopAppsList({
   rows,
   totalApps,
-  onRowClick,
+  rowHref,
   onViewAll,
 }: {
   rows: VolumeRow[];
   totalApps: number;
-  onRowClick: (r: VolumeRow) => void;
+  rowHref: (r: VolumeRow) => string;
   onViewAll: () => void;
 }) {
   const maxIxns = rows.reduce((m, r) => Math.max(m, r.interactions), 0) || 1;
@@ -460,12 +466,12 @@ function TopAppsList({
           const threats = r.threats ?? 0;
           const barPct = (r.interactions / maxIxns) * 100;
           return (
-            <div
+            <Link
               key={r.id}
-              onClick={() => onRowClick(r)}
-              style={{ cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 20px" }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+              to={rowHref(r)}
+              style={{ cursor: "pointer", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 20px" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               <div style={{ display: "grid", gridTemplateColumns: "36px 28px 1fr 76px 72px", alignItems: "center", padding: "10px 0 4px" }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: i === 0 ? "#fff" : "rgba(255,255,255,0.4)" }}>
@@ -487,7 +493,7 @@ function TopAppsList({
               <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginBottom: 8 }}>
                 <div style={{ width: `${barPct}%`, height: "100%", background: "linear-gradient(90deg, #5f83e8, #a8bdf5)", borderRadius: 2 }} />
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>
