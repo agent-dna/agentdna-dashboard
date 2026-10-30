@@ -815,6 +815,7 @@ export async function fetchHeatmap(): Promise<HeatmapRow[]> {
 // ============ Detail pages ============
 
 interface ApiAgentInfo {
+  applicationsInteracted?: UserApplication[];
   agentDID: string;
   agentName: string;
   createdAt: string;
@@ -844,6 +845,7 @@ export async function fetchAgent(id: string): Promise<Agent | null> {
       threats: r.totalThreats,
       connected: r.appsInteracted ?? 0,
       appsList: r.appsList || [],
+      applicationsInteracted: r.applicationsInteracted ?? [],
       status: r.totalThreats > 5 ? "warn" : "safe",
       env: r.orgID || "",
       owner: r.deployerDID || "",
@@ -1899,7 +1901,23 @@ function mapUserIntent(i: ApiUserIntent): Intent {
   };
 }
 
+export interface UserApplication {
+  applicationName: string;
+  intentCount: number;
+  intentIDs?: string[];
+  credentials: {
+    credentialID: string;
+    authMethods: string[];
+    status: CredentialStatusValue;
+    requestCount: number;
+    intentCount: number;
+    firstUsedAt: string;
+    lastUsedAt: string;
+  }[];
+}
+
 interface ApiUserInfo {
+  applicationsInteracted?: UserApplication[];
   user: {
     /** The user's primary DID (any of their DIDs is accepted as `userID`). */
     userID: string;
@@ -1959,6 +1977,7 @@ export interface DeployedAgent {
 }
 
 export interface UserDetailResult {
+  applicationsInteracted: UserApplication[];
   user: UserDetail;
   interactions: Interaction[];
   interactionsTotal: number;
@@ -2016,6 +2035,7 @@ export async function fetchAdminInfo(
 function mapUserInfo(r: ApiUserInfo): UserDetailResult {
     const u = r.user;
     return {
+      applicationsInteracted: r.applicationsInteracted ?? [],
       user: {
         userID: u.userID,
         dids: u.dids?.length ? u.dids : [u.userID],

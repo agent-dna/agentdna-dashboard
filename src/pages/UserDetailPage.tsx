@@ -14,10 +14,11 @@ import { useResolveName } from "../context/DirectoryContext";
 import { ThreatPill } from "../components/ThreatPill";
 import { usePresentedCredentials, useUserInfo } from "../data/hooks";
 import { PresentedCredentialsTable } from "../components/PresentedCredentialsTable";
+import { UserApplicationsTable } from "../components/UserApplicationsTable";
 import type { DeployedAgent } from "../data/api";
 import type { Intent } from "../types";
 
-type Tab = "interactions" | "intents" | "threats" | "agents" | "credentials";
+type Tab = "interactions" | "intents" | "threats" | "agents" | "credentials" | "applications";
 
 /**
  * A user's page (/users/:userId, from /user-info), or with `kind="admin"` an admin's
@@ -317,10 +318,11 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
                 { key: "threats", label: "Incidents", count: threatsTotal },
                 { key: "agents", label: "Agents Deployed", count: agentsTotal },
                 { key: "credentials", label: "Credentials", count: creds.data.total },
+                ...(!isAdminPage ? [{ key: "applications", label: "Applications", count: result.applicationsInteracted.length }] : []),
               ]}
             />
           </div>
-          <div style={{ paddingRight: 16, flexShrink: 0 }}>
+          {tab !== "applications" && <div style={{ paddingRight: 16, flexShrink: 0 }}>
             <Pagination
               page={currentPageFor(tab)}
               totalPages={totalPagesFor(tab)}
@@ -329,7 +331,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
               inline
               onChange={(p) => setPageFor(tab, p)}
             />
-          </div>
+          </div>}
         </div>
 
         {tab === "interactions" && (
@@ -359,6 +361,10 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
 
         {tab === "credentials" && (
           <PresentedCredentialsTable rows={creds.data.items} loading={creds.loading} error={creds.error} hideRequests />
+        )}
+
+        {tab === "applications" && (
+          <UserApplicationsTable applications={result.applicationsInteracted} />
         )}
 
         {tab === "agents" && (

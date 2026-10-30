@@ -1,4 +1,5 @@
 import type { AuthEvidence } from "./api/observability";
+import type { UserApplication } from "./data/api";
 
 export type Status = "safe" | "warn" | "threat";
 
@@ -13,6 +14,8 @@ export interface Agent {
   connected: number;
   /** Names of the apps counted in `connected`. Only populated by /agent-info. */
   appsList?: string[];
+  /** Destinations and the credentials used with them, from /agent-info. */
+  applicationsInteracted?: UserApplication[];
   status: Status;
   env: string;
   owner: string;
