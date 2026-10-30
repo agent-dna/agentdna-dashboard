@@ -90,6 +90,7 @@ export function UsersTab() {
           <span className="count">{loading && !res ? "Loading…" : `${total.toLocaleString()} user${total === 1 ? "" : "s"}`}</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize} loading={loading} inline onChange={setPage} />
           {/* Admins get neither Refresh nor Add user here. */}
           {!isAdmin && (
             <button className="btn" onClick={() => setReload((n) => n + 1)}>
@@ -121,8 +122,6 @@ export function UsersTab() {
         onRowClick={(r) => navigate(`/users/${encodeURIComponent(r.userID)}`)}
         emptyText={loading ? "Loading…" : "No users in this org yet"}
       />
-
-      <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize} loading={loading} onChange={setPage} />
     </>
   );
 }
