@@ -9,7 +9,9 @@ import { LedgerTable } from "../components/LedgerTable";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
-import { fmtRuntime, initials, timeAgo } from "../lib/format";
+import { initials, timeAgo } from "../lib/format";
+import { useResolveName } from "../context/DirectoryContext";
+import { ThreatPill } from "../components/ThreatPill";
 import { usePresentedCredentials, useUserInfo } from "../data/hooks";
 import { PresentedCredentialsTable } from "../components/PresentedCredentialsTable";
 import type { DeployedAgent } from "../data/api";
@@ -27,6 +29,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   const isAdminPage = kind === "admin";
   const userId = (isAdminPage ? params.adminId : params.userId) ?? "";
   const navigate = useNavigate();
+  const resolve = useResolveName();
   // Users go back to the Users list; there is no list of admins, so an admin's page goes back.
   const goBack = () => (isAdminPage ? navigate(-1) : navigate("/users"));
   const backLabel = isAdminPage ? "Back" : "Users";
@@ -136,20 +139,18 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
       key: "id",
       label: "Intent",
       render: (r) => (
-        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }} />
+        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {
-      key: "runtime",
-      label: "Runtime",
-      align: "right",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{fmtRuntime(r.runtime)}</span>,
+      key: "initiator",
+      label: "Initiator",
+      render: (r) => <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{resolve(r.initiator.id, r.initiator.name).name}</span>,
     },
     {
-      key: "agents",
-      label: "Agents",
-      align: "right",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.agentsInteracted}</span>,
+      key: "interactions",
+      label: "Interactions",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactionsCount}</span>,
     },
     {
       key: "tools",
@@ -161,14 +162,11 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
       key: "threats",
       label: "Incidents",
       align: "right",
-      render: (r) =>
-        r.threats > 0
-          ? <span className="chip threat">{r.threats}</span>
-          : <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>,
+      render: (r) => <ThreatPill threat={r.threats > 0} />,
     },
     {
       key: "started",
-      label: "Started",
+      label: "Time",
       align: "right",
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>
@@ -198,16 +196,6 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
       render: (r) => <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>,
     },
     {
-      key: "status",
-      label: "Status",
-      render: (r) => (
-        <span className={`chip ${r.status === "warn" ? "warn" : r.status === "inactive" ? "" : "safe"}`}>
-          <span className={`dot-status ${r.status === "warn" ? "warn" : r.status === "inactive" ? "" : "safe"}`} />
-          {r.status === "warn" ? "needs review" : r.status === "inactive" ? "inactive" : "healthy"}
-        </span>
-      ),
-    },
-    {
       key: "interactions",
       label: "Interactions",
       align: "right",
@@ -217,10 +205,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
       key: "threats",
       label: "Incidents",
       align: "right",
-      render: (r) =>
-        r.threats > 0
-          ? <span className="chip threat">{r.threats}</span>
-          : <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>,
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.threats.toLocaleString()}</span>,
     },
     {
       key: "created",
@@ -373,7 +358,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
         )}
 
         {tab === "credentials" && (
-          <PresentedCredentialsTable rows={creds.data.items} loading={creds.loading} error={creds.error} />
+          <PresentedCredentialsTable rows={creds.data.items} loading={creds.loading} error={creds.error} hideRequests />
         )}
 
         {tab === "agents" && (

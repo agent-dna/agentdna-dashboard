@@ -5,6 +5,7 @@ import { CredentialStatusChip } from "./CredentialStatusChip";
 import { CopyId } from "../pages/observability/IntentDetailPanel";
 import { authMethodLabel, sentence } from "../lib/credFormat";
 import { credentialPath, whenShort } from "../lib/resource";
+import { timeAgo } from "../lib/format";
 import type { PresentedCredential } from "../data/api";
 
 /**
@@ -22,7 +23,7 @@ export function PresentedCredentialsTable({ rows, loading, error, hideRequests =
   rows: PresentedCredential[];
   loading: boolean;
   error: Error | null;
-  /** Leaves out the Requests column (the agent page). */
+  /** Leaves out the Requests column on user and agent pages. */
   hideRequests?: boolean;
 }) {
   const navigate = useNavigate();
@@ -53,7 +54,19 @@ export function PresentedCredentialsTable({ rows, loading, error, hideRequests =
       : [{ key: "requests", label: "Requests", render: (c: PresentedCredential) => mono(c.requestCount.toLocaleString()) }]),
     { key: "intents", label: "Intents", render: (c) => mono(c.intentCount.toLocaleString()) },
     { key: "status", label: "Status", render: (c) => <CredentialStatusChip value={c.status.value} title={c.status.reason || undefined} /> },
-    { key: "lastUsed", label: "Last used", align: "right", render: (c) => mono(whenShort(c.lastUsedAt), true) },
+    {
+      key: "lastUsed",
+      label: "Last used",
+      align: "right",
+      render: (c) => {
+        const timestamp = Date.parse(c.lastUsedAt);
+        return (
+          <span title={whenShort(c.lastUsedAt)}>
+            {mono(Number.isFinite(timestamp) ? timeAgo(Math.max(0, (Date.now() - timestamp) / 60000)) : "—", true)}
+          </span>
+        );
+      },
+    },
   ];
 
   return (
