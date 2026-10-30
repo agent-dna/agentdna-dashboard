@@ -1,28 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../../components/Icon";
 import { DataTable, type DataTableColumn } from "../../components/DataTable";
-import { AddUserModal } from "../../components/forms/AddUserModal";
-import { listUsers, type OrgUser } from "../../api/users";
+import { Pagination } from "../../components/Pagination";
+import { listUsers, type OrgUser, type PagedUsers } from "../../api/users";
 import { ApiError } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 
-function UsersPager({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
-  const [input, setInput] = useState(String(page));
-  useEffect(() => { setInput(String(page)); }, [page]);
-  const commit = () => {
-    const n = parseInt(input, 10);
-    if (!Number.isNaN(n) && n >= 1 && n <= totalPages) onChange(n);
-    else setInput(String(page));
-  };
-  return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page <= 1} onClick={() => onChange(page - 1)}>Prev</button>
-      <input type="number" min={1} max={totalPages} value={input} onChange={(e) => setInput(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") commit(); }} style={{ width: 56, padding: "3px 6px", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--fg)", background: "var(--bg)", border: "2px solid var(--accent)", borderRadius: 6, boxShadow: "0 0 0 3px rgba(37,99,235,0.12)", textAlign: "center", outline: "none" }} />
-      <button className="btn primary" style={{ padding: "4px 10px", fontSize: 12 }} disabled={page >= totalPages} onClick={() => onChange(page + 1)}>Next</button>
-    </div>
-  );
-}
+/** Rows per page when the server hands back the whole list and we page it here. */
+const PAGE_SIZE = 10;
 
 function fmtDate(s: string) {
   try {
@@ -39,32 +25,42 @@ export function UsersTab() {
   const isAdmin = !!user?.is_admin;
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
-  const [rows, setRows] = useState<OrgUser[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  const [res, setRes] = useState<PagedUsers | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
+  const [reload, setReload] = useState(0);
 
-  const load = useCallback(async () => {
+  // /users-list pages on the server when it can; when it sends the whole list at once we page it
+  // here instead, and then page changes don't need another fetch.
+  const list = res?.usersList ?? [];
+  const total = res?.total || list.length;
+  const clientPaged = list.length > PAGE_SIZE && list.length >= total;
+  const fetchPage = clientPaged ? 1 : page;
+  const pageSize = clientPaged ? PAGE_SIZE : res?.pageSize || list.length || PAGE_SIZE;
+  const totalPages = clientPaged
+    ? Math.ceil(list.length / PAGE_SIZE)
+    : res?.totalPages || Math.max(1, Math.ceil(total / pageSize));
+  const rows = clientPaged ? list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : list;
+
+  useEffect(() => {
+    let live = true;
     setLoading(true);
     setErr(null);
-    try {
-      const res = await listUsers(page);
-      setRows(res.usersList || []);
-      setTotal(res.total || 0);
-      setTotalPages(res.totalPages || 1);
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Failed to load users");
-      setRows([]);
-      setTotal(0);
-      setTotalPages(1);
-    } finally {
-      setLoading(false);
-    }
-  }, [page]);
+    listUsers(fetchPage)
+      .then((r) => live && setRes(r))
+      .catch((e) => {
+        if (!live) return;
+        setErr(e instanceof ApiError ? e.message : "Failed to load users");
+        setRes(null);
+      })
+      .finally(() => live && setLoading(false));
+    return () => { live = false; };
+  }, [fetchPage, reload]);
 
-  useEffect(() => { load(); }, [load]);
+  // A shrinking list (or a refresh) can leave us past the last page.
+  useEffect(() => {
+    if (res && page > totalPages) setPage(totalPages);
+  }, [res, page, totalPages]);
 
   const cols: DataTableColumn<OrgUser & { id: string }>[] = [
     { key: "userName", label: "Name", render: (r) => <span style={{ color: "var(--fg)", fontWeight: 600 }}>{r.userName}</span> },
@@ -91,18 +87,13 @@ export function UsersTab() {
     <>
       <div className="tb-toolbar">
         <div className="filters">
-          <span className="count">{loading ? "Loading…" : `${rows.length} of ${total}`}</span>
+          <span className="count">{loading && !res ? "Loading…" : `${total.toLocaleString()} user${total === 1 ? "" : "s"}`}</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {totalPages > 1 && (
-            <UsersPager page={page} totalPages={totalPages} onChange={setPage} />
-          )}
-          <button className="btn" onClick={load}>
-            <Icon name="refresh" size={14} /> Refresh
-          </button>
-          {isAdmin && (
-            <button className="btn primary" onClick={() => setAddOpen(true)}>
-              <Icon name="plus" size={14} /> Add user
+          {/* Admins get neither Refresh nor Add user here. */}
+          {!isAdmin && (
+            <button className="btn" onClick={() => setReload((n) => n + 1)}>
+              <Icon name="refresh" size={14} /> Refresh
             </button>
           )}
         </div>
@@ -131,14 +122,7 @@ export function UsersTab() {
         emptyText={loading ? "Loading…" : "No users in this org yet"}
       />
 
-      <AddUserModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onSuccess={() => {
-          setAddOpen(false);
-          load();
-        }}
-      />
+      <Pagination page={page} totalPages={totalPages} total={total} pageSize={pageSize} loading={loading} onChange={setPage} />
     </>
   );
 }
