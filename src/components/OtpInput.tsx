@@ -7,13 +7,15 @@ const LENGTH = 6;
  * all work) laid invisibly over six cells that show the digits. The value stays a string, so
  * leading zeros survive. `onComplete` fires once the sixth digit lands.
  */
-export function OtpInput({ value, onChange, onComplete, disabled, invalid, autoFocus }: {
+export function OtpInput({ value, onChange, onComplete, disabled, invalid, autoFocus, size = "md" }: {
   value: string;
   onChange: (v: string) => void;
   onComplete?: (v: string) => void;
   disabled?: boolean;
   invalid?: boolean;
   autoFocus?: boolean;
+  /** "sm": compact cells for use inside a longer form. */
+  size?: "md" | "sm";
 }) {
   const [focused, setFocused] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
@@ -23,7 +25,7 @@ export function OtpInput({ value, onChange, onComplete, disabled, invalid, autoF
   }, [disabled, value, autoFocus]);
   const active = Math.min(value.length, LENGTH - 1);
   return (
-    <div className={`otp${invalid ? " invalid" : ""}${disabled ? " disabled" : ""}`}>
+    <div className={`otp${size === "sm" ? " otp-sm" : ""}${invalid ? " invalid" : ""}${disabled ? " disabled" : ""}`}>
       <input
         ref={ref}
         className="otp-input"

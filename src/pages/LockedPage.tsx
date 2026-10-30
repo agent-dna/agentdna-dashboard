@@ -29,6 +29,7 @@ type Method = "password" | "code";
 
 /** The server lets a new sign-in code go out a minute after the last one. */
 const RESEND_AFTER_S = 60;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 interface LocationState { from?: { pathname?: string } }
 
@@ -260,6 +261,12 @@ export function LandingPage() {
         .agd-btn:hover:not(:disabled) { background:#1D4ED8!important; }
         .agd-btn:disabled { opacity:0.65; cursor:not-allowed; }
         .agd-soc:hover { background:#F1F5FB!important; }
+        .agd-confirm:hover:not(:disabled) { background:#1D4ED8!important; }
+        .agd-confirm:disabled { background:#C7D4EE!important; cursor:default!important; }
+        .agd-confirm:focus-visible { outline:2px solid #2563EB; outline-offset:2px; }
+        .agd-otp-slot { animation: agdSlot 180ms ease-out; }
+        @keyframes agdSlot { from { opacity:0; transform:scaleY(0.92); } to { opacity:1; transform:none; } }
+        @media (prefers-reduced-motion: reduce) { .agd-otp-slot { animation:none; } }
       `}</style>
 
       {/* ── LEFT 65% ─────────────────────────────────────────────── */}
@@ -446,43 +453,50 @@ export function LandingPage() {
               <label style={fl}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <span style={flt}>Work email</span>
-                  {isRegister && (
-                    <button
-                      type="button"
-                      disabled={otpLoading || countdown > 0}
-                      onClick={handleSendOtp}
-                      style={{ fontFamily:"var(--font-body)", fontSize:11, fontWeight:700, color: countdown > 0 ? "#9FB2D6" : "#2563EB", background:"none", border:"none", cursor: countdown > 0 ? "default" : "pointer", padding:0 }}
-                    >
-                      {otpLoading ? "Sending…" : countdown > 0 ? `Resend in ${Math.floor(countdown/60)}:${String(countdown%60).padStart(2,"0")}` : otpSent ? "Resend OTP" : "Send OTP →"}
-                    </button>
-                  )}
                 </div>
-                <input className="agd-in" type="email" required value={email} onChange={(e) => { setEmail(e.target.value); resetOtp(); }} placeholder="you@company.com" />
+                {isRegister ? (
+                  <div style={{ position:"relative" }}>
+                    <input className="agd-in" type="email" required value={email} onChange={(e) => { setEmail(e.target.value); resetOtp(); }} placeholder="you@company.com" style={{ paddingRight:126 }} />
+                    {otpSent ? (
+                      <span style={{ ...inlineConfirm, background:"rgba(5,150,105,0.08)", color:"#059669", cursor:"default" }}>✓ Code sent</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="agd-confirm"
+                        disabled={otpLoading || !EMAIL_RE.test(email.trim())}
+                        onClick={handleSendOtp}
+                        title={EMAIL_RE.test(email.trim()) ? "Email a 6-digit code to this address" : "Enter your email first"}
+                        style={inlineConfirm}
+                      >
+                        {otpLoading ? "Sending…" : "Confirm email"}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <input className="agd-in" type="email" required value={email} onChange={(e) => { setEmail(e.target.value); resetOtp(); }} placeholder="you@company.com" />
+                )}
               </label>
             )}
 
-            {/* OTP input — register only, appears after OTP is sent */}
+            {/* Register: "Confirm email" (inside the email field) opens small code boxes here. */}
             {isRegister && otpSent && (
-              <label style={fl}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={flt}>OTP code</span>
-                  <span style={{ fontFamily:"var(--font-mono)", fontSize:10.5, color:"#059669" }}>✓ Sent to {email}</span>
+              <div className="agd-otp-slot" style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                <span style={flt}>Code from your email</span>
+                <OtpInput value={otp} onChange={setOtp} size="sm" autoFocus />
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, fontSize:11.5, color:"#5F73A0" }}>
+                  <span>Code expires in 5 minutes</span>
+                  <button
+                    type="button"
+                    disabled={otpLoading || countdown > 0}
+                    onClick={handleSendOtp}
+                    style={{ ...linkBtn, ...(otpLoading || countdown > 0 ? { color:"#9FB2D6", cursor:"default" } : null) }}
+                  >
+                    {otpLoading ? "Sending…" : countdown > 0 ? `Resend in ${mmss(countdown)}` : "Resend code"}
+                  </button>
                 </div>
-                <input
-                  className="agd-in"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  required
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="Enter 6-digit code"
-                  style={{ letterSpacing: "0.2em", fontFamily:"var(--font-mono)", fontSize:16 }}
-                />
-                {otpError && <span style={{ fontFamily:"var(--font-body)", fontSize:11.5, color:"#DC2626" }}>{otpError}</span>}
-              </label>
+              </div>
             )}
-            {isRegister && !otpSent && otpError && (
+            {isRegister && otpError && (
               <span style={{ fontFamily:"var(--font-body)", fontSize:11.5, color:"#DC2626", marginTop:-4 }}>{otpError}</span>
             )}
 
@@ -736,6 +750,8 @@ const subBtn: CSSProperties = { fontFamily:"var(--font-body)", fontWeight:600, f
 // const div: CSSProperties = { margin:"14px 0 12px", display:"flex", alignItems:"center", gap:12 };
 // const divTxt: CSSProperties = { fontFamily:"var(--font-mono)", fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"#5F73A0", whiteSpace:"nowrap" };
 // const socBtnDisabled: CSSProperties = { fontFamily:"var(--font-body)", fontWeight:600, fontSize:13, color:"#9FB2D6", background:"#F8FAFC", border:"1.5px solid rgba(15,32,70,0.10)", borderRadius:10, padding:"9px", cursor:"not-allowed", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:7, opacity:0.7 };
+/** The "Confirm email" button sitting at the right end of the register email field. */
+const inlineConfirm: CSSProperties = { position:"absolute", right:5, top:"50%", transform:"translateY(-50%)", display:"inline-flex", alignItems:"center", height:26, padding:"0 11px", fontFamily:"var(--font-body)", fontWeight:700, fontSize:12, color:"#FFFFFF", background:"#2563EB", border:"none", borderRadius:7, cursor:"pointer", whiteSpace:"nowrap", transition:"background 150ms" };
 const altBtn: CSSProperties = { fontFamily:"var(--font-body)", fontWeight:600, fontSize:13.5, color:"#0A2240", background:"#FFFFFF", border:"1.5px solid rgba(15,32,70,0.14)", borderRadius:10, padding:"10px", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:8, transition:"background 150ms" };
 const linkBtn: CSSProperties = { fontFamily:"var(--font-body)", fontSize:11.5, fontWeight:700, color:"#2563EB", background:"none", border:"none", padding:0, cursor:"pointer", flexShrink:0 };
 const sentTo: CSSProperties = { display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, padding:"8px 11px", borderRadius:9, background:"#F1F5FB", border:"1.5px solid rgba(15,32,70,0.10)", fontSize:13, fontWeight:600, color:"#0A2240" };
