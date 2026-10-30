@@ -379,11 +379,6 @@ function Step({
                   )}
                 </>
               )}
-              {s.threat && (
-                <span className="chip threat ix-incident" title={s.threatID || undefined}>
-                  <ShieldAlert size={12} /> Incident{s.threatID ? ` ${shortId(s.threatID)}` : ""}
-                </span>
-              )}
             </span>
             {/* Every hop shows its payload, the trigger included. */}
             {s.message && (
