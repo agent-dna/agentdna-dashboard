@@ -4,7 +4,9 @@ import logo from "../assets/agentdna-logo.png";
 import { useAuth } from "../context/AuthContext";
 import { friendlyAuthError, type FriendlyError } from "../lib/authErrors";
 import { fetchPublicMetrics } from "../data/api";
-import { sendOtp, forgotPassword, resetPassword } from "../api/auth";
+import { sendOtp, sendLoginOtp, forgotPassword, resetPassword } from "../api/auth";
+import { ApiError } from "../api/client";
+import { OtpInput } from "../components/OtpInput";
 import type { PublicMetrics } from "../types";
 
 const USER_ORG_ID = "AGENT_DNA_BETA";
@@ -22,6 +24,12 @@ function fmt(n: number): string {
 type Mode   = "signin" | "register";
 type Role   = "user" | "admin";
 type Screen = "auth" | "forgot";
+/** How a user signs in: password, or a 6-digit code emailed by POST /login/send-otp. */
+type Method = "password" | "code";
+
+/** The server lets a new sign-in code go out a minute after the last one. */
+const RESEND_AFTER_S = 60;
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 interface LocationState { from?: { pathname?: string } }
 
 /* ── Component ──────────────────────────────────────────────────── */
@@ -29,7 +37,7 @@ interface LocationState { from?: { pathname?: string } }
 export function LandingPage() {
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { user, login, loginAdmin, registerUser } = useAuth();
+  const { user, login, loginWithOtp, loginAdmin, registerUser } = useAuth();
 
   const [screen, setScreen]         = useState<Screen>("auth");
   const [mode, setMode]             = useState<Mode>("signin");
@@ -50,6 +58,20 @@ export function LandingPage() {
   const [otpError, setOtpError]     = useState<string | null>(null);
   const [countdown, setCountdown]   = useState(0);
   const timerRef                    = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Email-code sign-in: its own step, code and resend timer, apart from the register/reset OTPs.
+  const [method, setMethod]         = useState<Method>("password");
+  const [codeSent, setCodeSent]     = useState(false);
+  const [code, setCode]             = useState("");
+  const [codeNotice, setCodeNotice] = useState<string | null>(null);
+  const [resendAt, setResendAt]     = useState(0);
+  const [now, setNow]               = useState(() => Date.now());
+  useEffect(() => {
+    if (resendAt <= Date.now()) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [resendAt]);
+  const resendIn = Math.max(0, Math.ceil((resendAt - now) / 1000));
 
   // countdown tick
   useEffect(() => {
@@ -78,14 +100,73 @@ export function LandingPage() {
   const isRegister     = mode === "register" && role === "user";
   const isAdminLogin   = role === "admin";
   const isUserRegister = isRegister;
+  const isCodeLogin    = mode === "signin" && role === "user" && method === "code";
 
   const resetOtp = () => { setOtp(""); setOtpSent(false); setOtpError(null); setCountdown(0); };
-  const switchMode = (m: Mode) => { setMode(m); setError(null); setEmail(""); setUsername(""); setPassword(""); setConfirm(""); resetOtp(); };
-  const switchRole = (r: Role) => { setRole(r); setMode("signin"); setError(null); resetOtp(); };
+  const resetCode = () => { setCode(""); setCodeSent(false); setCodeNotice(null); };
+  const switchMode = (m: Mode) => { setMode(m); setError(null); setEmail(""); setUsername(""); setPassword(""); setConfirm(""); resetOtp(); resetCode(); };
+  const switchRole = (r: Role) => { setRole(r); setMode("signin"); setError(null); resetOtp(); resetCode(); };
+  const switchMethod = (m: Method) => { setMethod(m); setError(null); setPassword(""); resetCode(); };
+
+  const goAfterLogin = () => {
+    const to = (location.state as LocationState | null)?.from?.pathname || "/dashboard";
+    navigate(to, { replace: true });
+  };
+
+  /** Registration with the email already filled in (the "not registered" way out). */
+  const toRegister = () => { const keep = email.trim(); switchMode("register"); setEmail(keep); };
+
+  /** A send-otp / verify-otp failure, by HTTP status as the API asks. */
+  const onCodeError = (err: unknown, step: "send" | "verify") => {
+    if (!(err instanceof ApiError) || err.status === 0) { setError(friendlyAuthError(err)); return; }
+    const data = (err.data ?? {}) as { registered?: boolean; retryAfterSeconds?: number };
+    if (err.status === 404 && data.registered === false) {
+      setCodeSent(false);
+      setError({ message: "This email is not registered. Create an account to sign in.", action: "register" });
+    } else if (err.status === 429) {
+      // A code already went out: go on to entering it, and hold Resend until the server allows it.
+      const wait = Number(data.retryAfterSeconds) || RESEND_AFTER_S;
+      setResendAt(Date.now() + wait * 1000); setNow(Date.now());
+      setCodeSent(true);
+      setCodeNotice(`A code was sent to ${email.trim()} less than a minute ago. Enter it below, or request a new one when the timer runs out.`);
+    } else if (step === "verify" && err.status === 400 && !/required/i.test(err.message)) {
+      setCode("");
+      setError({ message: "Invalid or expired code. Check it and try again, or request a new code.", action: "resend" });
+    } else {
+      setError({ message: err.message ? err.message[0].toUpperCase() + err.message.slice(1) : "Something went wrong. Please try again." });
+    }
+  };
+
+  const sendCode = async () => {
+    setError(null); setCodeNotice(null); setSubmitting(true);
+    try {
+      await sendLoginOtp(email.trim());
+      setCodeSent(true); setCode("");
+      setResendAt(Date.now() + RESEND_AFTER_S * 1000); setNow(Date.now());
+      setCodeNotice(`We sent a 6-digit code to ${email.trim()}.`);
+    } catch (err) {
+      onCodeError(err, "send");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const verifyCode = async (value = code) => {
+    if (value.length !== 6 || submitting) return;
+    setError(null); setSubmitting(true);
+    try {
+      await loginWithOtp(email.trim(), value);
+      goAfterLogin();
+    } catch (err) {
+      onCodeError(err, "verify");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const goToForgot = () => {
     setScreen("forgot");
-    setEmail(""); setPassword(""); setConfirm(""); setError(null); setFpSuccess(null); resetOtp();
+    setEmail(""); setPassword(""); setConfirm(""); setError(null); setFpSuccess(null); resetOtp(); resetCode();
   };
 
   const backToAuth = () => {
@@ -140,6 +221,7 @@ export function LandingPage() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (isCodeLogin) { void (codeSent ? verifyCode() : sendCode()); return; }
     setError(null);
     if (isRegister && password !== confirm) { setError({ message: "Passwords do not match." }); return; }
     if (isRegister && !otp.trim()) { setError({ message: "Enter the OTP sent to your email." }); return; }
@@ -148,8 +230,7 @@ export function LandingPage() {
       if (isUserRegister)     await registerUser(username.trim(), email.trim(), password, USER_ORG_ID, otp.trim());
       else if (isAdminLogin)  await loginAdmin(username.trim(), password);
       else                    await login(email.trim(), password);
-      const to = (location.state as LocationState | null)?.from?.pathname || "/dashboard";
-      navigate(to, { replace: true });
+      goAfterLogin();
     } catch (err) {
       setError(friendlyAuthError(err));
     } finally {
@@ -158,7 +239,9 @@ export function LandingPage() {
   };
 
   const heading  = isUserRegister ? "Create your account" : role === "admin" ? "Admin sign in" : "Welcome back";
-  const btnLabel = submitting ? (isRegister ? "Creating…" : "Signing in…") : (isRegister ? "Create account →" : "Sign in →");
+  const btnLabel = isCodeLogin
+    ? (codeSent ? (submitting ? "Verifying…" : "Verify code →") : (submitting ? "Sending code…" : "Send code →"))
+    : submitting ? (isRegister ? "Creating…" : "Signing in…") : (isRegister ? "Create account →" : "Sign in →");
 
   return (
     <div style={page}>
@@ -353,8 +436,13 @@ export function LandingPage() {
               </label>
             )}
 
-            {/* email */}
-            {(role === "user" || isRegister) && (
+            {/* email — on the code step it's fixed, with a way back to change it */}
+            {isCodeLogin && codeSent ? (
+              <div style={sentTo}>
+                <span style={{ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={email.trim()}>{email.trim()}</span>
+                <button type="button" style={linkBtn} onClick={() => { resetCode(); setError(null); }}>Change email</button>
+              </div>
+            ) : (role === "user" || isRegister) && (
               <label style={fl}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <span style={flt}>Work email</span>
@@ -398,14 +486,40 @@ export function LandingPage() {
               <span style={{ fontFamily:"var(--font-body)", fontSize:11.5, color:"#DC2626", marginTop:-4 }}>{otpError}</span>
             )}
 
+            {/* sign-in code */}
+            {isCodeLogin && codeSent && (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {codeNotice && <p role="status" style={{ margin:0, fontSize:12, lineHeight:1.5, color:"#2E4A7F" }}>{codeNotice}</p>}
+                <OtpInput
+                  value={code}
+                  onChange={(v) => { setCode(v); if (error?.action === "resend") setError(null); }}
+                  onComplete={(v) => void verifyCode(v)}
+                  disabled={submitting}
+                  invalid={error?.action === "resend"}
+                  autoFocus
+                />
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, fontSize:11.5, color:"#5F73A0" }}>
+                  <span>Code expires in 5 minutes</span>
+                  <button
+                    type="button"
+                    disabled={resendIn > 0 || submitting}
+                    onClick={() => void sendCode()}
+                    style={{ ...linkBtn, ...(resendIn > 0 || submitting ? { color:"#9FB2D6", cursor:"default" } : null) }}
+                  >
+                    {resendIn > 0 ? `Resend code in ${mmss(resendIn)}` : "Resend code"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* password */}
-            <label style={fl}>
+            {!isCodeLogin && <label style={fl}>
               <div style={{ display:"flex", justifyContent:"space-between" }}>
                 <span style={flt}>Password</span>
                 {mode === "signin" && <span onClick={goToForgot} style={{ fontFamily:"var(--font-body)", fontSize:11.5, fontWeight:600, color:"#2563EB", cursor:"pointer" }}>Forgot?</span>}
               </div>
               <input className="agd-in" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" />
-            </label>
+            </label>}
 
             {/* confirm */}
             {isRegister && (
@@ -426,11 +540,40 @@ export function LandingPage() {
             <ErrorBanner
               error={error}
               onSignIn={() => { const keep = email; switchMode("signin"); setEmail(keep); }}
+              onRegister={toRegister}
+              onResend={() => void sendCode()}
+              resendIn={submitting ? -1 : resendIn}
             />
 
-            <button type="submit" disabled={submitting} className="agd-btn" style={subBtn}>
+            <button type="submit" disabled={submitting || (isCodeLogin && codeSent && code.length !== 6)} className="agd-btn" style={subBtn}>
               {btnLabel}
             </button>
+
+            {/* the other way to sign in */}
+            {mode === "signin" && role === "user" && (
+              <button
+                type="button"
+                className="agd-soc"
+                onClick={() => switchMethod(method === "password" ? "code" : "password")}
+                style={altBtn}
+              >
+                {method === "password" ? (
+                  <>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" />
+                    </svg>
+                    Sign in with OTP
+                  </>
+                ) : (
+                  <>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
+                    Sign in with password
+                  </>
+                )}
+              </button>
+            )}
           </form>
 
 
@@ -484,7 +627,14 @@ export function LandingPage() {
 
 /* ── Error banner ───────────────────────────────────────────────── */
 
-function ErrorBanner({ error, onSignIn }: { error: FriendlyError | null; onSignIn?: () => void }) {
+function ErrorBanner({ error, onSignIn, onRegister, onResend, resendIn = 0 }: {
+  error: FriendlyError | null;
+  onSignIn?: () => void;
+  onRegister?: () => void;
+  onResend?: () => void;
+  /** Seconds until a new code may be requested; negative while a request is in flight. */
+  resendIn?: number;
+}) {
   if (!error) return null;
   return (
     <div role="alert" style={errBox}>
@@ -495,6 +645,21 @@ function ErrorBanner({ error, onSignIn }: { error: FriendlyError | null; onSignI
       </svg>
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         <span>{error.message}</span>
+        {error.action === "register" && onRegister && (
+          <button type="button" style={errAction} onClick={onRegister}>
+            Register with this email →
+          </button>
+        )}
+        {error.action === "resend" && onResend && (
+          <button
+            type="button"
+            style={{ ...errAction, ...(resendIn !== 0 ? { opacity: 0.6, cursor: "default", textDecoration: "none" } : null) }}
+            disabled={resendIn !== 0}
+            onClick={onResend}
+          >
+            {resendIn > 0 ? `Request new code in ${mmss(resendIn)}` : "Request new code"}
+          </button>
+        )}
         {error.action === "signin" && onSignIn && (
           <button type="button" style={errAction} onClick={onSignIn}>
             Sign in instead →
@@ -571,4 +736,7 @@ const subBtn: CSSProperties = { fontFamily:"var(--font-body)", fontWeight:600, f
 // const div: CSSProperties = { margin:"14px 0 12px", display:"flex", alignItems:"center", gap:12 };
 // const divTxt: CSSProperties = { fontFamily:"var(--font-mono)", fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"#5F73A0", whiteSpace:"nowrap" };
 // const socBtnDisabled: CSSProperties = { fontFamily:"var(--font-body)", fontWeight:600, fontSize:13, color:"#9FB2D6", background:"#F8FAFC", border:"1.5px solid rgba(15,32,70,0.10)", borderRadius:10, padding:"9px", cursor:"not-allowed", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:7, opacity:0.7 };
+const altBtn: CSSProperties = { fontFamily:"var(--font-body)", fontWeight:600, fontSize:13.5, color:"#0A2240", background:"#FFFFFF", border:"1.5px solid rgba(15,32,70,0.14)", borderRadius:10, padding:"10px", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:8, transition:"background 150ms" };
+const linkBtn: CSSProperties = { fontFamily:"var(--font-body)", fontSize:11.5, fontWeight:700, color:"#2563EB", background:"none", border:"none", padding:0, cursor:"pointer", flexShrink:0 };
+const sentTo: CSSProperties = { display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, padding:"8px 11px", borderRadius:9, background:"#F1F5FB", border:"1.5px solid rgba(15,32,70,0.10)", fontSize:13, fontWeight:600, color:"#0A2240" };
 const rFooter: CSSProperties = { display:"flex", alignItems:"center", justifyContent:"space-between", paddingTop:14, borderTop:"1px solid rgba(15,32,70,0.08)", marginTop:14 };

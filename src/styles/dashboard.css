@@ -3396,3 +3396,36 @@ table.rt .num { text-align: right; }
 .csp-opt-text .t { font-size: 13px; font-weight: 600; color: var(--fg); }
 .csp-opt-text .s { font-size: 11.5px; color: var(--fg-muted); }
 .csp-error { margin: 4px 4px 2px; padding: 6px 8px; border-radius: 6px; font-size: 12px; color: var(--threat); background: rgba(220,38,38,.06); }
+
+/* ============ One-time code field (login) ============ */
+.otp { position: relative; display: flex; gap: 8px; }
+.otp-input {
+  position: absolute; inset: 0; z-index: 1;
+  width: 100%; height: 100%;
+  opacity: 0; border: 0; padding: 0;
+  font-size: 16px; /* keeps iOS from zooming on focus */
+  cursor: text;
+}
+.otp.disabled .otp-input { cursor: default; }
+.otp-cell {
+  position: relative;
+  flex: 1; min-width: 0; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-0);
+  font: 600 20px var(--font-mono);
+  color: var(--fg);
+  transition: border-color 120ms, box-shadow 120ms, background 120ms;
+}
+.otp-cell.split { margin-left: 10px; }
+.otp-cell.filled { background: var(--bg-1); border-color: rgba(15, 32, 70, 0.28); }
+.otp-cell.active { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14); background: var(--bg-1); }
+.otp-cell.active:empty::after {
+  content: ""; width: 1.5px; height: 20px; background: var(--accent);
+  animation: otp-caret 1s steps(1) infinite;
+}
+.otp.invalid .otp-cell { border-color: rgba(220, 38, 38, 0.45); }
+.otp.disabled .otp-cell { opacity: 0.6; }
+@keyframes otp-caret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .otp-cell.active:empty::after { animation: none; } }

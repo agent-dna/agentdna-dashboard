@@ -23,6 +23,32 @@ export function login(email: string, password: string): Promise<LoginResponse> {
   });
 }
 
+/**
+ * POST /login/send-otp — emails a 6-digit sign-in code to a registered org user (valid 5 minutes,
+ * works once). Errors: 404 with `data.registered === false` for an unknown email, 429 with
+ * `data.retryAfterSeconds` when a code went out under a minute ago.
+ */
+export function sendLoginOtp(email: string): Promise<undefined> {
+  return apiRequest<undefined>("/login/send-otp", {
+    method: "POST",
+    body: { email },
+    auth: false,
+  });
+}
+
+/**
+ * POST /login/verify-otp — signs in with the emailed code (kept a string so leading zeros
+ * survive) and sets the session cookie. Same body as POST /login. 400 for a wrong, expired or
+ * used code (five wrong tries discard it); 404 if the account went away meanwhile.
+ */
+export function verifyLoginOtp(email: string, otp: string): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>("/login/verify-otp", {
+    method: "POST",
+    body: { email, otp },
+    auth: false,
+  });
+}
+
 /** POST /admin-login — admins. The middleware checks the credentials with the admin server. */
 export interface AdminLoginResponse {
   username: string;

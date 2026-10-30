@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   login as apiLogin,
+  verifyLoginOtp,
   adminLogin as apiAdminLogin,
   adminRegister as apiAdminRegister,
   registerAdminMiddleware,
@@ -8,6 +9,7 @@ import {
   fetchSession,
   logoutSession,
   logoutAllSessions,
+  type LoginResponse,
   type SessionInfo,
 } from "../api/auth";
 import { ApiError, setUnauthorizedHandler } from "../api/client";
@@ -40,6 +42,8 @@ interface AuthContextValue {
   ready: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  /** Signs an org user in with the code from POST /login/send-otp. */
+  loginWithOtp: (email: string, otp: string) => Promise<void>;
   loginAdmin: (username: string, password: string) => Promise<void>;
   registerAdmin: (username: string, email: string, password: string, org: string, otp?: string) => Promise<void>;
   registerUser: (username: string, email: string, password: string, orgId: string, otp?: string) => Promise<void>;
@@ -53,6 +57,17 @@ interface AuthContextValue {
 }
 
 const Ctx = createContext<AuthContextValue | null>(null);
+
+/** The user from a /login or /login/verify-otp response (both send the same body). */
+const fromLogin = (r: LoginResponse): AuthUser => ({
+  did: r.did,
+  email: r.email,
+  org_id: r.org_id,
+  api_key: r.api_key,
+  userCardId: r.nft_id,
+  agent_access_list: r.agent_access_list,
+  is_admin: !!r.is_admin,
+});
 
 const fromSession = (s: SessionInfo, prev: AuthUser | null): AuthUser => ({
   // Login-only fields survive a session refresh; everything /session sends wins.
@@ -106,17 +121,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     try {
-      const r = await apiLogin(email, password);
-      setUser({
-        did: r.did,
-        email: r.email,
-        org_id: r.org_id,
-        api_key: r.api_key,
-        userCardId: r.nft_id,
-        agent_access_list: r.agent_access_list,
-        is_admin: !!r.is_admin,
-      });
+      setUser(fromLogin(await apiLogin(email, password)));
       void refreshSession(); // fills in the name
+    } finally {
+      setLoading(false);
+    }
+  }, [refreshSession]);
+
+  const loginWithOtp = useCallback(async (email: string, otp: string) => {
+    setLoading(true);
+    try {
+      setUser(fromLogin(await verifyLoginOtp(email, otp)));
+      void refreshSession();
     } finally {
       setLoading(false);
     }
@@ -183,8 +199,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, ready, loading, login, loginAdmin, registerAdmin, registerUser, logout, logoutAll, refreshSession, patchUser }),
-    [user, ready, loading, login, loginAdmin, registerAdmin, registerUser, logout, logoutAll, refreshSession, patchUser],
+    () => ({ user, ready, loading, login, loginWithOtp, loginAdmin, registerAdmin, registerUser, logout, logoutAll, refreshSession, patchUser }),
+    [user, ready, loading, login, loginWithOtp, loginAdmin, registerAdmin, registerUser, logout, logoutAll, refreshSession, patchUser],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

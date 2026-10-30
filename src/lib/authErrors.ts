@@ -3,7 +3,7 @@ import { ApiError } from "../api/client";
 export interface FriendlyError {
   message: string;
   /** Optional follow-up the UI can offer alongside the message. */
-  action?: "signin";
+  action?: "signin" | "register" | "resend";
 }
 
 /**
