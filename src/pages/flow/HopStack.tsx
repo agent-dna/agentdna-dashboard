@@ -193,7 +193,19 @@ function HopCard({
         </span>
         <span className="tr-rc-meta">
           <span className="op">{`${hop.protocol} · ${hop.op}`}</span>
-          {hop.cred && (
+          {hop.activity ? (
+            <span
+              className={`tr-rc-tag tok-${hop.activity.toLowerCase().replace(/\s+/g, "")}${hop.cred?.tone === "bad" ? " bad" : ""}`}
+              title={
+                hop.activity === "No Auth"
+                  ? "Sent without a credential"
+                  : hop.cred?.reusedFrom ? `${hop.activity} · same credential as hop ${pad2(hop.cred.reusedFrom)}` : `Token ${hop.activity.toLowerCase()}`
+              }
+            >
+              {hop.activity !== "No Auth" && <Icon name="key" size={10} />}
+              {hop.activity}
+            </span>
+          ) : hop.cred && (
             <span
               className={`tr-rc-tag ${hop.cred.tone}`}
               title={hop.cred.reusedFrom ? `Same credential as hop ${pad2(hop.cred.reusedFrom)}` : "Carried a credential"}

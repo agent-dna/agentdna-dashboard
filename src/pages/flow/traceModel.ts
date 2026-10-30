@@ -3,6 +3,7 @@ import { worstAuthTone, type AuthEvidence, type AuthTone } from "../../api/obser
 import { parseDestination, type ParsedDestination } from "../../lib/destination";
 import type { Interaction } from "../../types";
 import type { Flow, FlowNode } from "./flowData";
+import { buildTokenTrail, hopTokenActivity, type NO_AUTH, type TokenActivity } from "../observability/EvidenceTable";
 
 /**
  * The trace investigation view's model: the flow's hops numbered in play order, the
@@ -80,6 +81,8 @@ export interface TraceHop {
     tone: AuthTone;
     reusedFrom?: number;
   };
+  /** What happened to the token on this hop, as the intent page's evidence shows it; "No Auth" when it carried none. */
+  activity?: TokenActivity | typeof NO_AUTH;
   /** Outside-resource node ids the receiver called on this hop (its server_out checks). */
   outside: string[];
   /** The receiver's server_out checks: credentials it used on those outside resources. */
@@ -231,6 +234,13 @@ export function buildTrace(flow: Flow, ixById: Map<string, Interaction>): TraceM
       branch: s.branch || undefined,
     };
   });
+
+  // Token activity, followed through the hops the same way the intent page follows its steps.
+  const tokens = buildTokenTrail(
+    hops.map((h) => ({ interactionID: `h${h.n}`, from: h.src, to: h.dst })),
+    new Map(hops.map((h) => [`h${h.n}`, h.checks])),
+  );
+  for (const h of hops) h.activity = hopTokenActivity(h.checks, tokens);
 
   for (const e of flow.sealEdges) addPair(e.from, e.to, "seal");
 

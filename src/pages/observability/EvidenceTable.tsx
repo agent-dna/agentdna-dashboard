@@ -47,6 +47,13 @@ const Empty = () => <span className="evt-none" aria-label="None">—</span>;
 
 /** What happened to the credential on a check, across the whole intent. */
 export type TokenActivity = "Issued" | "Forwarded" | "Switched";
+/** A check, or a hop, made without any credential: no fingerprint and no auth method. */
+export const NO_AUTH = "No Auth";
+export const isNoAuth = (e: AuthEvidence) => {
+  const m = (e.authMethod || "").trim().toLowerCase();
+  return !e.credentialID && (m === "" || m === "none");
+};
+const tokClass = (label: string) => `evt-tok ${label.toLowerCase().replace(/\s+/g, "")}`;
 export interface TokenInfo {
   activity: TokenActivity;
   /** DID of the party holding the token: whoever presented it first. */
@@ -95,6 +102,24 @@ export function buildTokenTrail(
     }
   }
   return trail;
+}
+
+/**
+ * A hop's activity for its one-line summary: what happened to the token on the interaction's own
+ * checks (or, with none, its onward calls), the first one seen. "No Auth" when none of those
+ * checks carried a credential; undefined with no checks, or a credential the trail can't follow.
+ */
+export function hopTokenActivity(checks: AuthEvidence[], tokens: TokenTrail): TokenActivity | typeof NO_AUTH | undefined {
+  if (!checks.length) return undefined;
+  const direct = checks.filter((e) => (e.source || "").toLowerCase() !== "server_out");
+  const pool = [...(direct.length ? direct : checks)].sort(
+    (a, b) =>
+      (ms(a.observedAt) ?? 0) - (ms(b.observedAt) ?? 0) ||
+      (SOURCE_ORDER[(a.source || "").toLowerCase()] ?? 9) - (SOURCE_ORDER[(b.source || "").toLowerCase()] ?? 9),
+  );
+  const tok = pool.map((e) => tokens.get(e)).find(Boolean);
+  if (tok) return tok.activity;
+  return pool.every(isNoAuth) ? NO_AUTH : undefined;
 }
 
 /** A step's checks: the interaction's own table, then its onward calls. */
@@ -224,7 +249,11 @@ export function EvidenceTable({ checks, tokens, name, to }: {
                   <td title={tok?.holder || undefined}>{tok ? name(tok.holder) : <Empty />}</td>
                   {/* Acting as: the identity the credential carries, i.e. on whose behalf it was used. */}
                   <td className="evt-mono" title={e.identityID || undefined}>{e.identityID ? shortId(e.identityID) : <Empty />}</td>
-                  <td>{tok ? <span className={`evt-tok ${tok.activity.toLowerCase()}`}>{tok.activity}</span> : <Empty />}</td>
+                  <td>
+                    {tok ? <span className={tokClass(tok.activity)}>{tok.activity}</span>
+                      : isNoAuth(e) ? <span className={tokClass(NO_AUTH)} title="Sent without a credential">{NO_AUTH}</span>
+                      : <Empty />}
+                  </td>
                   <td>{loginLabel(e.authMethod) || <Empty />}</td>
                   <td
                     className="evt-mono evt-key"

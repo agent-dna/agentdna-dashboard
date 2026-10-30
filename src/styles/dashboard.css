@@ -2696,6 +2696,7 @@ table.dt tbody tr td:first-child { color: var(--fg); font-weight: 600; }
 .evt-tok.issued { color: var(--accent); background: rgba(37,99,235,.08); }
 .evt-tok.forwarded { color: var(--fg-dim); background: var(--bg-2); }
 .evt-tok.switched { color: #B45309; background: rgba(217,119,6,.10); }
+.evt-tok.noauth { color: var(--fg-muted); background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); }
 .evt-status.ok { color: var(--safe); font-weight: 600; }
 .evt-status.warn { color: var(--warn); font-weight: 600; }
 .evt-status.bad { color: var(--threat); font-weight: 600; }
