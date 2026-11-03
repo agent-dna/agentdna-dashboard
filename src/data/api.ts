@@ -1928,6 +1928,8 @@ interface ApiUserInfo {
     createdAt: string;
     lastActive: string | null;
     isActive: boolean;
+    /** Revocation state of `userID`: true = active (whitelisted), false = revoked. /user-info only, not /admins/:id. */
+    status?: boolean;
     accessAgentCount: number;
     totalInteractions: number;
     totalThreats: number;
@@ -1960,6 +1962,11 @@ export interface UserDetail {
   createdMinsAgo: number;    // minutes since createdAt
   lastActiveMinsAgo: number; // minutes since lastActive, 0 if null
   isActive: boolean;
+  /**
+   * Revocation state of the primary DID: true = active (whitelisted), false = revoked. Also false
+   * when the backend can't reach the admin server. Undefined on an admin's page (/admins/:id).
+   */
+  status?: boolean;
   accessAgentCount: number;
   totalInteractions: number;
   totalThreats: number;
@@ -2044,6 +2051,7 @@ function mapUserInfo(r: ApiUserInfo): UserDetailResult {
         createdMinsAgo: isoToMinutesAgo(u.createdAt),
         lastActiveMinsAgo: isoToMinutesAgo(u.lastActive),
         isActive: !!u.isActive,
+        status: u.status === undefined ? undefined : !!u.status,
         accessAgentCount: u.accessAgentCount || 0,
         totalInteractions: u.totalInteractions || 0,
         totalThreats: u.totalThreats || 0,

@@ -15,6 +15,8 @@ import { ThreatPill } from "../components/ThreatPill";
 import { usePresentedCredentials, useUserInfo } from "../data/hooks";
 import { PresentedCredentialsTable } from "../components/PresentedCredentialsTable";
 import { UserApplicationsTable } from "../components/UserApplicationsTable";
+import { RevokeUserModal } from "../components/forms/RevokeUserModal";
+import { useAuth } from "../context/AuthContext";
 import type { DeployedAgent } from "../data/api";
 import type { Intent } from "../types";
 
@@ -23,7 +25,7 @@ type Tab = "interactions" | "intents" | "threats" | "agents" | "credentials" | "
 /**
  * A user's page (/users/:userId, from /user-info), or with `kind="admin"` an admin's
  * (/admins/:adminId, from /admins/:id, which returns the same shape). An admin's page has no
- * Users list to go back to and no "Revoke access".
+ * Users list to go back to and no revoke/whitelist (/admins/:id doesn't return `status`).
  */
 export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   const params = useParams<{ userId: string; adminId: string }>();
@@ -35,6 +37,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   const goBack = () => (isAdminPage ? navigate(-1) : navigate("/users"));
   const backLabel = isAdminPage ? "Back" : "Users";
   const { openDrawer } = useDrawer();
+  const { user: me } = useAuth();
 
   const [tab, setTab] = useState<Tab>("interactions");
   const [interactionsPage, setInteractionsPage] = useState(1);
@@ -43,10 +46,9 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   const [agentsPage, setAgentsPage] = useState(1);
   const [credentialsPage, setCredentialsPage] = useState(1);
 
-  const [revoking, setRevoking] = useState(false);
-  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
 
-  const { data: result, loading } = useUserInfo(
+  const { data: result, loading, refetch } = useUserInfo(
     userId, interactionsPage, intentsPage, threatsPage, agentsPage, kind,
   );
   // The credentials this user (or admin) presented, paged on their own.
@@ -109,6 +111,11 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   } = result;
 
   const displayName = user.displayName || user.userName || user.userID?.slice(0, 8) || "?";
+  // Revocation state comes from `status`, not the older `isActive`. Only /user-info returns it,
+  // and only admins can change it.
+  const hasStatus = !isAdminPage && user.status !== undefined;
+  const revoked = hasStatus && !user.status;
+  const canChangeStatus = hasStatus && !!me?.is_admin;
   const currentPageFor = (t: Tab) =>
     t === "interactions" ? interactionsPage
     : t === "intents" ? intentsPage
@@ -263,10 +270,21 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
               <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--fg)" }}>
                 {displayName}
               </h1>
-              <span className={`chip ${user.isActive ? "safe" : "warn"}`}>
-                <span className={`dot-status ${user.isActive ? "safe" : "warn"}`} />
-                {user.isActive ? "active" : "suspended"}
-              </span>
+              {hasStatus ? (
+                <span
+                  className={`chip ${revoked ? "threat" : "safe"}`}
+                  // The backend also reports false when it can't reach the admin server.
+                  title={revoked ? "Revoked, or the admin server couldn't be reached to check" : "Active (whitelisted)"}
+                >
+                  <span className={`dot-status ${revoked ? "threat" : "safe"}`} />
+                  {revoked ? "revoked" : "active"}
+                </span>
+              ) : (
+                <span className={`chip ${user.isActive ? "safe" : "warn"}`}>
+                  <span className={`dot-status ${user.isActive ? "safe" : "warn"}`} />
+                  {user.isActive ? "active" : "suspended"}
+                </span>
+              )}
               <span className="chip info" style={{ fontSize: 10.5, padding: "2px 7px" }}>{kind}</span>
             </div>
 
@@ -281,16 +299,11 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
             </div>
           </div>
 
-          {/* Action buttons (an admin's page has none: admins have no access to revoke) */}
-          {!isAdminPage && <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button
-              className="btn"
-              disabled={revoking}
-              style={{ color: "var(--threat)", borderColor: "rgba(220,38,38,0.3)" }}
-              onClick={() => setConfirmRevoke(true)}
-            >
+          {/* Revoke / whitelist the primary DID (admins only; never on an admin's page) */}
+          {canChangeStatus && <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button className={revoked ? "btn safe" : "btn danger"} onClick={() => setRevokeOpen(true)}>
               <Icon name="shield" size={14} />
-              {revoking ? "Revoking…" : "Revoke access"}
+              {revoked ? "Whitelist user" : "Revoke user"}
             </button>
           </div>}
         </div>
@@ -377,45 +390,19 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
         )}
       </div>
 
-      {/* Revoke access confirmation modal */}
-      {confirmRevoke && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setConfirmRevoke(false)}>
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(3px)" }} />
-          <div style={{ position: "relative", background: "#ffffff", borderRadius: 16, padding: "32px 28px 28px", width: 420, boxShadow: "0 24px 64px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)" }}
-            onClick={(e) => e.stopPropagation()}>
-            {/* Icon */}
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#FEF2F2", border: "1.5px solid #FECACA", display: "grid", placeItems: "center", marginBottom: 18 }}>
-              <Icon name="shield" size={22} style={{ color: "#DC2626" }} />
-            </div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Revoke access</div>
-            <div style={{ fontSize: 13.5, color: "#6B7280", lineHeight: 1.65, marginBottom: 28 }}>
-              Are you sure you want to revoke all access for{" "}
-              <span style={{ fontWeight: 600, color: "#111827" }}>{user.displayName || user.userName}</span>?
-              This will remove their access to all agents immediately.
-            </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setConfirmRevoke(false)}
-                style={{ padding: "9px 20px", fontSize: 13.5, fontWeight: 600, borderRadius: 8, border: "1.5px solid #2563EB", background: "#fff", color: "#2563EB", cursor: "pointer" }}
-              >
-                Cancel
-              </button>
-              <button
-                disabled={revoking}
-                style={{ padding: "9px 20px", fontSize: 13.5, fontWeight: 600, borderRadius: 8, border: "none", background: "#DC2626", color: "#fff", cursor: revoking ? "not-allowed" : "pointer", opacity: revoking ? 0.7 : 1 }}
-                onClick={async () => {
-                  setRevoking(true);
-                  // TODO: call revokeAgentAccess or user-level revoke API
-                  setRevoking(false);
-                  setConfirmRevoke(false);
-                }}
-              >
-                {revoking ? "Revoking…" : "Yes, revoke access"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {canChangeStatus && (
+        <RevokeUserModal
+          open={revokeOpen}
+          userDID={user.userID}
+          userName={displayName}
+          otherDidCount={user.dids.filter((d) => d !== user.userID).length}
+          mode={revoked ? "whitelist" : "revoke"}
+          onClose={() => setRevokeOpen(false)}
+          onSuccess={() => {
+            setRevokeOpen(false);
+            refetch();
+          }}
+        />
       )}
     </div>
   );
