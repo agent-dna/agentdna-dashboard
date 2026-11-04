@@ -11,6 +11,7 @@ import { SearchDropdown } from "./components/SearchDropdown";
 import { useDrawer } from "./context/DrawerContext";
 import { useTweaks } from "./context/TweaksContext";
 import { useAuth } from "./context/AuthContext";
+import { TopbarSlotContext } from "./context/TopbarSlotContext";
 import { useIntentReview } from "./context/IntentReviewContext";
 import { listAgentCreationRequests, listAccessRequestsForOrg } from "./api/requests";
 import { fetchSearch, type SearchResults } from "./data/api";
@@ -21,13 +22,15 @@ interface NavEntry {
   label: string;
   icon: IconName;
   badge?: number;
+  adminOnly?: boolean;
 }
 
 export function App() {
   const { tweaks, setTweak } = useTweaks();
   const { drawer, closeDrawer } = useDrawer();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
+  const [topbarSlot, setTopbarSlot] = useState<HTMLDivElement | null>(null);
   const { unacknowledgedCount } = useIntentReview();
   const [pendingCount, setPendingCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,13 +68,28 @@ export function App() {
     { to: "/dashboard", label: "Home", icon: "home" },
     { to: "/intents", label: "Intents", icon: "intents", badge: unacknowledgedCount > 0 ? unacknowledgedCount : undefined },
     { to: "/agents", label: "Agents & Apps", icon: "agents" },
-    { to: "/requests", label: "Requests", icon: "box", badge: pendingCount > 0 ? pendingCount : undefined },
+    { to: "/observability", label: "Observability", icon: "activity" },
+    { to: "/resources", label: "Resources", icon: "globe" },
+    { to: "/approvals", label: "Approvals", icon: "box", badge: pendingCount > 0 ? pendingCount : undefined },
+    { to: "/users", label: "Users", icon: "user", adminOnly: true },
     // Hidden from the sidebar for now; the /interactions route still works.
     // { to: "/interactions", label: "Interactions", icon: "interactions" },
-    { to: "/observability", label: "Observability", icon: "activity" },
   ];
 
-  const collapsed = tweaks.sidebar === "collapsed";
+  // The flow page needs the width, so the sidebar folds away there and comes back on other pages.
+  // Opening it on the flow page lasts for that visit only; the saved preference is untouched.
+  const onFlow = location.pathname === "/graph" || location.pathname.startsWith("/graph/");
+  const [flowSidebarOpen, setFlowSidebarOpen] = useState(false);
+  const [wasOnFlow, setWasOnFlow] = useState(onFlow);
+  if (wasOnFlow !== onFlow) {
+    setWasOnFlow(onFlow);
+    setFlowSidebarOpen(false);
+  }
+  const collapsed = onFlow ? !flowSidebarOpen : tweaks.sidebar === "collapsed";
+  const toggleSidebar = () => {
+    if (onFlow) setFlowSidebarOpen((o) => !o);
+    else setTweak("sidebar", collapsed ? "expanded" : "collapsed");
+  };
   const densityClass =
     tweaks.density === "compact" ? "density-compact" : tweaks.density === "comfortable" ? "density-comfy" : "";
 
@@ -95,11 +113,11 @@ export function App() {
         <nav className="sb-nav">
           <div className="sb-workspace">
             <div className="sb-section">Workspace</div>
-            {NAV_WORKSPACE.map((n) => ( 
+            {NAV_WORKSPACE.filter((n) => !n.adminOnly || user?.is_admin).map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}
-                end={n.to === "/requests"}
+                end={n.to === "/approvals"}
                 className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
                 title={n.label}
               >
@@ -112,25 +130,6 @@ export function App() {
 
           <div className="sb-bottom">
             <div className="sb-section">Account</div>
-            <button
-              type="button"
-              className="sb-item"
-              onClick={logout}
-              title="Sign out"
-              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(220,38,38,0.12)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(220,38,38,0.06)"; }}
-              style={{
-                background: "rgba(220,38,38,0.06)",
-                border: "1px solid rgba(220,38,38,0.2)",
-                width: "100%",
-                textAlign: "left",
-                color: "var(--threat)",
-                cursor: "pointer",
-              }}
-            >
-              <Icon className="icon" name="arrowRight" size={18} />
-              <span className="label">Sign out</span>
-            </button>
             <NavLink to="/profile" className="sb-foot" title="Profile" style={{ textDecoration: "none" }}>
               <div className="avatar">{initials(user ? (user.name || user.email) : "Guest")}</div>
               <div className="who">
@@ -146,7 +145,7 @@ export function App() {
         <div className="topbar">
           <button
             className="icon-btn"
-            onClick={() => setTweak("sidebar", collapsed ? "expanded" : "collapsed")}
+            onClick={toggleSidebar}
             title="Toggle sidebar"
           >
             <Icon name="sidebar" size={16} />
@@ -158,6 +157,7 @@ export function App() {
             <span className="sep">/</span>
             <span className="here">{breadcrumb}</span>
           </div>
+          <div className="topbar-slot" ref={setTopbarSlot} />
           <div className="search" style={{ position: "relative" }}>
             <Icon name="search" className="icon" size={16} />
             <input
@@ -178,7 +178,9 @@ export function App() {
         </div>
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          <Outlet />
+          <TopbarSlotContext.Provider value={topbarSlot}>
+            <Outlet />
+          </TopbarSlotContext.Provider>
         </div>
       </div>
 

@@ -13,14 +13,10 @@ import { IntentIdChip } from "../context/IntentNumbersContext";
 import { useResolveName } from "../context/DirectoryContext";
 import { useIntentReview } from "../context/IntentReviewContext";
 import { ThreatPill } from "../components/ThreatPill";
+import { StatusPicker } from "../components/StatusPicker";
 import { AppIcon } from "../components/AppIcon";
 import type { Intent, IntentReviewStatus } from "../types";
-
-const REVIEW_STATUS_STYLE: Record<IntentReviewStatus, { color: string; bg: string }> = {
-  Unreviewed: { color: "var(--accent)", bg: "rgba(37,99,235,0.10)" },
-  Acknowledged: { color: "var(--safe)", bg: "rgba(5,150,105,0.10)" },
-  Flagged: { color: "var(--threat)", bg: "rgba(220,38,38,0.10)" },
-};
+import { InspectButton } from "../components/InspectButton";
 
 export function IntentsPage() {
   const [filter, setFilter] = useState<"all" | "threats" | "safe">("all");
@@ -55,6 +51,11 @@ export function IntentsPage() {
     }
   };
 
+  const changeStatus = async (intentID: string, next: IntentReviewStatus) => {
+    await updateIntentStatus(intentID, next);
+    intentsState.refetch();
+    refetchIntentReview();
+  };
 
   let rows = intents;
   if (filter === "threats") rows = rows.filter((r) => r.threats > 0);
@@ -138,18 +139,7 @@ export function IntentsPage() {
       label: "Review",
       sortFn: (a, b) => a.reviewStatus.localeCompare(b.reviewStatus),
       render: (r) => (
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            padding: "3px 8px",
-            borderRadius: 999,
-            color: REVIEW_STATUS_STYLE[r.reviewStatus].color,
-            background: REVIEW_STATUS_STYLE[r.reviewStatus].bg,
-          }}
-        >
-          {r.reviewStatus}
-        </span>
+        <StatusPicker size="sm" status={r.reviewStatus} hasIncident={r.threats > 0} onChange={(next) => changeStatus(r.id, next)} />
       ),
     },
     {
@@ -167,18 +157,11 @@ export function IntentsPage() {
       key: "actions",
       label: "",
       align: "right",
-      width: 76,
+      // Fits the Inspect button (≈85px) plus the cell's 12px side padding, so nothing spills into a scroll.
+      width: 112,
       render: (r) => (
         <div className="row-actions">
-          <button
-            className="btn-mini"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/intents/${r.id}`);
-            }}
-          >
-            Inspect
-          </button>
+          <InspectButton onClick={() => navigate(`/intents/${r.id}`)} />
         </div>
       ),
     },

@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { useAuth } from "../context/AuthContext";
 import { fetchTokenUsage, type TokenUsage } from "../api/keys";
@@ -12,7 +13,9 @@ function maskKey(key: string) {
 }
 
 export function ProfilePage() {
-  const { user, patchUser } = useAuth();
+  const { user, patchUser, logout } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  const navigate = useNavigate();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
@@ -135,6 +138,30 @@ export function ProfilePage() {
             <span style={pillStyle}>{displayRole}</span>
             {memberSince && <span style={pillStyle}>Since {memberSince}</span>}
           </div>
+        </div>
+
+        <div className="profile-actions">
+          {/* Your own page: a user's is the one admins open from the Users list, an admin's is /admins/:id.
+              Both show interactions, intents, incidents and agents. */}
+          {user?.did && (
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => navigate(`/${user.is_admin ? "admins" : "users"}/${encodeURIComponent(user.did)}`)}
+            >
+              <Icon name="activity" size={14} />
+              View my activity
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn signout-btn"
+            disabled={signingOut}
+            onClick={async () => { setSigningOut(true); await logout(); }}
+          >
+            <Icon name="arrowRight" size={14} />
+            {signingOut ? "Signing out…" : "Sign out"}
+          </button>
         </div>
       </div>
 

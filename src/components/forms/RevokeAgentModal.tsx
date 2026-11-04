@@ -5,7 +5,8 @@ import { errorStyle } from "./styles";
 import { revokeAgent, unrevokeAgent } from "../../api/agents";
 import { ApiError } from "../../api/client";
 
-type Mode = "revoke" | "whitelist";
+export type RevokeMode = "revoke" | "whitelist";
+type Mode = RevokeMode;
 
 interface Props {
   open: boolean;
@@ -19,7 +20,7 @@ interface Props {
 
 type Phase = "confirm" | "working" | "success";
 
-const COPY: Record<Mode, {
+export interface RevokeCopy {
   actionLabel: string;
   workingLabel: string;
   modalTitle: string;
@@ -30,7 +31,25 @@ const COPY: Record<Mode, {
   bg: string;
   border: string;
   buttonClass: string;
-}> = {
+}
+
+/** Shared look for both modes; each subject (agent, user) supplies its own words. */
+export const REVOKE_STYLE: Record<Mode, Pick<RevokeCopy, "color" | "bg" | "border" | "buttonClass">> = {
+  revoke: {
+    color: "var(--threat)",
+    bg: "linear-gradient(135deg, rgba(220,38,38,0.18), rgba(220,38,38,0.04))",
+    border: "1px solid rgba(220,38,38,0.22)",
+    buttonClass: "btn danger solid",
+  },
+  whitelist: {
+    color: "var(--safe)",
+    bg: "linear-gradient(135deg, rgba(5,150,105,0.18), rgba(5,150,105,0.04))",
+    border: "1px solid rgba(5,150,105,0.22)",
+    buttonClass: "btn safe solid",
+  },
+};
+
+const COPY: Record<Mode, RevokeCopy> = {
   revoke: {
     actionLabel: "Revoke agent",
     workingLabel: "Revoking…",
@@ -39,10 +58,7 @@ const COPY: Record<Mode, {
       `This will permanently revoke ${name}. It will lose all access to connected apps and will no longer be able to handle intents.`,
     successTitle: (name) => `"${name}" has been revoked`,
     successBody: "This agent can no longer interact with connected apps or intents.",
-    color: "var(--threat)",
-    bg: "linear-gradient(135deg, rgba(220,38,38,0.18), rgba(220,38,38,0.04))",
-    border: "1px solid rgba(220,38,38,0.22)",
-    buttonClass: "btn danger solid",
+    ...REVOKE_STYLE.revoke,
   },
   whitelist: {
     actionLabel: "Whitelist agent",
@@ -51,17 +67,42 @@ const COPY: Record<Mode, {
     confirmBody: (name) => `This will reverse the revoke on ${name}, restoring its access to connected apps and intents.`,
     successTitle: (name) => `"${name}" has been whitelisted`,
     successBody: "This agent can interact with connected apps and handle intents again.",
-    color: "var(--safe)",
-    bg: "linear-gradient(135deg, rgba(5,150,105,0.18), rgba(5,150,105,0.04))",
-    border: "1px solid rgba(5,150,105,0.22)",
-    buttonClass: "btn safe solid",
+    ...REVOKE_STYLE.whitelist,
   },
 };
 
 export function RevokeAgentModal({ open, agentDID, agentName, mode = "revoke", onClose, onSuccess }: Props) {
+  return (
+    <RevokeModal
+      open={open}
+      name={agentName}
+      copy={COPY[mode]}
+      successHeading={mode === "revoke" ? "Agent revoked" : "Agent whitelisted"}
+      failureMessage={`Failed to ${mode === "revoke" ? "revoke" : "whitelist"} agent`}
+      run={() => (mode === "revoke" ? revokeAgent(agentDID) : unrevokeAgent(agentDID))}
+      onClose={onClose}
+      onSuccess={onSuccess}
+    />
+  );
+}
+
+interface RevokeModalProps {
+  open: boolean;
+  /** Who is being revoked or whitelisted, as shown in the copy. */
+  name: string;
+  copy: RevokeCopy;
+  successHeading: string;
+  /** Shown when the call fails without an API message. */
+  failureMessage: string;
+  run: () => Promise<unknown>;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+/** Confirm → working → success flow shared by the agent and user revoke/whitelist modals. */
+export function RevokeModal({ open, name, copy, successHeading, failureMessage, run, onClose, onSuccess }: RevokeModalProps) {
   const [phase, setPhase] = useState<Phase>("confirm");
   const [err, setErr] = useState<string | null>(null);
-  const copy = COPY[mode];
 
   useEffect(() => {
     if (open) {
@@ -74,11 +115,10 @@ export function RevokeAgentModal({ open, agentDID, agentName, mode = "revoke", o
     setErr(null);
     setPhase("working");
     try {
-      if (mode === "revoke") await revokeAgent(agentDID);
-      else await unrevokeAgent(agentDID);
+      await run();
       setPhase("success");
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : `Failed to ${mode === "revoke" ? "revoke" : "whitelist"} agent`);
+      setErr(e instanceof ApiError ? e.message : failureMessage);
       setPhase("confirm");
     }
   };
@@ -92,7 +132,7 @@ export function RevokeAgentModal({ open, agentDID, agentName, mode = "revoke", o
     return (
       <Modal
         open={open}
-        title={mode === "revoke" ? "Agent revoked" : "Agent whitelisted"}
+        title={successHeading}
         onClose={handleDone}
         footer={
           <button type="button" className="btn primary" onClick={handleDone}>
@@ -134,7 +174,7 @@ export function RevokeAgentModal({ open, agentDID, agentName, mode = "revoke", o
                 marginBottom: 6,
               }}
             >
-              {copy.successTitle(agentName)}
+              {copy.successTitle(name)}
             </div>
             <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.55, maxWidth: 360 }}>
               {copy.successBody}
@@ -178,7 +218,7 @@ export function RevokeAgentModal({ open, agentDID, agentName, mode = "revoke", o
       }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ fontSize: 13.5, color: "var(--fg)", lineHeight: 1.55 }}>{copy.confirmBody(agentName)}</div>
+        <div style={{ fontSize: 13.5, color: "var(--fg)", lineHeight: 1.55 }}>{copy.confirmBody(name)}</div>
         {err && <div style={errorStyle}>{err}</div>}
       </div>
     </Modal>

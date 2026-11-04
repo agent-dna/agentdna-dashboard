@@ -8,6 +8,9 @@ import { useIntentLabel } from "../../context/IntentNumbersContext";
 import { useThreatByID } from "../../data/hooks";
 import { timeAgo, interactionRawData, titleOrUnknown } from "../../lib/format";
 import type { Interaction } from "../../types";
+import { authStatusLabel, authTone } from "../../api/observability";
+import { parseDestination } from "../../lib/destination";
+import { DestinationLogo } from "../DestinationLogo";
 
 interface Props {
   interaction: Interaction;
@@ -55,6 +58,23 @@ export function InteractionDetail({ interaction: i }: Props) {
   const target = pickName(i.target.id, i.target.name);
   const targetKind = target.kind || i.targetType;
   const isSelfInteraction = i.initiator.id === i.target.id;
+  // Where this hop's calls went (from its auth evidence), one entry per destination: the
+  // client_out / server_in records of one call share it. A failed check on any of them wins.
+  const destinations = Object.values(
+    (i.backendCalls ?? []).reduce<Record<string, NonNullable<Interaction["backendCalls"]>[number]>>((acc, c) => {
+      const seen = acc[c.destination];
+      acc[c.destination] = !seen
+        ? c
+        : {
+            ...seen,
+            authMethod: seen.authMethod || c.authMethod,
+            credentialID: seen.credentialID || c.credentialID,
+            // Keep the worse status: rejected over not seen over accepted.
+            authStatus: TONE_RANK[authTone(c.authStatus)] > TONE_RANK[authTone(seen.authStatus)] ? c.authStatus : seen.authStatus,
+          };
+      return acc;
+    }, {}),
+  );
   return (
     <>
       <div className="drawer-head">
@@ -169,6 +189,38 @@ export function InteractionDetail({ interaction: i }: Props) {
                 )}
               </>
             )}
+            {destinations.length > 0 && (
+              <>
+                <div className="k">Destination</div>
+                <div className="v ixd-dests">
+                  {destinations.map((d) => {
+                    const dest = parseDestination(d.destination);
+                    return (
+                      <div key={d.destination} className="ixd-dest" title={d.destination}>
+                        <DestinationLogo entity={dest.entity} />
+                        <div className="ixd-dest-body">
+                          <span className="ixd-dest-name">{dest.name}</span>
+                          <span className="ixd-dest-url">
+                            {dest.method && <span className="ixd-dest-method">{dest.method}</span>}
+                            <span className="ixd-dest-path">
+                              {dest.entity === "local" || dest.entity === "web" ? `${dest.host}${dest.port ? `:${dest.port}` : ""}` : ""}
+                              {dest.path || (dest.entity === "local" || dest.entity === "web" ? "" : dest.host)}
+                            </span>
+                          </span>
+                          <span className="ixd-dest-meta">
+                            {d.authMethod && <span className="ixd-dest-tag">{authMethodLabel(d.authMethod)}</span>}
+                            {d.authStatus && (
+                              <span className={`ixd-dest-tag ${authTone(d.authStatus)}`}>{authStatusLabel(d.authStatus)}</span>
+                            )}
+                            {d.credentialID && <span className="ixd-dest-cred" title={d.credentialID}>{truncateId(d.credentialID)}</span>}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
             <div className="k">Intent ID</div>
             <div className="v" style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {i.intent?.id ? (
@@ -197,48 +249,6 @@ export function InteractionDetail({ interaction: i }: Props) {
               ) : (
                 "—"
               )}
-            </div>
-            <div className="v" style={{ fontFamily: "var(--font-body)" }}>{i.intent.name}</div>
-          </div>
-        </DrawerSection>
-
-        <DrawerSection title="Audit trail">
-          <div className="timeline">
-            <div className="tl-item">
-              <div className="dot" />
-              <div className="line" />
-              <div className="body">
-                <div className="nm">Identity authorized</div>
-                <div className="desc">Signature {i.initiator.id.slice(-6)} matched against registered key</div>
-              </div>
-            </div>
-
-            <div className="tl-item">
-              <div className="dot" />
-              <div className="line" />
-              <div className="body">
-                <div className="nm">Access verified</div>
-                <div className="desc">Policies checked and verified for {i.target.name || i.target.id}</div>
-              </div>
-            </div>
-
-            {i.threat && (
-              <div className="tl-item threat">
-                <div className="dot" />
-                <div className="line" />
-                <div className="body">
-                  <div className="nm">Incident detected</div>
-                  <div className="desc">{threatMessage || "Interaction flagged for review"}</div>
-                </div>
-              </div>
-            )}
-
-            <div className="tl-item">
-              <div className="dot" />
-              <div className="body">
-                <div className="nm">Envelope sealed</div>
-                <div className="desc">Interaction recorded, signed and committed</div>
-              </div>
             </div>
           </div>
         </DrawerSection>
@@ -270,7 +280,10 @@ export function InteractionDetail({ interaction: i }: Props) {
 const KIND_LABEL: Record<string, string> = { agent: "Agent", tool: "App", user: "User" };
 const KIND_ICON = { agent: "agents", tool: "apps", user: "user" } as const;
 
+const TONE_RANK = { ok: 0, warn: 1, bad: 2 } as const;
 const capitalize = (v: string) => (v ? v[0].toUpperCase() + v.slice(1) : v);
+/** "api_key" → "Api key", "none" → "No auth". */
+const authMethodLabel = (m: string) => (m.toLowerCase() === "none" ? "No auth" : capitalize(m.replace(/_/g, " ")));
 
 /** One end of the hop: what it is, which end, and its name, with the DID on hover. */
 function Party({ role, name, kind, did }: { role: string; name: string; kind?: string; did: string }) {
@@ -298,9 +311,12 @@ function toolCallName(v: unknown): string | null {
   return o.method === "tools/call" && typeof o.params?.name === "string" ? o.params.name : null;
 }
 
+/** Messages longer than this many lines open folded, with "See more". */
+const PAYLOAD_FOLD_LINES = 14;
+
 /**
- * The hop's message. JSON can be read formatted or exactly as received (what Copy copies);
- * anything else is shown as received.
+ * The hop's message: JSON formatted and coloured, anything else as received. Copy always copies
+ * it exactly as received. A long message opens folded, with "See more" to read the rest.
  */
 function Payload({ text }: { text: string }) {
   const parsed = (() => {
@@ -309,9 +325,13 @@ function Payload({ text }: { text: string }) {
     try { return JSON.parse(t) as unknown; } catch { return undefined; }
   })();
   const isJson = parsed !== undefined;
-  const [view, setView] = useState<"formatted" | "exact">("formatted");
+  const [expanded, setExpanded] = useState(false);
   const tool = toolCallName(parsed);
-  const shown = isJson && view === "formatted" ? JSON.stringify(parsed, null, 2) : text;
+  const shown = isJson ? JSON.stringify(parsed, null, 2) : text;
+  // Wrapped lines count too, roughly: a line longer than the panel is wide reads as several.
+  const lines = shown.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 60)), 0);
+  const long = lines > PAYLOAD_FOLD_LINES;
+  const folded = long && !expanded;
   return (
     <div className="ixd-msg">
       <div className="ixd-msg-head">
@@ -320,18 +340,17 @@ function Payload({ text }: { text: string }) {
             <>Tool call <code>{tool}</code></>
           ) : isJson ? "JSON" : "Text"}
         </span>
-        {isJson && (
-          <div className="ixd-seg" role="group" aria-label="Message view">
-            <button type="button" className={view === "formatted" ? "on" : ""} aria-pressed={view === "formatted"} onClick={() => setView("formatted")}>Formatted</button>
-            <button type="button" className={view === "exact" ? "on" : ""} aria-pressed={view === "exact"} onClick={() => setView("exact")}>Exact</button>
-          </div>
-        )}
         <CopyButton text={text} />
       </div>
-      {isJson && view === "formatted" ? (
-        <pre className="ixd-msg-body json" dangerouslySetInnerHTML={{ __html: colorizeLight(shown) }} />
+      {isJson ? (
+        <pre className={`ixd-msg-body json${folded ? " folded" : ""}`} dangerouslySetInnerHTML={{ __html: colorizeLight(shown) }} />
       ) : (
-        <pre className="ixd-msg-body">{shown}</pre>
+        <pre className={`ixd-msg-body${folded ? " folded" : ""}`}>{shown}</pre>
+      )}
+      {long && (
+        <button type="button" className="ixd-msg-more" aria-expanded={expanded} onClick={() => setExpanded((e) => !e)}>
+          {expanded ? "See less" : "See more"}
+        </button>
       )}
     </div>
   );

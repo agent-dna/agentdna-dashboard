@@ -1,7 +1,7 @@
 import { Fragment, memo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppWindow, Bot, ExternalLink, FileText, UserRound, X, type LucideIcon } from "lucide-react";
-import { fetchObsPaths, type ObsPath, type ObsPathFilter, type ObsScope } from "../../api/observability";
+import { fetchIntentAuthEvidence, fetchObsPaths, type ObsPath, type ObsPathFilter, type ObsScope } from "../../api/observability";
 import { AgentInfoPanel, AppInfoPanel, UserInfoPanel } from "./ProfilePanels";
 import { IntentDetailPanel } from "./IntentDetailPanel";
 import { loadIntentDetail, threatHopCounts } from "./intentDetail";
@@ -114,6 +114,10 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, filter, n
   const intentDetail = useObsQuery(pickedIntent && `intent-detail:${pickedIntent}`, () =>
     loadIntentDetail(pickedIntent!, NODES[chain.i!]?.name ?? pickedIntent!),
   );
+  // Fetched once the Intent Info tab is opened, for each step's "Credential info".
+  const authEvidence = useObsQuery(activeTab === "intent" && pickedIntent && `auth-evidence:${pickedIntent}`, () =>
+    fetchIntentAuthEvidence(pickedIntent!),
+  );
   const nameOf = (did: string) => (["u", "a", "p"] as const).map((t) => NODES[nodeId(t, did)]?.name).find(Boolean);
   // Each row's user as their plane card, so opening a path lands on the person's one card.
   const rows = (paths.data?.pathsList ?? []).map((r) =>
@@ -215,6 +219,7 @@ export const DetailBox = memo(function DetailBox({ mode, order, chain, filter, n
           error={intentDetail.error}
           onRetry={intentDetail.retry}
           nameOf={nameOf}
+          evidence={authEvidence.data ?? null}
         />
       ) : activeTab === "user" && chain.u ? (
         <UserInfoPanel key={chain.u} did={refOf(chain.u)} name={panelName(chain.u)} />

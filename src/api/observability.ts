@@ -169,6 +169,19 @@ export interface ObsIntentsPage extends Paged {
   intentsList: ObsIntent[];
 }
 
+/**
+ * A call an app made onward while handling an interaction (/intent-info's
+ * `authEvidence.backendCalls`): where it went and how it authenticated.
+ */
+export interface BackendCall {
+  /** e.g. "POST https://learn.microsoft.com/api/mcp", or just a host. */
+  destination: string;
+  authMethod?: string;
+  credentialID?: string;
+  /** "accepted", "rejected" or "unknown". */
+  authStatus?: string;
+}
+
 export interface ObsInteraction {
   interactionID: string;
   from: string;
@@ -185,6 +198,8 @@ export interface ObsInteraction {
   time: string;
   /** The sender's original envelope (from /intent-info's `rawData`), when the source has it. */
   raw?: unknown;
+  /** Onward calls the sending app made (/intent-info's `authEvidence.backendCalls`). */
+  backendCalls?: BackendCall[];
 }
 
 /** The intent on a path row. The detail fields come back when the paths call is filtered by `intentID`. */
@@ -273,3 +288,85 @@ export const fetchObsIntents = (
 
 export const fetchObsPaths = (s: ObsScope, f: ObsPathFilter, pageSize = 50) =>
   apiRequest<ObsPathsPage>("/observability-paths", { query: { ...s, ...f, page: 1, pageSize } });
+
+/** One auth check recorded for an interaction: who presented which credential, where, and the result. */
+export interface AuthEvidence {
+  requestID: string;
+  /** Where the check was observed, e.g. "server_in". */
+  source: string;
+  runID: string;
+  /** e.g. "bearer". */
+  authMethod: string;
+  credentialID: string;
+  identityID: string;
+  /** "accepted", "rejected" or "unknown" (the check wasn't seen). Only "accepted" passes. */
+  authStatus: string;
+  keyVersion: string;
+  /** Empty when the check had no onward destination. */
+  destination: string;
+  observedAt: string;
+}
+
+/**
+ * One interaction's evidence. The array keeps the run's order (trunk first, then each branch
+ * from start to end); the frontend matches entries to interactions by `interactionID`.
+ */
+export interface AuthEvidenceInteraction {
+  /** Step number in the run; can repeat across branches and skip hops with no evidence. */
+  position?: number;
+  /** "" on the trunk, else "a", "b", … */
+  branch?: string;
+  interactionID: string;
+  signature: string;
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  type: string;
+  time: string;
+  evidence: AuthEvidence[];
+}
+
+export interface IntentAuthEvidence {
+  intentID: string;
+  /** Every interaction in the intent, with or without evidence. */
+  totalInteractions: number;
+  /** Interactions that have evidence (the ones listed). */
+  count: number;
+  interactions: AuthEvidenceInteraction[];
+}
+
+/** An auth check passed: "accepted" (or the older "ok"). "rejected" and "unknown" don't (see authTone for colour). */
+export const authAccepted = (status?: string) => {
+  const s = (status || "").toLowerCase();
+  return s === "accepted" || s === "ok";
+};
+
+/** How an auth status is coloured: accepted normal, unknown (not seen) yellow, rejected or anything else red. */
+export type AuthTone = "ok" | "warn" | "bad";
+export function authTone(status?: string): AuthTone {
+  const s = (status || "").toLowerCase();
+  if (s === "accepted" || s === "ok") return "ok";
+  if (s === "unknown" || !s) return "warn";
+  return "bad";
+}
+/** The worse of several checks' tones (red over yellow over normal). */
+export const worstAuthTone = (statuses: (string | undefined)[]): AuthTone =>
+  statuses.reduce<AuthTone>((w, st) => {
+    const t = authTone(st);
+    return w === "bad" || t === "bad" ? "bad" : w === "warn" || t === "warn" ? "warn" : "ok";
+  }, "ok");
+
+/** How an auth status reads in the UI. */
+export function authStatusLabel(status?: string): string {
+  const s = (status || "").toLowerCase();
+  if (s === "accepted" || s === "ok") return "Accepted";
+  if (s === "rejected") return "Rejected";
+  if (s === "unknown" || !s) return "Not seen";
+  const t = s.replace(/_/g, " ");
+  return t[0].toUpperCase() + t.slice(1);
+}
+
+/** GET /intent-auth-evidence: the auth evidence recorded for each of an intent's interactions. */
+export const fetchIntentAuthEvidence = (intentID: string) =>
+  apiRequest<IntentAuthEvidence>("/intent-auth-evidence", { query: { intentID } });

@@ -9,31 +9,50 @@ import { LedgerTable } from "../components/LedgerTable";
 import { Pagination } from "../components/Pagination";
 import { useDrawer } from "../context/DrawerContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
-import { fmtRuntime, initials, timeAgo } from "../lib/format";
-import { ScoreBar } from "../components/ScoreBar";
-import { useUserInfo } from "../data/hooks";
+import { initials, timeAgo } from "../lib/format";
+import { useResolveName } from "../context/DirectoryContext";
+import { ThreatPill } from "../components/ThreatPill";
+import { usePresentedCredentials, useUserInfo } from "../data/hooks";
+import { PresentedCredentialsTable } from "../components/PresentedCredentialsTable";
+import { UserApplicationsTable } from "../components/UserApplicationsTable";
+import { RevokeUserModal } from "../components/forms/RevokeUserModal";
+import { useAuth } from "../context/AuthContext";
 import type { DeployedAgent } from "../data/api";
 import type { Intent } from "../types";
 
-type Tab = "interactions" | "intents" | "threats" | "agents";
+type Tab = "interactions" | "intents" | "threats" | "agents" | "credentials" | "applications";
 
-export function UserDetailPage() {
-  const { userId = "" } = useParams<{ userId: string }>();
+/**
+ * A user's page (/users/:userId, from /user-info), or with `kind="admin"` an admin's
+ * (/admins/:adminId, from /admins/:id, which returns the same shape). An admin's page has no
+ * Users list to go back to and no revoke/whitelist (/admins/:id doesn't return `status`).
+ */
+export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
+  const params = useParams<{ userId: string; adminId: string }>();
+  const isAdminPage = kind === "admin";
+  const userId = (isAdminPage ? params.adminId : params.userId) ?? "";
   const navigate = useNavigate();
+  const resolve = useResolveName();
+  // Users go back to the Users list; there is no list of admins, so an admin's page goes back.
+  const goBack = () => (isAdminPage ? navigate(-1) : navigate("/users"));
+  const backLabel = isAdminPage ? "Back" : "Users";
   const { openDrawer } = useDrawer();
+  const { user: me } = useAuth();
 
   const [tab, setTab] = useState<Tab>("interactions");
   const [interactionsPage, setInteractionsPage] = useState(1);
   const [intentsPage, setIntentsPage] = useState(1);
   const [threatsPage, setThreatsPage] = useState(1);
   const [agentsPage, setAgentsPage] = useState(1);
+  const [credentialsPage, setCredentialsPage] = useState(1);
 
-  const [revoking, setRevoking] = useState(false);
-  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
 
-  const { data: result, loading } = useUserInfo(
-    userId, interactionsPage, intentsPage, threatsPage, agentsPage,
+  const { data: result, loading, refetch } = useUserInfo(
+    userId, interactionsPage, intentsPage, threatsPage, agentsPage, kind,
   );
+  // The credentials this user (or admin) presented, paged on their own.
+  const creds = usePresentedCredentials({ kind, id: userId }, credentialsPage);
 
   // ─── Loading ─────────────────────────────────────────────────────────────
   if (loading) {
@@ -50,23 +69,23 @@ export function UserDetailPage() {
       <div className="page">
         {/* Breadcrumb */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, fontSize: 13 }}>
-          <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 12.5 }} onClick={() => navigate("/requests", { state: { tab: "users" } })}>
-            <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> Users
+          <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 12.5 }} onClick={goBack}>
+            <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> {backLabel}
           </button>
           <span style={{ color: "var(--fg-faint)" }}>/</span>
           <span style={{ color: "var(--fg-muted)", fontFamily: "var(--font-mono)", fontSize: 12 }}>{userId}</span>
         </div>
 
         <div className="stub">
-          <h2>User not found</h2>
+          <h2>{isAdminPage ? "Admin not found" : "User not found"}</h2>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, marginTop: 6, color: "var(--fg-muted)" }}>{userId}</div>
-          <button className="btn" style={{ marginTop: 16 }} onClick={() => navigate("/requests", { state: { tab: "users" } })}>
-            <Icon name="arrowRight" size={14} style={{ transform: "rotate(180deg)" }} /> Back to users
+          <button className="btn" style={{ marginTop: 16 }} onClick={goBack}>
+            <Icon name="arrowRight" size={14} style={{ transform: "rotate(180deg)" }} /> {isAdminPage ? "Go back" : "Back to users"}
           </button>
         </div>
 
         {/* Coming soon notice */}
-        <div className="card" style={{ marginTop: 20, padding: "28px 28px" }}>
+        {!isAdminPage && <div className="card" style={{ marginTop: 20, padding: "28px 28px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.16)", display: "grid", placeItems: "center", flexShrink: 0 }}>
               <Icon name="activity" size={18} style={{ color: "var(--accent)" }} />
@@ -74,11 +93,11 @@ export function UserDetailPage() {
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg)", marginBottom: 4 }}>API endpoint required</div>
               <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.6, maxWidth: 500 }}>
-                This page is scaffolded and ready. Once the <code style={{ fontFamily: "var(--font-mono)", fontSize: 12, background: "var(--surface-raised)", padding: "1px 5px", borderRadius: 4 }}>GET /dashboard/v1/user-info</code> endpoint is live, the full user profile, activity metrics and interaction history will appear here.
+                PAGE NOT FOUND 
               </div>
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     );
   }
@@ -92,26 +111,35 @@ export function UserDetailPage() {
   } = result;
 
   const displayName = user.displayName || user.userName || user.userID?.slice(0, 8) || "?";
+  // Revocation state comes from `status`, not the older `isActive`. Only /user-info returns it,
+  // and only admins can change it.
+  const hasStatus = !isAdminPage && user.status !== undefined;
+  const revoked = hasStatus && !user.status;
+  const canChangeStatus = hasStatus && !!me?.is_admin;
   const currentPageFor = (t: Tab) =>
     t === "interactions" ? interactionsPage
     : t === "intents" ? intentsPage
     : t === "threats" ? threatsPage
+    : t === "credentials" ? credentialsPage
     : agentsPage;
   const setPageFor = (t: Tab, p: number) => {
     if (t === "interactions") setInteractionsPage(p);
     else if (t === "intents") setIntentsPage(p);
     else if (t === "threats") setThreatsPage(p);
+    else if (t === "credentials") setCredentialsPage(p);
     else setAgentsPage(p);
   };
   const totalPagesFor = (t: Tab) =>
     t === "interactions" ? interactionsTotalPages
     : t === "intents" ? intentsTotalPages
     : t === "threats" ? threatsTotalPages
+    : t === "credentials" ? creds.data.totalPages
     : agentsTotalPages;
   const totalCountFor = (t: Tab) =>
     t === "interactions" ? interactionsTotal
     : t === "intents" ? intentsTotal
     : t === "threats" ? threatsTotal
+    : t === "credentials" ? creds.data.total
     : agentsTotal;
 
   const intentCols: DataTableColumn<Intent>[] = [
@@ -119,20 +147,18 @@ export function UserDetailPage() {
       key: "id",
       label: "Intent",
       render: (r) => (
-        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }} />
+        <IntentIdChip id={r.id} style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--fg)" }} />
       ),
     },
     {
-      key: "runtime",
-      label: "Runtime",
-      align: "right",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{fmtRuntime(r.runtime)}</span>,
+      key: "initiator",
+      label: "Initiator",
+      render: (r) => <span style={{ fontSize: 13, color: "var(--fg)", fontWeight: 600 }}>{resolve(r.initiator.id, r.initiator.name).name}</span>,
     },
     {
-      key: "agents",
-      label: "Agents",
-      align: "right",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.agentsInteracted}</span>,
+      key: "interactions",
+      label: "Interactions",
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.interactionsCount}</span>,
     },
     {
       key: "tools",
@@ -144,25 +170,11 @@ export function UserDetailPage() {
       key: "threats",
       label: "Incidents",
       align: "right",
-      render: (r) =>
-        r.threats > 0
-          ? <span className="chip threat">{r.threats}</span>
-          : <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>,
-    },
-    {
-      key: "score",
-      label: "Score",
-      align: "right",
-      render: (r) => {
-        const ix = r.agentsInteracted + r.toolsInteracted;
-        if (ix <= 0) return <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>—</span>;
-        const pct = Math.max(0, Math.round((((ix - r.threats) / ix) * 100) * 100) / 100);
-        return <ScoreBar value={pct} />;
-      },
+      render: (r) => <ThreatPill threat={r.threats > 0} />,
     },
     {
       key: "started",
-      label: "Started",
+      label: "Time",
       align: "right",
       render: (r) => (
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--fg-muted)" }}>
@@ -192,16 +204,6 @@ export function UserDetailPage() {
       render: (r) => <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{r.name}</span>,
     },
     {
-      key: "status",
-      label: "Status",
-      render: (r) => (
-        <span className={`chip ${r.status === "warn" ? "warn" : r.status === "inactive" ? "" : "safe"}`}>
-          <span className={`dot-status ${r.status === "warn" ? "warn" : r.status === "inactive" ? "" : "safe"}`} />
-          {r.status === "warn" ? "needs review" : r.status === "inactive" ? "inactive" : "healthy"}
-        </span>
-      ),
-    },
-    {
       key: "interactions",
       label: "Interactions",
       align: "right",
@@ -211,10 +213,7 @@ export function UserDetailPage() {
       key: "threats",
       label: "Incidents",
       align: "right",
-      render: (r) =>
-        r.threats > 0
-          ? <span className="chip threat">{r.threats}</span>
-          : <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 12.5 }}>0</span>,
+      render: (r) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{r.threats.toLocaleString()}</span>,
     },
     {
       key: "created",
@@ -241,8 +240,8 @@ export function UserDetailPage() {
     <div className="page">
       {/* Breadcrumb */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, fontSize: 13 }}>
-        <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 12.5 }} onClick={() => navigate("/requests", { state: { tab: "users" } })}>
-          <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> Users
+        <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 12.5 }} onClick={goBack}>
+          <Icon name="arrowRight" size={12} style={{ transform: "rotate(180deg)" }} /> {backLabel}
         </button>
         <span style={{ color: "var(--fg-faint)" }}>/</span>
         <span style={{ color: "var(--fg)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600 }}>{user.userName}</span>
@@ -271,17 +270,26 @@ export function UserDetailPage() {
               <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--fg)" }}>
                 {displayName}
               </h1>
-              <span className={`chip ${user.isActive ? "safe" : "warn"}`}>
-                <span className={`dot-status ${user.isActive ? "safe" : "warn"}`} />
-                {user.isActive ? "active" : "suspended"}
-              </span>
-              <span className="chip info" style={{ fontSize: 10.5, padding: "2px 7px" }}>user</span>
+              {hasStatus ? (
+                <span
+                  className={`chip ${revoked ? "threat" : "safe"}`}
+                  // The backend also reports false when it can't reach the admin server.
+                  title={revoked ? "Revoked, or the admin server couldn't be reached to check" : "Active (whitelisted)"}
+                >
+                  <span className={`dot-status ${revoked ? "threat" : "safe"}`} />
+                  {revoked ? "revoked" : "active"}
+                </span>
+              ) : (
+                <span className={`chip ${user.isActive ? "safe" : "warn"}`}>
+                  <span className={`dot-status ${user.isActive ? "safe" : "warn"}`} />
+                  {user.isActive ? "active" : "suspended"}
+                </span>
+              )}
+              <span className="chip info" style={{ fontSize: 10.5, padding: "2px 7px" }}>{kind}</span>
             </div>
 
-            {/* User ID */}
-            <div style={{ color: "var(--fg-muted)", fontSize: 13, fontFamily: "var(--font-mono)", marginBottom: 16 }}>
-              {user.userID}
-            </div>
+            {/* Every DID the user holds: the primary shows, the rest open from the arrow. */}
+            <UserDids dids={user.dids} primary={user.userID} />
 
             {/* Info grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
@@ -291,18 +299,13 @@ export function UserDetailPage() {
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button
-              className="btn"
-              disabled={revoking}
-              style={{ color: "var(--threat)", borderColor: "rgba(220,38,38,0.3)" }}
-              onClick={() => setConfirmRevoke(true)}
-            >
+          {/* Revoke / whitelist the primary DID (admins only; never on an admin's page) */}
+          {canChangeStatus && <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button className={revoked ? "btn safe" : "btn danger"} onClick={() => setRevokeOpen(true)}>
               <Icon name="shield" size={14} />
-              {revoking ? "Revoking…" : "Revoke access"}
+              {revoked ? "Whitelist user" : "Revoke user"}
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -327,10 +330,12 @@ export function UserDetailPage() {
                 { key: "intents", label: "Intents", count: intentsTotal },
                 { key: "threats", label: "Incidents", count: threatsTotal },
                 { key: "agents", label: "Agents Deployed", count: agentsTotal },
+                { key: "credentials", label: "Credentials", count: creds.data.total },
+                ...(!isAdminPage ? [{ key: "applications", label: "Applications", count: result.applicationsInteracted.length }] : []),
               ]}
             />
           </div>
-          <div style={{ paddingRight: 16, flexShrink: 0 }}>
+          {tab !== "applications" && <div style={{ paddingRight: 16, flexShrink: 0 }}>
             <Pagination
               page={currentPageFor(tab)}
               totalPages={totalPagesFor(tab)}
@@ -339,7 +344,7 @@ export function UserDetailPage() {
               inline
               onChange={(p) => setPageFor(tab, p)}
             />
-          </div>
+          </div>}
         </div>
 
         {tab === "interactions" && (
@@ -367,6 +372,14 @@ export function UserDetailPage() {
           />
         )}
 
+        {tab === "credentials" && (
+          <PresentedCredentialsTable rows={creds.data.items} loading={creds.loading} error={creds.error} hideRequests />
+        )}
+
+        {tab === "applications" && (
+          <UserApplicationsTable applications={result.applicationsInteracted} />
+        )}
+
         {tab === "agents" && (
           <DataTable
             rows={agents}
@@ -377,45 +390,78 @@ export function UserDetailPage() {
         )}
       </div>
 
-      {/* Revoke access confirmation modal */}
-      {confirmRevoke && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setConfirmRevoke(false)}>
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(3px)" }} />
-          <div style={{ position: "relative", background: "#ffffff", borderRadius: 16, padding: "32px 28px 28px", width: 420, boxShadow: "0 24px 64px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)" }}
-            onClick={(e) => e.stopPropagation()}>
-            {/* Icon */}
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#FEF2F2", border: "1.5px solid #FECACA", display: "grid", placeItems: "center", marginBottom: 18 }}>
-              <Icon name="shield" size={22} style={{ color: "#DC2626" }} />
-            </div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Revoke access</div>
-            <div style={{ fontSize: 13.5, color: "#6B7280", lineHeight: 1.65, marginBottom: 28 }}>
-              Are you sure you want to revoke all access for{" "}
-              <span style={{ fontWeight: 600, color: "#111827" }}>{user.displayName || user.userName}</span>?
-              This will remove their access to all agents immediately.
-            </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setConfirmRevoke(false)}
-                style={{ padding: "9px 20px", fontSize: 13.5, fontWeight: 600, borderRadius: 8, border: "1.5px solid #2563EB", background: "#fff", color: "#2563EB", cursor: "pointer" }}
-              >
-                Cancel
-              </button>
-              <button
-                disabled={revoking}
-                style={{ padding: "9px 20px", fontSize: 13.5, fontWeight: 600, borderRadius: 8, border: "none", background: "#DC2626", color: "#fff", cursor: revoking ? "not-allowed" : "pointer", opacity: revoking ? 0.7 : 1 }}
-                onClick={async () => {
-                  setRevoking(true);
-                  // TODO: call revokeAgentAccess or user-level revoke API
-                  setRevoking(false);
-                  setConfirmRevoke(false);
-                }}
-              >
-                {revoking ? "Revoking…" : "Yes, revoke access"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {canChangeStatus && (
+        <RevokeUserModal
+          open={revokeOpen}
+          userDID={user.userID}
+          userName={displayName}
+          otherDidCount={user.dids.filter((d) => d !== user.userID).length}
+          mode={revoked ? "whitelist" : "revoke"}
+          onClose={() => setRevokeOpen(false)}
+          onSuccess={() => {
+            setRevokeOpen(false);
+            refetch();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The user's DIDs under their name. The primary is always shown; when they hold more, a down
+ * arrow opens the rest below it. Each DID has its own copy button.
+ */
+function UserDids({ dids, primary }: { dids: string[]; primary: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const others = dids.filter((d) => d && d !== primary);
+
+  const copy = async (did: string) => {
+    try {
+      await navigator.clipboard.writeText(did);
+      setCopied(did);
+      window.setTimeout(() => setCopied((c) => (c === did ? null : c)), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const row = (did: string) => (
+    <>
+      <span className="did-v">{did}</span>
+      <button
+        type="button"
+        className={`did-copy ${copied === did ? "done" : ""}`}
+        onClick={() => copy(did)}
+        title={copied === did ? "Copied" : "Copy DID"}
+        aria-label={copied === did ? "Copied" : "Copy DID"}
+      >
+        <Icon name={copied === did ? "check" : "copy"} size={13} />
+      </button>
+    </>
+  );
+
+  return (
+    <div className="user-dids">
+      <div className="user-dids-head">
+        {row(primary)}
+        {others.length > 0 && (
+          <button
+            type="button"
+            className="user-dids-toggle"
+            aria-expanded={expanded}
+            aria-controls="user-dids-rest"
+            onClick={() => setExpanded((v) => !v)}
+            title={expanded ? "Hide other DIDs" : "Show all DIDs"}
+          >
+            {expanded ? "Hide" : `+${others.length} more`}
+            <Icon name="chevronDown" size={13} />
+          </button>
+        )}
+      </div>
+      {expanded && others.length > 0 && (
+        <ul id="user-dids-rest" className="user-dids-rest">
+          {others.map((did) => <li key={did}>{row(did)}</li>)}
+        </ul>
       )}
     </div>
   );

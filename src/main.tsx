@@ -9,11 +9,15 @@ import { AgentsToolsPage } from "./pages/AgentsToolsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { AgentToolDetailPage } from "./pages/AgentToolDetailPage";
 import { ToolDetailPage } from "./pages/ToolDetailPage";
+import { ResourcesPage } from "./pages/resources/ResourcesPage";
+import { ResourceDetailPage } from "./pages/resources/ResourceDetailPage";
+import { CredentialDetailPage } from "./pages/resources/CredentialDetailPage";
 import { UserDetailPage } from "./pages/UserDetailPage";
 import { IntentDetailPage } from "./pages/IntentDetailPage";
 import { InteractionsPage } from "./pages/InteractionsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RequestsPage } from "./pages/RequestsPage";
+import { UsersPage } from "./pages/UsersPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { LandingPage } from "./pages/LockedPage";
 // import { LandingPage } from "./pages/LandingPage";
@@ -53,12 +57,18 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="agents/:agentId" element={<AgentDetailPage />} />
                 <Route path="agents/:agentId/tools/:toolId" element={<AgentToolDetailPage />} />
                 <Route path="tools/:toolId" element={<ToolDetailPage />} />
+                <Route path="users" element={<UsersPage />} />
                 <Route path="users/:userId" element={<UserDetailPage />} />
-                <Route path="requests" element={<RequestsPage />} />
+                <Route path="admins/:adminId" element={<UserDetailPage kind="admin" />} />
+                <Route path="approvals" element={<RequestsPage />} />
+                <Route path="requests" element={<Navigate to="/approvals" replace />} />
                 <Route path="graph" element={<FlowPage />} />
                 <Route path="graph/:intentId" element={<FlowPage />} />
                 <Route path="interactions" element={<InteractionsPage />} />
                 <Route path="observability" element={<ObservabilityPage />} />
+                <Route path="resources" element={<ResourcesPage />} />
+                <Route path="resources/credentials/:credentialId" element={<CredentialDetailPage />} />
+                <Route path="resources/:resourceId" element={<ResourceDetailPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 {/* <Route path="locked" element={<LockedPage />} /> */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />

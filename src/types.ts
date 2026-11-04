@@ -1,3 +1,6 @@
+import type { AuthEvidence } from "./api/observability";
+import type { UserApplication } from "./data/api";
+
 export type Status = "safe" | "warn" | "threat";
 
 export interface Agent {
@@ -11,6 +14,8 @@ export interface Agent {
   connected: number;
   /** Names of the apps counted in `connected`. Only populated by /agent-info. */
   appsList?: string[];
+  /** Destinations and the credentials used with them, from /agent-info. */
+  applicationsInteracted?: UserApplication[];
   status: Status;
   env: string;
   owner: string;
@@ -53,6 +58,8 @@ export interface Intent {
   appsInteracted?: EntityRef[];
   /** Human review state — separate from the pipeline `status` field. Defaults to "Unreviewed" server-side. */
   reviewStatus: IntentReviewStatus;
+  /** DID of the participant that executed the intent (/intent-info's `executor`); may differ from the initiator. */
+  executor?: string;
 }
 
 export type IntentReviewStatus = "Unreviewed" | "Acknowledged" | "Flagged";
@@ -81,6 +88,17 @@ export interface Interaction {
    * `rawData`; earlier envelopes nest in `parent_envelope`). Shown as the interaction's raw data.
    */
   raw?: unknown;
+  /**
+   * Onward calls the sending app made while handling this hop (/intent-info's
+   * `authEvidence.backendCalls`); the drawer shows their destinations when the sender is an app.
+   */
+  backendCalls?: { destination: string; authMethod?: string; credentialID?: string; authStatus?: string }[];
+  /** The hop's auth checks (/intent-info's `authEvidence`); absent when it has none. */
+  authEvidence?: AuthEvidence[];
+  /** ISO time of the hop, when the endpoint gives one. */
+  time?: string;
+  /** What kind of hop it was, as /intent-info names it: "trigger", "delegate", "response", … */
+  kind?: string;
 }
 
 export interface TimeSeries {

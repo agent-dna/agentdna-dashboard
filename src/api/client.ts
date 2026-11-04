@@ -29,9 +29,12 @@ export interface ApiResponse<T> {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** The error response's `data`, when it sent one (e.g. `{ retryAfterSeconds }` on a 429). */
+  data?: unknown;
+  constructor(message: string, status: number, data?: unknown) {
     super(message);
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -118,7 +121,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
 
   if (!res.ok || payload?.status === false) {
     console.warn(`[REQUEST ${method} ${url.pathname}${url.search}] failed after ${elapsed.toFixed(0)}ms — HTTP ${res.status}`, payload);
-    throw new ApiError(payload?.message || `HTTP ${res.status}`, res.status);
+    throw new ApiError(payload?.message || `HTTP ${res.status}`, res.status, payload?.data);
   }
 
   console.log(`[REQUEST ${method} ${url.pathname}${url.search}] succeeded after ${elapsed.toFixed(0)}ms →`, payload?.data);
@@ -157,7 +160,7 @@ export async function apiUpload<T>(
 
   if (!res.ok || payload?.status === false) {
     console.warn(`[${method} ${path}] ${res.status}`, payload);
-    throw new ApiError(payload?.message || `HTTP ${res.status}`, res.status);
+    throw new ApiError(payload?.message || `HTTP ${res.status}`, res.status, payload?.data);
   }
 
   console.log(`[${method} ${path}]`, payload?.data);

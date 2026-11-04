@@ -15,7 +15,6 @@ interface Props {
 export function AddUserModal({ open, onClose, onSuccess }: Props) {
   const { user } = useAuth();
   const defaultOrg = user?.org_id || "";
-
   const [userId, setUserId] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

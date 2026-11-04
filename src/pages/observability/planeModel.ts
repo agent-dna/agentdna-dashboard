@@ -226,6 +226,8 @@ const userNode = (u: UserCard, k: number): PlaneNode => ({
 });
 
 const agentSub = (a: ObsGraph["agents"][number]) => `${plural(a.usersCount, "user")}${a.revoked ? " · revoked" : ""}`;
+/** The agent column's cards carry no user count, only whether the agent is revoked. */
+const agentColumnSub = (a: ObsGraph["agents"][number]) => (a.revoked ? "revoked" : undefined);
 
 const peerNodes = (peers: ObsAgentFlow["peers"]): PlaneNode[] =>
   [...peers]
@@ -256,22 +258,19 @@ const peerTips = (p: ObsAgentFlow["peers"][number]) => [
 export const intentStatus = (it: ObsIntent): PlaneStatus =>
   it.flags > 0 ? worst([it.outcome, "flagged"]) : it.outcome;
 
-const intentNode = (it: ObsIntent, k: number): PlaneNode => {
-  const agentsNote = it.agents?.length ? `${plural(it.agents.length, "agent")} · ` : "";
-  return {
-    id: nodeId("i", it.intentID),
-    t: "i",
-    ref: it.intentID,
-    name: it.intentTitle || it.intentID,
-    st: intentStatus(it),
-    meta:
-      intentStatus(it) === "allowed"
-        ? `${agentsNote}${it.interactionsCount.toLocaleString()} ixns · ${ago(it.lastAt)}${ago(it.lastAt) === "just now" ? "" : " ago"}`
-        : `${it.policy ?? "Needs review"} · ${plural(it.flags, "flag")}`,
-    // The plane re-stacks whichever intents are showing, so this is only the default.
-    y: listY("i", k),
-  };
-};
+const intentNode = (it: ObsIntent, k: number): PlaneNode => ({
+  id: nodeId("i", it.intentID),
+  t: "i",
+  ref: it.intentID,
+  name: it.intentTitle || it.intentID,
+  st: intentStatus(it),
+  meta:
+    intentStatus(it) === "allowed"
+      ? `${ago(it.lastAt)}${ago(it.lastAt) === "just now" ? "" : " ago"}`
+      : `${it.policy ?? "Needs review"} · ${plural(it.flags, "flag")}`,
+  // The plane re-stacks whichever intents are showing, so this is only the default.
+  y: listY("i", k),
+});
 
 /** Shared bookkeeping for both builders. */
 function modelParts() {
@@ -321,7 +320,7 @@ export function buildPlaneModel({ graph, users, userFlow, agentFlow, intents }: 
   const agents = byBarycenter(graph.agents, (a) => a.agentDID, userAgentLinks, userPos);
   agents.forEach((a, k) => {
     const id = nodeId("a", a.agentDID);
-    nodes[id] = { id, t: "a", ref: a.agentDID, name: a.agentName || a.agentDID, sub: agentSub(a), y: listY("a", k) };
+    nodes[id] = { id, t: "a", ref: a.agentDID, name: a.agentName || a.agentDID, sub: agentColumnSub(a), y: listY("a", k) };
   });
 
   /* ---------- Peer column: every agent at rest, the picked agent's peers once loaded ---------- */
@@ -623,7 +622,7 @@ export function buildAppPlaneModel({ graph, users, appFlow, agentUsers, intents 
   const appAgentLinks = graph.agentAppEdges.map((e) => ({ from: nodeId("p", e.to), to: e.from, w: e.count }));
   const agents = byBarycenter(graph.agents, (a) => a.agentDID, appAgentLinks, appPos);
   agents.forEach((a, k) =>
-    addNode({ id: nodeId("a", a.agentDID), t: "a", ref: a.agentDID, name: a.agentName || a.agentDID, sub: agentSub(a), y: listY("a", k) }),
+    addNode({ id: nodeId("a", a.agentDID), t: "a", ref: a.agentDID, name: a.agentName || a.agentDID, sub: agentColumnSub(a), y: listY("a", k) }),
   );
 
   /* ---------- Peer column: every agent at rest, the picked agent's peers once loaded ---------- */

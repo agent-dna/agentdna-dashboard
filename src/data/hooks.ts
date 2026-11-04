@@ -139,17 +139,20 @@ export const useIntentParticipants = (id: string) =>
 export const useLogs = (kind: "agent" | "intent", id: string) =>
   useAsync<LogEntry[]>(() => api.fetchLogs(kind, id), [], [kind, id]);
 
+/** A user's page (/user-info), or an admin's (/admins/:id) — the same response either way. */
 export const useUserInfo = (
   userID: string,
   interactionsPage = 1,
   intentsPage = 1,
   threatsPage = 1,
   agentsPage = 1,
+  kind: "user" | "admin" = "user",
 ) =>
   useAsync<api.UserDetailResult | null>(
-    () => api.fetchUserInfo(userID, interactionsPage, intentsPage, threatsPage, agentsPage),
+    () =>
+      (kind === "admin" ? api.fetchAdminInfo : api.fetchUserInfo)(userID, interactionsPage, intentsPage, threatsPage, agentsPage),
     null,
-    [userID, interactionsPage, intentsPage, threatsPage, agentsPage],
+    [userID, interactionsPage, intentsPage, threatsPage, agentsPage, kind],
   );
 
 export const useAgentPolicyHistory = (id: string) =>
@@ -174,6 +177,42 @@ export const useToolInfo = (nameOrDid: string, interactionsPage = 1, intentsPage
 /** /tool-info for an app known by DID, falling back to its name (see fetchToolInfoByDidOrName). */
 export const useToolInfoByDidOrName = (did: string, name?: string) =>
   useAsync<api.ToolDetailResult | null>(() => api.fetchToolInfoByDidOrName(did, name), null, [did, name]);
+export const useResourcesPaged = (page = 1, pageSize = 10) =>
+  useAsync<api.PagedResources>(() => api.fetchResources(page, pageSize), { items: [], total: 0, page: 1, pageSize, totalPages: 1 }, [page, pageSize]);
+export const useResourceInfo = (resourceID: string, intentsPage = 1, credentialsPage = 1) =>
+  useAsync<api.ResourceInfo | null>(
+    () => (resourceID ? api.fetchResourceInfo(resourceID, { intentsPage, credentialsPage }) : Promise.resolve(null)),
+    null,
+    [resourceID, intentsPage, credentialsPage],
+  );
+/** The credentials a user, admin or agent presented, a page at a time. */
+export const usePresentedCredentials = (owner: api.CredentialOwner, page = 1) =>
+  useAsync<api.PagedPresentedCredentials>(
+    () => (owner.id ? api.fetchPresentedCredentials(owner, page) : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 10, totalPages: 0 })),
+    { items: [], total: 0, page: 1, pageSize: 10, totalPages: 0 },
+    [owner.kind, owner.id, page],
+  );
+/** Several intents at once (each from the cached /intent-info); a failed one comes back as null. */
+export const useIntentsByIds = (ids: string[]) =>
+  useAsync<(Intent | null)[]>(
+    () => Promise.all(ids.map((id) => api.fetchIntent(id).catch(() => null))),
+    [],
+    [ids.join(",")],
+  );
+export const useCredentialsPaged = (page = 1, pageSize = 10, status?: api.CredentialStatusValue) =>
+  useAsync<api.PagedCredentials>(
+    () => api.fetchCredentials(page, pageSize, status),
+    { items: [], total: 0, page: 1, pageSize, totalPages: 1 },
+    [page, pageSize, status],
+  );
+export const useCredentialInfo = (credentialID: string, intentsPage = 1) =>
+  useAsync<api.CredentialInfo | null>(
+    () => (credentialID ? api.fetchCredentialInfo(credentialID, intentsPage) : Promise.resolve(null)),
+    null,
+    [credentialID, intentsPage],
+  );
+export const useAppCredentials = (appDID: string | undefined) =>
+  useAsync<api.AppCredentials | null>(() => (appDID ? api.fetchAppCredentials(appDID) : Promise.resolve(null)), null, [appDID]);
 export const useToolAgentScores = (toolDID: string | undefined) =>
   useAsync<api.ToolAgentScore[]>(
     () => (toolDID ? api.fetchToolAgentScores(toolDID) : Promise.resolve([])),

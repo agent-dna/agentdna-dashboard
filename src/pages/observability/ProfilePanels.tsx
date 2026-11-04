@@ -141,7 +141,6 @@ export function AgentInfoPanel({ did, name, nameOf }: { did: string; name: strin
       <Hero
         avatar={<Bot size={34} strokeWidth={1.8} />}
         title={agent?.name || name}
-        chip={agent && (agent.revoked ? <StatusChip tone="threat">Revoked</StatusChip> : <StatusChip tone="safe">Approved</StatusChip>)}
         sub={agent ? [`Deployed by ${deployer}`, agent.env].filter(Boolean).join(" · ") : undefined}
         action={
           <div className="ip-pf-actions">
@@ -190,9 +189,6 @@ export function AgentInfoPanel({ did, name, nameOf }: { did: string; name: strin
           <div className="ip-pf-box ip-pf-split">
             <dl className="ip-pf-rows">
               <Row k="Agent name">{agent.name}</Row>
-              <Row k="Status">
-                {agent.revoked ? <StatusChip tone="threat">Revoked</StatusChip> : <StatusChip tone="safe">Approved</StatusChip>}
-              </Row>
               <Row k="Deployer">
                 <span title={agent.owner}>{deployer}</span>
               </Row>

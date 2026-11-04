@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Pagination } from "../components/Pagination";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Icon } from "../components/Icon";
+import { InspectButton } from "../components/InspectButton";
 import { MetricTile } from "../components/MetricTile";
 import { DataTable, type DataTableColumn } from "../components/DataTable";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
@@ -9,6 +10,7 @@ import { AccessRequestModal } from "../components/forms/AccessRequestModal";
 import { ViewPolicyModal } from "../components/forms/ViewPolicyModal";
 import { useAgentsPaged, useToolsPaged, useAgentsAppsMetrics, useHomeMetrics } from "../data/hooks";
 import { useAuth } from "../context/AuthContext";
+import { useDirectory } from "../context/DirectoryContext";
 import { AppIcon } from "../components/AppIcon";
 import { EmptyAgentsState } from "../components/EmptyAgentsState";
 import { timeAgo } from "../lib/format";
@@ -20,6 +22,7 @@ type Tab = "agents" | "tools";
 export function AgentsToolsPage() {
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
+  const directory = useDirectory();
   const location = useLocation();
   const [tab, setTab] = useState<Tab>((location.state as { tab?: Tab } | null)?.tab ?? "agents");
   const [agentsPage, setAgentsPage] = useState(1);
@@ -56,7 +59,7 @@ export function AgentsToolsPage() {
     {
       key: "name",
       label: "Agent",
-      width: "28%",
+      width: "48%",
       sortFn: (a, b) => a.name.localeCompare(b.name),
       render: (r) => (
         <div className="at-name">
@@ -87,13 +90,6 @@ export function AgentsToolsPage() {
       render: (r) => <ThreatCount n={r.threats} />,
     },
     {
-      key: "score",
-      label: "Reliability",
-      width: "20%",
-      sortFn: (a, b) => computeReliability(a.interactions, a.threats) - computeReliability(b.interactions, b.threats),
-      render: (r) => <ReliabilityBar interactions={r.interactions} threats={r.threats} />,
-    },
-    {
       key: "created",
       label: "Created",
       align: "right",
@@ -119,16 +115,7 @@ export function AgentsToolsPage() {
             <Icon name="eye" size={12} />
             Policy
           </button>
-          <button
-            className="btn-mini info at-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/agents/${r.id}`);
-            }}
-          >
-            <Icon name="search" size={12} />
-            Inspect
-          </button>
+          <InspectButton onClick={() => navigate(`/agents/${r.id}`)} />
         </div>
       ),
     },
@@ -138,7 +125,7 @@ export function AgentsToolsPage() {
     {
       key: "name",
       label: "App",
-      width: "34%",
+      width: "58%",
       sortFn: (a, b) => a.name.localeCompare(b.name),
       render: (r) => (
         <div className="at-name">
@@ -167,29 +154,13 @@ export function AgentsToolsPage() {
       render: (r) => <ThreatCount n={r.threats} />,
     },
     {
-      key: "score",
-      label: "Reliability",
-      width: "24%",
-      sortFn: (a, b) => computeReliability(a.interactions, a.threats) - computeReliability(b.interactions, b.threats),
-      render: (r) => <ReliabilityBar interactions={r.interactions} threats={r.threats} />,
-    },
-    {
       key: "actions",
       label: "",
       align: "right",
       width: "14%",
       render: (r) => (
         <div className="row-actions">
-          <button
-            className="btn-mini info at-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/tools/${encodeURIComponent(r.name)}`);
-            }}
-          >
-            <Icon name="search" size={12} />
-            Inspect
-          </button>
+          <InspectButton onClick={() => navigate(`/tools/${encodeURIComponent(r.name)}`)} />
         </div>
       ),
     },
@@ -226,10 +197,9 @@ export function AgentsToolsPage() {
         <MetricTile label="Total Agents" value={agentCount} icon="agents" sparkColor="#2563EB" spark={[]} />
         <MetricTile label="Total Apps" value={noAgents ? 0 : m.totalApps} icon="box" sparkColor="#0A2240" spark={[]} />
         <MetricTile
-          label="Avg. Reliability"
-          value={noAgents ? 0 : parseFloat(m.avgReliability.toFixed(2))}
-          unit="%"
-          icon="target"
+          label="Total Interactions"
+          value={noAgents ? 0 : m.totalInteractions.toLocaleString()}
+          icon="activity"
           sparkColor="#0EA5E9"
           spark={[]}
         />
@@ -260,9 +230,10 @@ export function AgentsToolsPage() {
                   .map((a) => ({ id: a.id, name: a.name, interactions: a.interactions, threats: a.threats }))
           }
           totalAgents={isAdmin ? agentsAppsMetrics.metrics.totalAgents : homeMetrics.agentCount}
-          onRowClick={(r) => {
+          rowHref={(r) => {
             const match = agents.find((a) => a.id === r.id) || agents.find((a) => a.name === r.name);
-            if (match) navigate(`/agents/${match.id}`);
+            const id = match?.id ?? [...directory].find(([, entry]) => entry.kind === "agent" && entry.name === r.name)?.[0];
+            return id ? `/agents/${encodeURIComponent(id)}` : undefined;
           }}
           onViewAll={() => navigate("/agents", { state: { tab: "agents" } })}
         />
@@ -274,7 +245,7 @@ export function AgentsToolsPage() {
             threats: a.totalThreats,
           }))}
           totalApps={agentsAppsMetrics.metrics.totalApps}
-          onRowClick={(r) => navigate(`/tools/${encodeURIComponent(r.name)}`)}
+          rowHref={(r) => `/tools/${encodeURIComponent(r.name)}`}
           onViewAll={() => navigate("/agents", { state: { tab: "tools" } })}
         />
       </div>
@@ -351,32 +322,6 @@ export function AgentsToolsPage() {
   );
 }
 
-/** Reliability = (interactions - threats) / interactions * 100, rounded to 2 dp. */
-function computeReliability(interactions: number, threats: number): number {
-  if (!interactions || interactions <= 0) return 0;
-  const pct = ((interactions - threats) / interactions) * 100;
-  return Math.max(0, Math.round(pct * 100) / 100);
-}
-
-/** Clean share of traffic as a bar; the unfilled part is the flagged share, tinted red. */
-function ReliabilityBar({ interactions, threats }: { interactions: number; threats: number }) {
-  if (interactions <= 0) return <span className="at-meta">No traffic yet</span>;
-  const pct = computeReliability(interactions, threats);
-  const band = pct < 70 ? "low" : pct < 85 ? "mid" : "high";
-  const clean = Math.max(0, interactions - threats);
-  return (
-    <div
-      className={`at-rel ${band}`}
-      title={`${clean.toLocaleString()} of ${interactions.toLocaleString()} interactions passed without an incident`}
-    >
-      <div className="at-rel-track">
-        <div className="at-rel-fill" style={{ width: `${Math.min(100, pct)}%` }} />
-      </div>
-      <span className="at-rel-pct">{pct % 1 === 0 ? pct : pct.toFixed(1)}%</span>
-    </div>
-  );
-}
-
 function ThreatCount({ n }: { n: number }) {
   return n > 0 ? (
     <span className="at-threats">{n.toLocaleString()}</span>
@@ -417,12 +362,12 @@ interface VolumeRow {
 function TopAgentsList({
   rows,
   totalAgents,
-  onRowClick,
+  rowHref,
   onViewAll,
 }: {
   rows: VolumeRow[];
   totalAgents: number;
-  onRowClick: (r: VolumeRow) => void;
+  rowHref: (r: VolumeRow) => string | undefined;
   onViewAll: () => void;
 }) {
   return (
@@ -447,13 +392,16 @@ function TopAgentsList({
         )}
         {rows.map((r, i) => {
           const threats = r.threats ?? 0;
+          const href = rowHref(r);
           return (
-            <div
+            <Link
               key={r.id}
-              onClick={() => onRowClick(r)}
-              style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", alignItems: "center", padding: "10px 20px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+              to={href ?? "#"}
+              onClick={(e) => { if (!href) e.preventDefault(); }}
+              aria-disabled={!href}
+              style={{ display: "grid", gridTemplateColumns: "44px 1fr 92px 78px", alignItems: "center", padding: "10px 20px", cursor: "pointer", textDecoration: "none", borderBottom: "1px solid var(--line)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-2)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               <div style={{ width: 28, height: 28, borderRadius: 8, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, background: i === 0 ? "#0a2240" : "var(--bg-3)", color: i === 0 ? "#fff" : "var(--fg-muted)" }}>
                 {String(i + 1).padStart(2, "0")}
@@ -469,7 +417,7 @@ function TopAgentsList({
                   {threats.toLocaleString()}
                 </span>
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>
@@ -485,12 +433,12 @@ function TopAgentsList({
 function TopAppsList({
   rows,
   totalApps,
-  onRowClick,
+  rowHref,
   onViewAll,
 }: {
   rows: VolumeRow[];
   totalApps: number;
-  onRowClick: (r: VolumeRow) => void;
+  rowHref: (r: VolumeRow) => string;
   onViewAll: () => void;
 }) {
   const maxIxns = rows.reduce((m, r) => Math.max(m, r.interactions), 0) || 1;
@@ -518,12 +466,12 @@ function TopAppsList({
           const threats = r.threats ?? 0;
           const barPct = (r.interactions / maxIxns) * 100;
           return (
-            <div
+            <Link
               key={r.id}
-              onClick={() => onRowClick(r)}
-              style={{ cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 20px" }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "transparent")}
+              to={rowHref(r)}
+              style={{ cursor: "pointer", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "0 20px" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               <div style={{ display: "grid", gridTemplateColumns: "36px 28px 1fr 76px 72px", alignItems: "center", padding: "10px 0 4px" }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: i === 0 ? "#fff" : "rgba(255,255,255,0.4)" }}>
@@ -545,7 +493,7 @@ function TopAppsList({
               <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginBottom: 8 }}>
                 <div style={{ width: `${barPct}%`, height: "100%", background: "linear-gradient(90deg, #5f83e8, #a8bdf5)", borderRadius: 2 }} />
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>

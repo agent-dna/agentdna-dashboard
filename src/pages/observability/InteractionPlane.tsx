@@ -438,14 +438,18 @@ export function InteractionPlane() {
   const pick = (id: string) => {
     const col = NODES[id].t;
     const k = ORDER.indexOf(col);
-    setChain((cur) => {
+    const nextChain = (cur: Chain): Chain => {
       const upstream: Chain = {};
       ORDER.slice(0, k).forEach((c) => cur[c] && (upstream[c] = cur[c]));
       if (cur[col] === id) return upstream;
       const next = { ...upstream, [col]: id };
       return FLOWS.some((f) => matchesChain(f, next, ORDER)) ? next : { [col]: id };
-    });
+    };
+    const next = nextChain(chain);
+    setChain(nextChain);
     if (col === "u" && userMode) revealAgentsOf(id);
+    // Same for the app layer: a pick upstream of it brings its apps into view.
+    if (next[col] === id && k < ORDER.indexOf("p")) revealAppsOf(next);
   };
 
   /** If none of a user's agents is on screen in the agent list, scroll to the first of them. */
@@ -453,6 +457,15 @@ export function InteractionPlane() {
     const ys = FLOWS.filter((f) => f.n[0] === userId && f.n[1]).map((f) => NODES[f.n[1]]?.y ?? Infinity);
     if (!ys.length || ys.some((y) => y - agentScroll > 0 && y - agentScroll < userListH)) return;
     revealAgent(Math.min(...ys));
+  };
+  /** If none of the apps on the picked chain's flows is on screen in the app list, scroll to the first of them. */
+  const revealAppsOf = (next: Chain) => {
+    const at = ORDER.indexOf("p");
+    const ys = FLOWS.filter((f) => matchesChain(f, next, ORDER) && f.n[at])
+      .map((f) => NODES[f.n[at]]?.y)
+      .filter((y): y is number => y != null);
+    if (!ys.length || ys.some((y) => y - appScroll > 0 && y - appScroll < userListH)) return;
+    revealApp(Math.min(...ys));
   };
   const revealAgent = (y: number) => {
     agentListRef.current?.scrollTo({ top: Math.max(0, y - userListH / 2), behavior: "smooth" });
@@ -766,6 +779,8 @@ export function InteractionPlane() {
               const tagged = e.st === "flagged" && a.t !== "a";
               const muted = vis === "muted";
               if (offscreen) return null;
+              // Lines into the intent column carry no count; the line's colour and dash still show its status.
+              if (nodeAt(e.to)?.t === "i") return null;
               if (e.st === "allowed" && e.n < PILL_THRESHOLD && vis !== "lit") {
                 return (
                   <div key={e.id} className="ip-dot" style={{ left: cx, top: my, opacity: muted ? 0.25 : 1 }} {...edgeHover(e.id)} />
@@ -856,7 +871,7 @@ export function InteractionPlane() {
                   <div className="ip-glyph ip-glyph-agent"><Bot size={20} strokeWidth={1.8} /></div>
                   <div className="ip-node-text">
                     <div className="ip-node-name ip-display">{n.name}</div>
-                    <div className="ip-node-sub ip-mono">{n.sub}</div>
+                    {n.sub && <div className="ip-node-sub ip-mono">{n.sub}</div>}
                   </div>
                 </div>
               ))}

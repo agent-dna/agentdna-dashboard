@@ -4,7 +4,6 @@ import { Icon } from "../components/Icon";
 import { Tabs } from "../components/Tabs";
 import { AgentRequestModal } from "../components/forms/AgentRequestModal";
 import { DeployAgentModal, type DeployPhase } from "../components/forms/DeployAgentModal";
-import { UsersTab } from "./requests/UsersTab";
 import { useAuth } from "../context/AuthContext";
 import { useResolveName } from "../context/DirectoryContext";
 import { ApiError } from "../api/client";
@@ -20,7 +19,7 @@ import {
   type RequestStatus,
 } from "../api/requests";
 
-type TabKey = "creation" | "access-org" | "access-mine" | "users";
+type TabKey = "creation" | "access-org" | "access-mine";
 
 function StatusChip({ status }: { status: RequestStatus }) {
   if (status === "approved") return <span className="chip safe"><span className="dot-status safe" /> approved</span>;
@@ -99,7 +98,6 @@ export function RequestsPage() {
   }>({ open: false, phase: "loading" });
 
   const load = useCallback(async () => {
-    if (tab === "users") return; // Users tab handles its own fetch
     setLoading(true);
     setError(null);
     setNoDid(false);
@@ -304,115 +302,104 @@ export function RequestsPage() {
     // Hidden for now — the "access-mine" tab and its /agent-access-requests-list-user
     // fetch still work; drop this line back in to bring it back for non-admins.
     // ...(isAdmin ? [] : [{ key: "access-mine" as const, label: "My Access" }]),
-    ...(isAdmin ? ([{ key: "users", label: "Users" }] as const) : []),
   ];
 
   const subtitle =
     tab === "creation"
       ? "Agent deployment workflow"
-      : tab === "users"
-      ? "Organization members and their agent access"
       : "Your submitted access requests";
 
   return (
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Requests</h1>
+          <h1>Approvals</h1>
           <div className="sub">{subtitle}</div>
         </div>
         <div className="right">
-          {tab !== "users" && (
-            <button className="btn" onClick={load}>
-              <Icon name="refresh" size={14} /> Refresh
-            </button>
-          )}
+          <button className="btn" onClick={load}>
+            <Icon name="refresh" size={14} /> Refresh
+          </button>
         </div>
       </div>
 
       <div className="card">
         <Tabs active={tab} onChange={(k) => changeTab(k as TabKey)} tabs={tabs} />
 
-        {tab === "users" ? (
-          <UsersTab />
-        ) : (
-          <>
-            <div className="tb-toolbar">
-              <div className="filters">
-                <span className="count">
-                  {loading
-                    ? "Loading…"
-                    : total === 0
-                    ? "0 of 0"
-                    : `${(page - 1) * pageSize + 1}–${(page - 1) * pageSize + rows.length} of ${total}`}
-                </span>
-              </div>
-              <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+        <div className="tb-toolbar">
+          <div className="filters">
+            <span className="count">
+              {loading
+                ? "Loading…"
+                : total === 0
+                ? "0 of 0"
+                : `${(page - 1) * pageSize + 1}–${(page - 1) * pageSize + rows.length} of ${total}`}
+            </span>
+          </div>
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+        </div>
+
+        {error && (
+          <div
+            style={{
+              margin: "12px 20px",
+              padding: "10px 14px",
+              background: "rgba(220, 38, 38, 0.06)",
+              border: "1px solid rgba(220, 38, 38, 0.18)",
+              borderRadius: 8,
+              color: "var(--threat)",
+              fontSize: 13,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {noDid ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "56px 24px",
+              gap: 20,
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 14,
+                background: "rgba(37,99,235,0.08)",
+                border: "1px solid rgba(37,99,235,0.16)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Icon name="box" size={22} style={{ color: "var(--accent)" }} />
             </div>
-
-            {error && (
-              <div
-                style={{
-                  margin: "12px 20px",
-                  padding: "10px 14px",
-                  background: "rgba(220, 38, 38, 0.06)",
-                  border: "1px solid rgba(220, 38, 38, 0.18)",
-                  borderRadius: 8,
-                  color: "var(--threat)",
-                  fontSize: 13,
-                }}
-              >
-                {error}
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg)", marginBottom: 6 }}>
+                Deploy your first agent
               </div>
-            )}
-
-            {noDid ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "56px 24px",
-                  gap: 20,
-                  textAlign: "center",
-                }}
-              >
-                <div
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 14,
-                    background: "rgba(37,99,235,0.08)",
-                    border: "1px solid rgba(37,99,235,0.16)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Icon name="box" size={22} style={{ color: "var(--accent)" }} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg)", marginBottom: 6 }}>
-                    Deploy your first agent
-                  </div>
-                  <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.6, maxWidth: 340 }}>
-                    Your account is ready. Copy your API key from the Profile page and follow the setup guide to register and deploy your first agent.
-                  </div>
-                </div>
-                <button
-                  className="btn primary"
-                  onClick={() => navigate("/profile")}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-                >
-                  <Icon name="key" size={14} />
-                  Get your API key
-                </button>
+              <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.6, maxWidth: 340 }}>
+                Your account is ready. Copy your API key from the Profile page and follow the setup guide to register and deploy your first agent.
               </div>
-            ) : (
-              <RequestsLedger />
-            )}
-          </>
+            </div>
+            <button
+              className="btn primary"
+              onClick={() => navigate("/profile")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <Icon name="key" size={14} />
+              Get your API key
+            </button>
+          </div>
+        ) : (
+          <RequestsLedger />
         )}
       </div>
 
