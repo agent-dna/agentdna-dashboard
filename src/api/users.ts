@@ -61,18 +61,15 @@ export function addUser(body: CreateUserBody): Promise<CreateUserResponse> {
 // ============ Admin: revoke / whitelist a user ============
 
 export interface UpdateUserStatusResponse {
-  user_id: string;
+  email: string;
   is_active: boolean;
 }
 
-/**
- * Admin only — `isActive: false` revokes the user's DID, `true` whitelists it again.
- * Only the DID passed is affected; a user's other DIDs keep their own status.
- */
-export function updateUserStatus(userDID: string, isActive: boolean): Promise<UpdateUserStatusResponse> {
+/** Admin only — `isActive: false` revokes the user (all their DIDs), `true` whitelists them again. */
+export function updateUserStatus(email: string, isActive: boolean): Promise<UpdateUserStatusResponse> {
   return apiRequest<UpdateUserStatusResponse>("/update-user-status", {
     method: "POST",
-    body: { user_id: userDID, is_active: isActive },
+    body: { email, is_active: isActive },
   });
 }
 

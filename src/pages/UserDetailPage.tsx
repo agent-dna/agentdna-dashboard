@@ -20,7 +20,7 @@ import { useAuth } from "../context/AuthContext";
 import type { DeployedAgent } from "../data/api";
 import type { Intent } from "../types";
 
-type Tab = "interactions" | "intents" | "threats" | "agents" | "credentials" | "applications";
+type Tab = "intents" | "threats" | "agents" | "credentials" | "applications";
 
 /**
  * A user's page (/users/:userId, from /user-info), or with `kind="admin"` an admin's
@@ -39,8 +39,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   const { openDrawer } = useDrawer();
   const { user: me } = useAuth();
 
-  const [tab, setTab] = useState<Tab>("interactions");
-  const [interactionsPage, setInteractionsPage] = useState(1);
+  const [tab, setTab] = useState<Tab>("intents");
   const [intentsPage, setIntentsPage] = useState(1);
   const [threatsPage, setThreatsPage] = useState(1);
   const [agentsPage, setAgentsPage] = useState(1);
@@ -49,7 +48,8 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   const [revokeOpen, setRevokeOpen] = useState(false);
 
   const { data: result, loading, refetch } = useUserInfo(
-    userId, interactionsPage, intentsPage, threatsPage, agentsPage, kind,
+    // The page has no interactions table, so the interactions section always asks for page 1.
+    userId, 1, intentsPage, threatsPage, agentsPage, kind,
   );
   // The credentials this user (or admin) presented, paged on their own.
   const creds = usePresentedCredentials({ kind, id: userId }, credentialsPage);
@@ -104,7 +104,6 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
 
   const {
     user,
-    interactions, interactionsTotal, interactionsTotalPages,
     intents, intentsTotal, intentsTotalPages,
     threats, threatsTotal, threatsTotalPages,
     agents, agentsTotal, agentsTotalPages,
@@ -117,27 +116,23 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
   const revoked = hasStatus && !user.status;
   const canChangeStatus = hasStatus && !!me?.is_admin;
   const currentPageFor = (t: Tab) =>
-    t === "interactions" ? interactionsPage
-    : t === "intents" ? intentsPage
+    t === "intents" ? intentsPage
     : t === "threats" ? threatsPage
     : t === "credentials" ? credentialsPage
     : agentsPage;
   const setPageFor = (t: Tab, p: number) => {
-    if (t === "interactions") setInteractionsPage(p);
-    else if (t === "intents") setIntentsPage(p);
+    if (t === "intents") setIntentsPage(p);
     else if (t === "threats") setThreatsPage(p);
     else if (t === "credentials") setCredentialsPage(p);
     else setAgentsPage(p);
   };
   const totalPagesFor = (t: Tab) =>
-    t === "interactions" ? interactionsTotalPages
-    : t === "intents" ? intentsTotalPages
+    t === "intents" ? intentsTotalPages
     : t === "threats" ? threatsTotalPages
     : t === "credentials" ? creds.data.totalPages
     : agentsTotalPages;
   const totalCountFor = (t: Tab) =>
-    t === "interactions" ? interactionsTotal
-    : t === "intents" ? intentsTotal
+    t === "intents" ? intentsTotal
     : t === "threats" ? threatsTotal
     : t === "credentials" ? creds.data.total
     : agentsTotal;
@@ -299,7 +294,7 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
             </div>
           </div>
 
-          {/* Revoke / whitelist the primary DID (admins only; never on an admin's page) */}
+          {/* Revoke / whitelist the user (admins only; never on an admin's page) */}
           {canChangeStatus && <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button className={revoked ? "btn safe" : "btn danger"} onClick={() => setRevokeOpen(true)}>
               <Icon name="shield" size={14} />
@@ -326,7 +321,6 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
               active={tab}
               onChange={(k) => setTab(k as Tab)}
               tabs={[
-                { key: "interactions", label: "Interactions", count: interactionsTotal },
                 { key: "intents", label: "Intents", count: intentsTotal },
                 { key: "threats", label: "Incidents", count: threatsTotal },
                 { key: "agents", label: "Agents Deployed", count: agentsTotal },
@@ -346,14 +340,6 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
             />
           </div>}
         </div>
-
-        {tab === "interactions" && (
-          <LedgerTable
-            rows={interactions}
-            emptyText="No interactions yet."
-            onView={(r) => openDrawer("interaction", r)}
-          />
-        )}
 
         {tab === "intents" && (
           <DataTable
@@ -393,9 +379,8 @@ export function UserDetailPage({ kind = "user" }: { kind?: "user" | "admin" }) {
       {canChangeStatus && (
         <RevokeUserModal
           open={revokeOpen}
-          userDID={user.userID}
+          userEmail={user.userName}
           userName={displayName}
-          otherDidCount={user.dids.filter((d) => d !== user.userID).length}
           mode={revoked ? "whitelist" : "revoke"}
           onClose={() => setRevokeOpen(false)}
           onSuccess={() => {
