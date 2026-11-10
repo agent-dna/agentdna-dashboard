@@ -1928,7 +1928,7 @@ interface ApiUserInfo {
     createdAt: string;
     lastActive: string | null;
     isActive: boolean;
-    /** Revocation state of `userID`: true = active (whitelisted), false = revoked. /user-info only, not /admins/:id. */
+    /** Revocation state of the user: true = active (whitelisted), false = revoked. /user-info only, not /admins/:id. */
     status?: boolean;
     accessAgentCount: number;
     totalInteractions: number;
@@ -1963,7 +1963,7 @@ export interface UserDetail {
   lastActiveMinsAgo: number; // minutes since lastActive, 0 if null
   isActive: boolean;
   /**
-   * Revocation state of the primary DID: true = active (whitelisted), false = revoked. Also false
+   * The user's revocation state: true = active (whitelisted), false = revoked. Also false
    * when the backend can't reach the admin server. Undefined on an admin's page (/admins/:id).
    */
   status?: boolean;
