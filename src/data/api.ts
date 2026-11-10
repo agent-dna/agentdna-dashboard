@@ -4,6 +4,7 @@
 import { apiRequest } from "../api/client";
 import type { AuthEvidence } from "../api/observability";
 import { compareInteractionIds } from "../lib/interactionBranch";
+import { parseSeverity, type ThreatSeverity } from "../lib/threatSeverity";
 import { getDirectorySnapshot, waitForDirectoryReady } from "./directoryCache";
 import type {
   Agent,
@@ -207,13 +208,21 @@ export async function fetchAlerts(page = 1): Promise<Interaction[]> {
 
 // ============ Threat events ============
 
+/**
+ * A threat code from the backend's error_code.json, or "unknown" for the bucket of codes it
+ * doesn't track (shown as "Unknown Error"). /threat-detail sends this; /threats-list,
+ * /threat-events and /threat-by-id send the raw number; /top-threats sends a string (see TopThreat).
+ */
+export type ThreatCode = number | "unknown";
+
+
 export interface ThreatEvent {
   id: string;
   intentID: string;
   interactionID: string;
   /** Minutes ago, same convention as everywhere else in this file. */
   time: number;
-  threatCode: number;
+  threatCode: ThreatCode;
   message: string;
 }
 
@@ -222,7 +231,7 @@ interface ApiThreatEvent {
   intent_id: string;
   interaction_id: string;
   time: string;
-  threat_code: number;
+  threat_code: ThreatCode;
   message: string;
 }
 
@@ -270,14 +279,18 @@ export async function fetchThreatEvents(page = 1, limit = 10): Promise<PagedThre
 
 /** One entry in the top-5-most-frequent-threats list. */
 export interface TopThreat {
-  threatCode: number;
+  /** As /top-threats sends it: a string, e.g. "2001", "0000" for code 0, or "unknown". */
+  threatCode: string;
   title: string;
+  /** From the API (the backend's error_code.json); null when it sent none or an unrecognised value. */
+  severity: ThreatSeverity | null;
   count: number;
 }
 
 interface ApiTopThreat {
-  threat_code: number;
+  threat_code: string;
   title: string;
+  severity?: string;
   count: number;
 }
 
@@ -286,32 +299,35 @@ export async function fetchTopThreats(): Promise<TopThreat[]> {
   // UI can tell "the request failed" apart from "there are genuinely no
   // threats", instead of both looking like a silent empty list.
   const res = await apiRequest<ApiTopThreat[]>("/top-threats");
-  return (res || []).map((t) => ({ threatCode: t.threat_code, title: t.title, count: t.count }));
+  return (res || []).map((t) => ({ threatCode: t.threat_code, title: t.title, severity: parseSeverity(t.severity), count: t.count }));
 }
 
 export interface ThreatDetail {
-  threatCode: number;
+  threatCode: ThreatCode;
   title: string;
+  severity: ThreatSeverity | null;
   description: string;
   count: number;
   events: ThreatEvent[];
 }
 
 interface ApiThreatDetail {
-  threat_code: number;
+  threat_code: ThreatCode;
   title: string;
+  severity?: string;
   description: string;
   count: number;
   threats: ApiThreatEvent[];
 }
 
 /** Not currently wired into any page — available for a future "view threat" drawer/page. */
-export async function fetchThreatDetail(threatCode: number): Promise<ThreatDetail | null> {
+export async function fetchThreatDetail(threatCode: ThreatCode): Promise<ThreatDetail | null> {
   try {
     const res = await apiRequest<ApiThreatDetail>("/threat-detail", { query: { threat_code: threatCode } });
     return {
       threatCode: res.threat_code,
       title: res.title,
+      severity: parseSeverity(res.severity),
       description: res.description,
       count: res.count,
       events: (res.threats || []).map(mapThreatEvent),
@@ -327,8 +343,10 @@ export interface ThreatByID {
   intentID: string;
   interactionID: string;
   time: number;
-  threatCode: number;
+  threatCode: ThreatCode;
+  /** "Unknown Error" for codes the backend doesn't track. */
   title: string;
+  severity: ThreatSeverity | null;
   description: string;
   message: string;
 }
@@ -338,8 +356,9 @@ interface ApiThreatByID {
   intent_id: string;
   interaction_id: string;
   time: string;
-  threat_code: number;
+  threat_code: ThreatCode;
   title: string;
+  severity?: string;
   description: string;
   message: string;
 }
@@ -361,6 +380,7 @@ export async function fetchThreatByID(threatId: string): Promise<ThreatByID | nu
     time: isoToMinutesAgo(res.time),
     threatCode: res.threat_code,
     title: res.title,
+    severity: parseSeverity(res.severity),
     description: res.description,
     message: res.message,
   };
@@ -427,7 +447,7 @@ export interface ThreatListItem {
   threatID: string;
   threatTitle: string;
   /** Now returned by /threats-list — undefined only if the backend omits it for a given row. */
-  threatCode: number | undefined;
+  threatCode: ThreatCode | undefined;
   message: string;
   /** Minutes ago. */
   time: number;
@@ -445,7 +465,7 @@ interface ApiThreatListItem {
   threat: boolean;
   threatID: string;
   threatTitle?: string;
-  threatCode?: number;
+  threatCode?: ThreatCode;
   intentID: string;
   reviewStatus?: string;
   time: string;

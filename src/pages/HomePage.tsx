@@ -368,11 +368,11 @@ export function HomePage() {
   }
 
 
-  // Calculate critical/high severity threat counts
-  const criticalThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "Critical").reduce((sum, t) => sum + t.count, 0);
-  const highThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "High").reduce((sum, t) => sum + t.count, 0);
-  const mediumThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "Medium").reduce((sum, t) => sum + t.count, 0);
-  const lowThreats = (topThreats || []).filter(t => getThreatSeverity(t.threatCode) === "Low").reduce((sum, t) => sum + t.count, 0);
+  // Severity counts for the Incidents card, from /top-threats' own `severity`.
+  const criticalThreats = (topThreats || []).filter(t => t.severity === "Critical").reduce((sum, t) => sum + t.count, 0);
+  const highThreats = (topThreats || []).filter(t => t.severity === "High").reduce((sum, t) => sum + t.count, 0);
+  const mediumThreats = (topThreats || []).filter(t => t.severity === "Medium").reduce((sum, t) => sum + t.count, 0);
+  const lowThreats = (topThreats || []).filter(t => t.severity === "Low").reduce((sum, t) => sum + t.count, 0);
   // Shared by the Incidents card's legend row and its severity bar, so the two always match.
   const severitySegments = [
     { label: "Critical", count: criticalThreats, color: INCIDENT_SEVERITY_COLORS.Critical },
@@ -1111,7 +1111,7 @@ export function HomePage() {
                     </div>
                     <div style={{ fontSize: 12.5, fontWeight: 720, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titleOrUnknown(t.title)}</div>
                     <div style={{ textAlign: "right" }}>
-                      <SeverityPill severity={getThreatSeverity(t.threatCode)} />
+                      <SeverityPill severity={t.severity} />
                     </div>
                     <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 840, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>
                       {t.count.toLocaleString()}
