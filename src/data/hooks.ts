@@ -177,8 +177,12 @@ export const useToolInfo = (nameOrDid: string, interactionsPage = 1, intentsPage
 /** /tool-info for an app known by DID, falling back to its name (see fetchToolInfoByDidOrName). */
 export const useToolInfoByDidOrName = (did: string, name?: string) =>
   useAsync<api.ToolDetailResult | null>(() => api.fetchToolInfoByDidOrName(did, name), null, [did, name]);
-export const useResourcesPaged = (page = 1, pageSize = 10) =>
-  useAsync<api.PagedResources>(() => api.fetchResources(page, pageSize), { items: [], total: 0, page: 1, pageSize, totalPages: 1 }, [page, pageSize]);
+export const useResourcesPaged = (page = 1, pageSize = 10, trustStatus?: api.TrustStatus) =>
+  useAsync<api.PagedResources>(
+    () => api.fetchResources(page, pageSize, trustStatus),
+    { items: [], total: 0, page: 1, pageSize, totalPages: 1 },
+    [page, pageSize, trustStatus],
+  );
 export const useResourceInfo = (resourceID: string, intentsPage = 1, credentialsPage = 1) =>
   useAsync<api.ResourceInfo | null>(
     () => (resourceID ? api.fetchResourceInfo(resourceID, { intentsPage, credentialsPage }) : Promise.resolve(null)),

@@ -10,8 +10,11 @@ import { ApiError } from "../../api/client";
 import { CopyId } from "../observability/IntentDetailPanel";
 import { authMethodLabel } from "../../lib/credFormat";
 import { CredentialStatusChip } from "../../components/CredentialStatusChip";
+import { TrustStatusChip } from "../../components/TrustStatusChip";
+import { TrustStatusPicker } from "../../components/TrustStatusPicker";
+import { useAuth } from "../../context/AuthContext";
 import { credentialPath, resourceLabel } from "../../lib/resource";
-import type { ResourceCredential } from "../../data/api";
+import type { ResourceCredential, TrustStatus } from "../../data/api";
 import type { Intent } from "../../types";
 
 /**
@@ -27,7 +30,11 @@ const shortId = (s: string) => (s.length > 22 ? `${s.slice(0, 10)}…${s.slice(-
 export function ResourceDetailPage() {
   const { resourceId = "" } = useParams<{ resourceId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
   const [tab, setTab] = useState<Tab>("intents");
+  /** The trust status an admin set here; the update call returns it, so no refetch. */
+  const [trustEdit, setTrustEdit] = useState<TrustStatus | null>(null);
   const [intentsPage, setIntentsPage] = useState(1);
   const [credentialsPage, setCredentialsPage] = useState(1);
   const { data: res, loading, error, refetch } = useResourceInfo(resourceId, intentsPage, credentialsPage);
@@ -70,6 +77,7 @@ export function ResourceDetailPage() {
   }
 
   const { title, dest } = resourceLabel(res.url, res.name);
+  const trust = trustEdit ?? res.trustStatus;
 
   const intentCols = intentTableColumns(navigate);
   // Each row is the intent as /intent-info has it; one that failed to load is skipped.
@@ -124,6 +132,11 @@ export function ResourceDetailPage() {
               <span className="chip info" style={{ fontSize: 10.5, padding: "2px 7px" }}>
                 {dest.entity === "local" ? "local service" : "resource"}
               </span>
+              {isAdmin ? (
+                <TrustStatusPicker resourceID={res.resourceID} current={trust} onSaved={setTrustEdit} />
+              ) : (
+                <TrustStatusChip value={trust} />
+              )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--fg-muted)", fontSize: 12.5, fontFamily: "var(--font-mono)", marginBottom: 16, minWidth: 0 }}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={res.url}>{res.url}</span>

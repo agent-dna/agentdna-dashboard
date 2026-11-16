@@ -3468,3 +3468,10 @@ table.rt .num { text-align: right; }
 .ct-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 .ct-evidence { padding: 0 16px 14px; }
 @media (prefers-reduced-motion: reduce) { .ct-toggle svg { transition: none; } }
+
+/* ───────── Resource trust status (TrustStatusPicker, intent Destinations tab) ───────── */
+.csp-menu.right { left: auto; right: 0; }
+.csp-menu .csp-opt:first-child { margin-top: 0; }
+/* Status menus (credential and trust pickers) hang below their chip; a card or panel clips them
+   otherwise. Only while a menu is open, so rounded corners stay clean the rest of the time. */
+.card:has(.csp-menu), .rt-panel:has(.csp-menu) { overflow: visible; }

@@ -8,7 +8,11 @@ import { credentialPath, resourceLabel, resourcePath, whenShort } from "../../li
 import { DestinationLogo } from "../../components/DestinationLogo";
 import { MetricTile } from "../../components/MetricTile";
 import { CredentialStatusChip, credentialStatusLabel } from "../../components/CredentialStatusChip";
-import { CREDENTIAL_STATUSES, type CredentialStatusValue } from "../../data/api";
+import { TrustStatusChip } from "../../components/TrustStatusChip";
+import { trustStatusLabel } from "../../lib/trustStatus";
+import { TrustStatusPicker } from "../../components/TrustStatusPicker";
+import { useAuth } from "../../context/AuthContext";
+import { CREDENTIAL_STATUSES, TRUST_STATUSES, type CredentialStatusValue, type TrustStatus } from "../../data/api";
 
 /**
  * Resources: the outside services the org's agents and apps call (GET /resources-list), beside
@@ -62,10 +66,20 @@ function Pager({ page, totalPages, total, pageSize, onChange }: { page: number; 
 
 export function ResourcesPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
   const [page, setPage] = useState(1);
+  const [trustFilter, setTrustFilter] = useState<TrustStatus | "">("");
+  /** Trust statuses an admin changed here, by resource: the row shows the saved value, with no refetch. */
+  const [trustEdits, setTrustEdits] = useState<Record<string, TrustStatus>>({});
   const [credPage, setCredPage] = useState(1);
   const [credStatus, setCredStatus] = useState<CredentialStatusValue | "">("");
-  const { data: resources, loading, error, refetch } = useResourcesPaged(page);
+  const { data: resources, loading, error, refetch } = useResourcesPaged(page, 10, trustFilter || undefined);
+  // A new filter starts from its first page, in the same render.
+  const changeTrustFilter = (v: TrustStatus | "") => {
+    setTrustFilter(v);
+    setPage(1);
+  };
   const { data: credentials, loading: credsLoading, error: credsError, refetch: refetchCreds } = useCredentialsPaged(
     credPage,
     10,
@@ -97,6 +111,17 @@ export function ResourcesPage() {
           <header className="rt-head">
             <h2 id="rt-res-title">Resources</h2>
             <span className="rt-count">{resources.total.toLocaleString()}</span>
+            <select
+              className="rt-filter"
+              value={trustFilter}
+              onChange={(e) => changeTrustFilter(e.target.value as TrustStatus | "")}
+              aria-label="Filter resources by trust status"
+            >
+              <option value="">All statuses</option>
+              {TRUST_STATUSES.map((s) => (
+                <option key={s} value={s}>{trustStatusLabel(s)}</option>
+              ))}
+            </select>
             <Pager page={page} totalPages={resources.totalPages} total={resources.total} pageSize={resources.pageSize} onChange={setPage} />
           </header>
           {error ? (
@@ -105,17 +130,25 @@ export function ResourcesPage() {
               <button type="button" className="rt-retry" onClick={refetch}>Retry</button>
             </div>
           ) : resources.items.length === 0 ? (
-            <div className="rt-empty">{loading ? "Loading resources…" : "No resources yet. They appear once an app calls an outside service."}</div>
+            <div className="rt-empty">
+              {loading
+                ? "Loading resources…"
+                : trustFilter
+                ? `No ${trustStatusLabel(trustFilter).toLowerCase()} resources.`
+                : "No resources yet. They appear once an app calls an outside service."}
+            </div>
           ) : (
             <table className="rt">
               <colgroup>
                 <col />
+                <col style={{ width: 118 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 96 }} />
               </colgroup>
               <thead>
                 <tr>
                   <th>Resource</th>
+                  <th>Trust status</th>
                   <th className="num">Intents</th>
                   <th className="num">Credentials</th>
                 </tr>
@@ -123,8 +156,13 @@ export function ResourcesPage() {
               <tbody>
                 {resources.items.map((r) => {
                   const { title, dest } = resourceLabel(r.url, r.name);
+                  const trust = trustEdits[r.resourceID] ?? r.trustStatus;
                   return (
-                    <tr key={r.resourceID} {...rowProps(() => navigate(resourcePath(r.resourceID)))}>
+                    <tr
+                      key={r.resourceID}
+                      {...rowProps(() => navigate(resourcePath(r.resourceID)))}
+                      style={trust === "Flagged" ? { background: "rgba(220,38,38,.045)" } : undefined}
+                    >
                       <td>
                         <span className="rt-res">
                           <span className="rt-logo">
@@ -135,6 +173,17 @@ export function ResourcesPage() {
                             <span className="rt-sub" title={r.url}>{r.url}</span>
                           </span>
                         </span>
+                      </td>
+                      <td>
+                        {isAdmin ? (
+                          <TrustStatusPicker
+                            resourceID={r.resourceID}
+                            current={trust}
+                            onSaved={(s) => setTrustEdits((m) => ({ ...m, [r.resourceID]: s }))}
+                          />
+                        ) : (
+                          <TrustStatusChip value={trust} />
+                        )}
                       </td>
                       <td className="num">
                         <span className="rt-num">{r.intentCount.toLocaleString()}</span>

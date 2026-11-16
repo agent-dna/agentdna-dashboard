@@ -1222,12 +1222,21 @@ function mapToolAgentScore(e: ApiToolAgentScoreEntry): ToolAgentScore {
  */
 /* ============ Resources (outside services agents and apps call) ============ */
 
+/** An admin's trust decision on a resource. Until one is made it is "Unreviewed". */
+export type TrustStatus = "Unreviewed" | "Flagged" | "Trusted";
+export const TRUST_STATUSES: TrustStatus[] = ["Unreviewed", "Flagged", "Trusted"];
+
+/** Anything unrecognised (or missing) reads as "Unreviewed", as the server treats an unset status. */
+export const trustStatusValue = (v: unknown): TrustStatus =>
+  TRUST_STATUSES.includes(v as TrustStatus) ? (v as TrustStatus) : "Unreviewed";
+
 /** A row of GET /resources-list. */
 export interface ResourceSummary {
   /** The resource's URL; pass it (URL-encoded) to /resource-info. */
   resourceID: string;
   name: string;
   url: string;
+  trustStatus: TrustStatus;
   intentCount: number;
   credentialCount: number;
 }
@@ -1256,13 +1265,37 @@ const paged = <T,>(p: ApiPaged<T> | undefined, pageSize: number) => ({
   totalPages: p?.totalPages ?? 1,
 });
 
-/** GET /resources-list: the org's resources, a page at a time. */
-export async function fetchResources(page = 1, pageSize = 10): Promise<PagedResources> {
+/**
+ * GET /resources-list: the org's resources, a page at a time. With `trustStatus`, only those
+ * with that status (the totals then count the filtered set).
+ */
+export async function fetchResources(page = 1, pageSize = 10, trustStatus?: TrustStatus): Promise<PagedResources> {
   const r = await apiRequest<{ resourcesList?: ResourceSummary[] | null; total?: number; page?: number; pageSize?: number; totalPages?: number }>(
     "/resources-list",
-    { query: { page, pageSize } },
+    { query: { page, pageSize, ...(trustStatus ? { trustStatus } : {}) } },
   );
-  return paged({ list: r.resourcesList, total: r.total, page: r.page, pageSize: r.pageSize, totalPages: r.totalPages }, pageSize);
+  const p = paged({ list: r.resourcesList, total: r.total, page: r.page, pageSize: r.pageSize, totalPages: r.totalPages }, pageSize);
+  return { ...p, items: p.items.map((i) => ({ ...i, trustStatus: trustStatusValue(i.trustStatus) })) };
+}
+
+/**
+ * POST /update-resource-trust-status (admins only): set a resource's trust status. Returns the
+ * resource as the server now has it; callers update their row from it instead of refetching.
+ */
+export async function updateResourceTrustStatus(
+  resourceID: string,
+  trustStatus: TrustStatus,
+): Promise<{ resourceID: string; name: string; url: string; trustStatus: TrustStatus }> {
+  const r = await apiRequest<{ resourceID?: string; name?: string; url?: string; trustStatus?: string }>("/update-resource-trust-status", {
+    method: "POST",
+    body: { resourceID, trustStatus },
+  });
+  return {
+    resourceID: r.resourceID ?? resourceID,
+    name: r.name ?? "",
+    url: r.url ?? resourceID,
+    trustStatus: trustStatusValue(r.trustStatus ?? trustStatus),
+  };
 }
 
 /** An intent that reached a resource, with the credentials it presented there (empty if none). */
@@ -1311,6 +1344,7 @@ export async function fetchResourceInfo(
     resourceID: r.resourceID,
     name: r.name,
     url: r.url,
+    trustStatus: trustStatusValue(r.trustStatus),
     intentCount: r.intentCount ?? 0,
     credentialCount: r.credentialCount ?? 0,
     intents: { ...intents, items: intents.items.map((i) => ({ ...i, credentialIDs: i.credentialIDs ?? [] })) },
