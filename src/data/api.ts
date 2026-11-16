@@ -897,6 +897,8 @@ export interface ApiIntentInfo {
   executor?: string;
   /** Every interaction of the intent, oldest first — never paged. */
   interactions?: ApiInteraction[];
+  /** Every destination a server called while serving the intent, most used first; empty when none. */
+  resources?: { resourceID: string; name?: string; url?: string; trustStatus?: string }[] | null;
 }
 
 /**
@@ -1006,7 +1008,13 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     apps: r.apps,
     appDIDs: r.appDIDs,
   });
-  return r.executor ? { ...intent, executor: r.executor } : intent;
+  const resources: IntentResource[] = (r.resources ?? []).map((x) => ({
+    resourceID: x.resourceID,
+    name: x.name ?? "",
+    url: x.url || x.resourceID,
+    trustStatus: trustStatusValue(x.trustStatus),
+  }));
+  return { ...intent, resources, ...(r.executor ? { executor: r.executor } : {}) };
 }
 
 interface PagedAgentInteractions {
@@ -1229,6 +1237,26 @@ export const TRUST_STATUSES: TrustStatus[] = ["Unreviewed", "Flagged", "Trusted"
 /** Anything unrecognised (or missing) reads as "Unreviewed", as the server treats an unset status. */
 export const trustStatusValue = (v: unknown): TrustStatus =>
   TRUST_STATUSES.includes(v as TrustStatus) ? (v as TrustStatus) : "Unreviewed";
+
+/** A destination an intent reached (/intent-info's `resources`), with its live trust status. */
+export interface IntentResource {
+  resourceID: string;
+  name: string;
+  url: string;
+  trustStatus: TrustStatus;
+}
+
+/**
+ * One trust status for a whole intent, from its destinations: any flagged destination flags the
+ * intent; otherwise it is trusted only when every destination is; otherwise unreviewed. Null
+ * when the intent reached no recorded destination.
+ */
+export function intentTrustStatus(resources: IntentResource[] | undefined): TrustStatus | null {
+  if (!resources || resources.length === 0) return null;
+  if (resources.some((r) => r.trustStatus === "Flagged")) return "Flagged";
+  if (resources.every((r) => r.trustStatus === "Trusted")) return "Trusted";
+  return "Unreviewed";
+}
 
 /** A row of GET /resources-list. */
 export interface ResourceSummary {

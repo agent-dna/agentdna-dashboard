@@ -11,17 +11,21 @@ import { useResolveName, shortDid } from "../context/DirectoryContext";
 import { InfoStat } from "../components/InfoStat";
 import { StatusPicker } from "../components/StatusPicker";
 import { IntentEvidenceTrail } from "../components/IntentEvidenceTrail";
+// import { IntentCredentials } from "../components/IntentCredentials"; // Credentials tab hidden for now
+import { IntentDestinations } from "../components/IntentDestinations";
+import { TrustStatusChip } from "../components/TrustStatusChip";
+import { useAuth } from "../context/AuthContext";
 import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useIntentThreats } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
 import { useIntentReview } from "../context/IntentReviewContext";
 import { timeAgo, titleOrUnknown } from "../lib/format";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
-import { updateIntentStatus, type IntentThreat } from "../data/api";
+import { intentTrustStatus, invalidateIntentInfo, updateIntentStatus, type IntentThreat, type TrustStatus } from "../data/api";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { branchName, compareInteractionIds, parseInteractionId } from "../lib/interactionBranch";
 import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
 
-type Tab = "evidence" | "participants";
+type Tab = "evidence" | /* "credentials" | */ "destinations" | "participants";
 
 export function IntentDetailPage() {
   const { intentId = "" } = useParams<{ intentId: string }>();
@@ -39,7 +43,14 @@ export function IntentDetailPage() {
     return { text: initiator.name || "—", isDid: false };
   }
   const { refetch: refetchIntentReview } = useIntentReview();
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
   const [tab, setTab] = useState<Tab>("evidence");
+  /**
+   * Trust statuses an admin changed on this page, by resource. The update call returns the saved
+   * value, so rows and the header summary read from here rather than refetching the intent.
+   */
+  const [trustEdits, setTrustEdits] = useState<Record<string, TrustStatus>>({});
   /** The incident list starts collapsed to its one-line summary. */
   const [incidentsOpen, setIncidentsOpen] = useState(false);
   const intentState = useIntent(intentId);
@@ -74,6 +85,14 @@ export function IntentDetailPage() {
   }
 
   const participantRows = participants.map((p) => ({ ...p, id: `${p.type}:${p.entity.id}` }));
+  const destinations = (intent.resources ?? []).map((r) => ({ ...r, trustStatus: trustEdits[r.resourceID] ?? r.trustStatus }));
+  const trustSummary = intentTrustStatus(destinations);
+  const flaggedCount = destinations.filter((r) => r.trustStatus === "Flagged").length;
+  const changeTrust = (resourceID: string, status: TrustStatus) => {
+    setTrustEdits((m) => ({ ...m, [resourceID]: status }));
+    // The cached /intent-info still has the old value; the next visit fetches it fresh.
+    invalidateIntentInfo(intent.id);
+  };
 
   const changeStatus = async (next: IntentReviewStatus) => {
     await updateIntentStatus(intent.id, next);
@@ -171,7 +190,7 @@ export function IntentDetailPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(5, 1fr)",
+                gridTemplateColumns: "repeat(6, 1fr)",
                 gap: 24,
               }}
             >
@@ -263,6 +282,29 @@ export function IntentDetailPage() {
                 value={<StatusPicker status={intent.reviewStatus} hasIncident={threatCount > 0} onChange={changeStatus} />}
               />
               <InfoStat
+                label="Resource status"
+                value={
+                  trustSummary ? (
+                    <button
+                      type="button"
+                      className="it-trust-btn"
+                      onClick={() => setTab("destinations")}
+                      title={
+                        trustSummary === "Flagged"
+                          ? `${flaggedCount} flagged destination${flaggedCount === 1 ? "" : "s"} — see Destinations`
+                          : trustSummary === "Trusted"
+                          ? "Every destination is trusted — see Destinations"
+                          : "Some destinations are not reviewed yet — see Destinations"
+                      }
+                    >
+                      <TrustStatusChip value={trustSummary} />
+                    </button>
+                  ) : (
+                    <span className="it-trust-none" title="This intent reached no recorded destination">No destinations</span>
+                  )
+                }
+              />
+              <InfoStat
                 label="Incident detected"
                 value={
                   <span style={{ color: threatCount > 0 ? "var(--threat)" : "var(--fg)", fontWeight: 600 }}>
@@ -340,11 +382,17 @@ export function IntentDetailPage() {
           onChange={(k) => setTab(k as Tab)}
           tabs={[
             { key: "evidence", label: "Evidence trail" },
+            // { key: "credentials", label: "Credentials" }, // hidden for now
+            { key: "destinations", label: "Destinations", count: destinations.length },
             { key: "participants", label: "Agents & Apps", count: participantRows.length },
           ]}
         />
 
         {tab === "evidence" && <IntentEvidenceTrail intentId={intent.id} />}
+
+        {/* {tab === "credentials" && <IntentCredentials intentId={intent.id} />} */}
+
+        {tab === "destinations" && <IntentDestinations resources={destinations} isAdmin={isAdmin} onTrustChange={changeTrust} />}
 
         {tab === "participants" && (
           <DataTable

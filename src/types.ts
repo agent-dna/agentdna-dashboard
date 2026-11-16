@@ -1,5 +1,5 @@
 import type { AuthEvidence } from "./api/observability";
-import type { UserApplication } from "./data/api";
+import type { IntentResource, UserApplication } from "./data/api";
 
 export type Status = "safe" | "warn" | "threat";
 
@@ -60,6 +60,8 @@ export interface Intent {
   reviewStatus: IntentReviewStatus;
   /** DID of the participant that executed the intent (/intent-info's `executor`); may differ from the initiator. */
   executor?: string;
+  /** The destinations the intent reached with their trust status (/intent-info only; absent from list rows). */
+  resources?: IntentResource[];
 }
 
 export type IntentReviewStatus = "Unreviewed" | "Acknowledged" | "Flagged";
