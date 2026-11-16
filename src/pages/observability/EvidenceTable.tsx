@@ -19,17 +19,18 @@ const sentence = (s: string) => {
   return t ? t[0].toUpperCase() + t.slice(1) : "";
 };
 
-/** "bearer_opaque" → "Bearer", "none" → "None", "api_key" → "API key". */
-function loginLabel(m: string): string {
+/** "bearer_opaque" → "Bearer", "none" → "None", "api_key" → "API key", "jwt" → "JWT". */
+export function loginLabel(m: string): string {
   const s = (m || "").toLowerCase();
   if (!s) return "";
   if (s.startsWith("bearer")) return "Bearer";
   if (s === "api_key" || s === "apikey") return "API key";
+  if (s === "jwt") return "JWT";
   return sentence(s);
 }
 
 /** "09:11:42.07": local time to the hundredth of a second; the full date and time go in the tooltip. */
-function clockAt(iso: string): { short: string; full: string } | null {
+export function clockAt(iso: string): { short: string; full: string } | null {
   const t = ms(iso);
   if (t == null) return null;
   const d = new Date(t);
@@ -39,7 +40,7 @@ function clockAt(iso: string): { short: string; full: string } | null {
 }
 
 /** "accepted" → "OK"; anything else as the server sent it. */
-const statusLabel = (status: string) => (authTone(status) === "ok" ? "OK" : (status || "unknown").toLowerCase());
+export const statusLabel = (status: string) => (authTone(status) === "ok" ? "OK" : (status || "unknown").toLowerCase());
 
 const Empty = () => <span className="evt-none" aria-label="None">—</span>;
 
