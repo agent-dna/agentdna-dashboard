@@ -9,6 +9,7 @@ import { DestinationLogo } from "../../components/DestinationLogo";
 import { MetricTile } from "../../components/MetricTile";
 import { CredentialStatusChip, credentialStatusLabel } from "../../components/CredentialStatusChip";
 import { TrustStatusChip } from "../../components/TrustStatusChip";
+import { SharedKeyTag } from "../../components/SharedKeyTag";
 import { trustStatusLabel } from "../../lib/trustStatus";
 import { TrustStatusPicker } from "../../components/TrustStatusPicker";
 import { useAuth } from "../../context/AuthContext";
@@ -257,6 +258,7 @@ export function ResourcesPage() {
                         <span onClick={(e) => e.stopPropagation()}>
                           <CopyId value={c.credentialID} label="credential ID" />
                         </span>
+                        <SharedKeyTag userCount={c.userCount} agentCount={c.agentCount} />
                       </span>
                     </td>
                     <td>

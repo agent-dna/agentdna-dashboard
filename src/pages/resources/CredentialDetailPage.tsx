@@ -5,6 +5,7 @@ import { DataTable, type DataTableColumn } from "../../components/DataTable";
 import { Pagination } from "../../components/Pagination";
 import { CredentialStatusChip } from "../../components/CredentialStatusChip";
 import { CredentialStatusPicker } from "../../components/CredentialStatusPicker";
+import { SharedKeyTag } from "../../components/SharedKeyTag";
 import { intentTableColumns } from "../../components/intentTableColumns";
 import { useAuth } from "../../context/AuthContext";
 import { useCredentialInfo, useIntentsByIds } from "../../data/hooks";
@@ -147,6 +148,11 @@ export function CredentialDetailPage() {
               </h1>
               <CopyId value={cred.credentialID} label="credential ID" />
               <span className="chip warn" style={{ fontSize: 10.5, padding: "2px 7px" }}>credential</span>
+              {/* Counts from the summary; the party lists stand in if the server left them out. */}
+              <SharedKeyTag
+                userCount={Math.max(cred.userCount, cred.users.length)}
+                agentCount={Math.max(cred.agentCount, cred.agents.length)}
+              />
               {isAdmin ? (
                 <CredentialStatusPicker credentialID={cred.credentialID} current={cred.status} onSaved={refetch} />
               ) : (
