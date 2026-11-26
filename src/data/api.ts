@@ -1512,9 +1512,21 @@ export interface CredentialParty {
   lastUsedAt: string;
 }
 
+/** A resource a credential was presented to, with the full URLs it was used on there. */
+export interface CredentialResource {
+  resourceID: string;
+  name: string;
+  trustStatus: TrustStatus;
+  urls: string[];
+  intentCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
 export interface CredentialInfo extends CredentialSummary {
   /** Most recently used first. */
   intents: { items: CredentialIntent[]; total: number; page: number; pageSize: number; totalPages: number };
+  resources: CredentialResource[];
   users: CredentialParty[];
   agents: CredentialParty[];
   tools: CredentialParty[];
@@ -1536,6 +1548,8 @@ export async function fetchCredentialInfo(credentialID: string, intentsPage = 1,
     agents?: CredentialParty[] | ApiPaged<CredentialParty> | null;
     tools?: CredentialParty[] | ApiPaged<CredentialParty> | null;
     unknown?: CredentialParty[] | ApiPaged<CredentialParty> | null;
+    /** trustStatus is free text on the wire until trustStatusValue maps it. */
+    resources?: (Partial<Omit<CredentialResource, "trustStatus">> & { trustStatus?: string })[] | null;
   };
   const r = await apiRequest<Wire>("/credential-info", { query: { credentialID, intentsPage, intentsPageSize } });
   const intents = Array.isArray(r.intents)
@@ -1548,6 +1562,17 @@ export async function fetchCredentialInfo(credentialID: string, intentsPage = 1,
     agents: listOf(r.agents),
     tools: listOf(r.tools),
     unknown: listOf(r.unknown),
+    resources: (r.resources ?? [])
+      .filter((x) => !!x.resourceID)
+      .map((x) => ({
+        resourceID: x.resourceID as string,
+        name: x.name ?? "",
+        trustStatus: trustStatusValue(x.trustStatus),
+        urls: x.urls ?? [],
+        intentCount: x.intentCount ?? 0,
+        firstSeenAt: x.firstSeenAt ?? "",
+        lastSeenAt: x.lastSeenAt ?? "",
+      })),
   };
 }
 

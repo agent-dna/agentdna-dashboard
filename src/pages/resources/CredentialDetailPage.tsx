@@ -13,8 +13,11 @@ import { ApiError } from "../../api/client";
 import { useResolveName } from "../../context/DirectoryContext";
 import { CopyId } from "../observability/IntentDetailPanel";
 import { authMethodLabel, sentence } from "../../lib/credFormat";
-import { whenShort } from "../../lib/resource";
-import type { CredentialParty } from "../../data/api";
+import { resourceLabel, resourcePath, whenShort } from "../../lib/resource";
+import { DestinationLogo } from "../../components/DestinationLogo";
+import { TrustStatusChip } from "../../components/TrustStatusChip";
+import { TrustStatusPicker } from "../../components/TrustStatusPicker";
+import type { CredentialParty, CredentialResource, TrustStatus } from "../../data/api";
 import type { Intent } from "../../types";
 
 /**
@@ -22,7 +25,8 @@ import type { Intent } from "../../types";
  * intents it was used in (paged, most recent first) and the agents, apps and users that used it.
  */
 
-type Tab = "intents" | "agents" | "tools" | "users" | "unknown";
+type Tab = "intents" | "resources" | "agents" | "tools" | "users" | "unknown";
+type PartyTab = Exclude<Tab, "intents" | "resources">;
 
 const shortId = (s: string) => (s.length > 22 ? `${s.slice(0, 10)}…${s.slice(-6)}` : s);
 const mono = (v: string, muted = false) => (
@@ -30,7 +34,7 @@ const mono = (v: string, muted = false) => (
 );
 
 /** Where a party's own page is: agents and users by DID, apps by name (as the Apps table links them). */
-function partyPath(tab: Tab, p: CredentialParty): string | null {
+function partyPath(tab: PartyTab, p: CredentialParty): string | null {
   if (tab === "agents") return `/agents/${encodeURIComponent(p.did)}`;
   if (tab === "users") return `/users/${encodeURIComponent(p.did)}`;
   if (tab === "tools") return `/tools/${encodeURIComponent(p.name || p.did)}`;
@@ -45,6 +49,8 @@ export function CredentialDetailPage() {
   const isAdmin = !!user?.is_admin;
   const [tab, setTab] = useState<Tab>("intents");
   const [intentsPage, setIntentsPage] = useState(1);
+  /** Trust statuses an admin changed here, by resource; the update call returns them, so no refetch. */
+  const [trustEdits, setTrustEdits] = useState<Record<string, TrustStatus>>({});
   const { data: cred, loading, error, refetch } = useCredentialInfo(credentialId, intentsPage);
   // The intents table matches Home's, which needs each intent's own details (interactions, apps).
   const pageIntentIds = cred?.intents.items.map((i) => i.intentID) ?? [];
@@ -82,7 +88,7 @@ export function CredentialDetailPage() {
 
   const method = authMethodLabel(cred.authMethod);
   const seenBy = cred.sources.map(sentence).filter(Boolean).join(" → ");
-  const parties: Record<Exclude<Tab, "intents">, CredentialParty[]> = {
+  const parties: Record<PartyTab, CredentialParty[]> = {
     agents: cred.agents,
     tools: cred.tools,
     users: cred.users,
@@ -90,8 +96,9 @@ export function CredentialDetailPage() {
   };
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: "intents", label: "Intents", count: cred.intents.total },
+    { key: "resources", label: "Resources", count: cred.resources.length },
     { key: "agents", label: "Agents", count: cred.agents.length },
-    { key: "tools", label: "Apps", count: cred.tools.length },
+    { key: "tools", label: "Tools", count: cred.tools.length },
     { key: "users", label: "Users", count: cred.users.length },
     // DIDs that matched nothing; only shown when there are some.
     ...(cred.unknown.length ? [{ key: "unknown" as const, label: "Unrecognised", count: cred.unknown.length }] : []),
@@ -101,10 +108,65 @@ export function CredentialDetailPage() {
   // Each row is the intent as /intent-info has it; one that failed to load is skipped.
   const intentRows = pageIntents.filter((i): i is Intent => !!i);
 
-  const partyCols = (t: Tab): DataTableColumn<CredentialParty & { id: string }>[] => [
+  const resourceRows = cred.resources.map((r) => ({ ...r, id: r.resourceID, trustStatus: trustEdits[r.resourceID] ?? r.trustStatus }));
+  const resourceCols: DataTableColumn<CredentialResource & { id: string }>[] = [
     {
       key: "name",
-      label: t === "agents" ? "Agent" : t === "tools" ? "App" : t === "users" ? "User" : "DID",
+      label: "Resource",
+      render: (r) => {
+        const { title, dest } = resourceLabel(r.resourceID, r.name);
+        return (
+          <span className="rt-res">
+            <span className="dest-row-logo">
+              <DestinationLogo entity={dest.entity} size={15} />
+            </span>
+            <span className="rt-names">
+              <span className="rt-title">{title}</span>
+              <span className="rt-sub" title={r.resourceID}>{r.resourceID}</span>
+            </span>
+          </span>
+        );
+      },
+    },
+    {
+      key: "trust",
+      label: "Trust status",
+      width: 150,
+      render: (r) =>
+        isAdmin ? (
+          <TrustStatusPicker
+            resourceID={r.resourceID}
+            current={r.trustStatus}
+            onSaved={(s) => setTrustEdits((m) => ({ ...m, [r.resourceID]: s }))}
+          />
+        ) : (
+          <TrustStatusChip value={r.trustStatus} />
+        ),
+    },
+    {
+      key: "urls",
+      label: "URL",
+      // One line, cut with an ellipsis; the full list is in the tooltip.
+      render: (r) =>
+        r.urls.length ? (
+          <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, maxWidth: 420 }} title={r.urls.join("\n")}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+              {r.urls[0]}
+            </span>
+            {r.urls.length > 1 && (
+              <span className="pill" style={{ flexShrink: 0, fontSize: 11 }}>+{r.urls.length - 1}</span>
+            )}
+          </span>
+        ) : (
+          mono("—", true)
+        ),
+    },
+  ];
+
+  const partyCols = (t: PartyTab): DataTableColumn<CredentialParty & { id: string }>[] => [
+    {
+      key: "name",
+      label: t === "agents" ? "Agent" : t === "tools" ? "Tool" : t === "users" ? "User" : "DID",
       render: (p) => (
         <span style={{ display: "flex", flexDirection: "column", minWidth: 0, alignItems: "flex-start" }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{p.name || resolve(p.did).name}</span>
@@ -184,6 +246,36 @@ export function CredentialDetailPage() {
             <div className="res-stats">
               <Stat label="First used" value={whenShort(cred.firstUsedAt)} small />
               <Stat label="Last used" value={whenShort(cred.lastUsedAt)} small />
+              {/* Where the credential was presented: name and trust status. Two shown; the rest are in the Resources tab. */}
+              <div style={{ minWidth: 0, gridColumn: "span 2" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-muted)", marginBottom: 4 }}>
+                  {cred.resources.length > 1 ? "Resources" : "Resource"}
+                </div>
+                {resourceRows.length ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px 14px", flexWrap: "wrap", minWidth: 0 }}>
+                    {resourceRows.slice(0, 2).map((r) => (
+                      <span key={r.resourceID} style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(resourcePath(r.resourceID))}
+                          title={r.resourceID}
+                          style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit", fontSize: 13, fontWeight: 700, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}
+                        >
+                          {resourceLabel(r.resourceID, r.name).title}
+                        </button>
+                        <TrustStatusChip value={r.trustStatus} />
+                      </span>
+                    ))}
+                    {resourceRows.length > 2 && (
+                      <button type="button" className="dest-row-link" style={{ padding: "2px 4px" }} onClick={() => setTab("resources")}>
+                        +{resourceRows.length - 2} more
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: "var(--fg-faint)" }}>None recorded</div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -211,6 +303,15 @@ export function CredentialDetailPage() {
             onRowClick={(r) => navigate(`/intents/${encodeURIComponent(r.id)}`)}
             emptyText={pageIntentsLoading || (pageIntentIds.length > 0 && pageIntents.length === 0) ? "Loading intents…" : "This credential hasn’t been used in an intent."}
           />
+        ) : tab === "resources" ? (
+          <DataTable
+            rows={resourceRows}
+            columns={resourceCols}
+            alignCells
+            onRowClick={(r) => navigate(resourcePath(r.resourceID))}
+            rowStyle={(r) => (r.trustStatus === "Flagged" ? { background: "rgba(220,38,38,.045)" } : undefined)}
+            emptyText="This credential hasn’t been presented to a resource."
+          />
         ) : (
           <DataTable
             rows={parties[tab].map((p) => ({ ...p, id: p.did }))}
@@ -220,7 +321,7 @@ export function CredentialDetailPage() {
               if (path) navigate(path);
             }}
             emptyText={
-              tab === "agents" ? "No agent has used this credential." : tab === "tools" ? "No app has used this credential." : tab === "users" ? "No user has used this credential." : "None."
+              tab === "agents" ? "No agent has used this credential." : tab === "tools" ? "No tool has used this credential." : tab === "users" ? "No user has used this credential." : "None."
             }
           />
         )}
