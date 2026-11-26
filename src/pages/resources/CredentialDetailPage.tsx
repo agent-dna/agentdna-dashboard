@@ -307,7 +307,6 @@ export function CredentialDetailPage() {
           <DataTable
             rows={resourceRows}
             columns={resourceCols}
-            alignCells
             onRowClick={(r) => navigate(resourcePath(r.resourceID))}
             rowStyle={(r) => (r.trustStatus === "Flagged" ? { background: "rgba(220,38,38,.045)" } : undefined)}
             emptyText="This credential hasn’t been presented to a resource."
