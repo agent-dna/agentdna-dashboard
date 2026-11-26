@@ -58,10 +58,13 @@ export function InteractionDetail({ interaction: i }: Props) {
   const target = pickName(i.target.id, i.target.name);
   const targetKind = target.kind || i.targetType;
   const isSelfInteraction = i.initiator.id === i.target.id;
-  // Where this hop's calls went (from its auth evidence), one entry per destination: the
-  // client_out / server_in records of one call share it. A failed check on any of them wins.
+  // Where the receiver called onward while handling this hop: only the server_out checks, since
+  // client_out / server_in are the hop itself, not a destination. Older servers send no source;
+  // then every call is kept. One entry per destination; a failed check on any of them wins.
+  const calls = i.backendCalls ?? [];
+  const sourced = calls.some((c) => c.source);
   const destinations = Object.values(
-    (i.backendCalls ?? []).reduce<Record<string, NonNullable<Interaction["backendCalls"]>[number]>>((acc, c) => {
+    calls.filter((c) => !sourced || (c.source || "").toLowerCase() === "server_out").reduce<Record<string, NonNullable<Interaction["backendCalls"]>[number]>>((acc, c) => {
       const seen = acc[c.destination];
       acc[c.destination] = !seen
         ? c
@@ -194,6 +197,33 @@ export function InteractionDetail({ interaction: i }: Props) {
                 <div className="k">Destination</div>
                 <div className="v ixd-dests">
                   {destinations.map((d) => {
+                    // A participant (DID, "bafy…") is named from the org directory, like the credentials table.
+                    const isDid = d.destination.toLowerCase().startsWith("bafy");
+                    if (isDid) {
+                      const who = pickName(d.destination, "");
+                      return (
+                        <div key={d.destination} className="ixd-dest" title={d.destination}>
+                          <span className="dest-logo">
+                            <span className="dest-logo-icon local" style={{ width: 22, height: 22 }}>
+                              <Icon name={who.kind === "tool" ? "box" : "agents"} size={13} />
+                            </span>
+                          </span>
+                          <div className="ixd-dest-body">
+                            <span className="ixd-dest-name">{who.name}</span>
+                            <span className="ixd-dest-url">
+                              <span className="ixd-dest-path">{truncateId(d.destination)}</span>
+                            </span>
+                            <span className="ixd-dest-meta">
+                              {d.authMethod && <span className="ixd-dest-tag">{authMethodLabel(d.authMethod)}</span>}
+                              {d.authStatus && (
+                                <span className={`ixd-dest-tag ${authTone(d.authStatus)}`}>{authStatusLabel(d.authStatus)}</span>
+                              )}
+                              {d.credentialID && <span className="ixd-dest-cred" title={d.credentialID}>{truncateId(d.credentialID)}</span>}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
                     const dest = parseDestination(d.destination);
                     return (
                       <div key={d.destination} className="ixd-dest" title={d.destination}>

@@ -98,7 +98,7 @@ export interface Interaction {
    * Onward calls the sending app made while handling this hop (/intent-info's
    * `authEvidence.backendCalls`); the drawer shows their destinations when the sender is an app.
    */
-  backendCalls?: { destination: string; authMethod?: string; credentialID?: string; authStatus?: string }[];
+  backendCalls?: { destination: string; source?: string; authMethod?: string; credentialID?: string; authStatus?: string }[];
   /** The hop's auth checks (/intent-info's `authEvidence`); absent when it has none. */
   authEvidence?: AuthEvidence[];
   /** ISO time of the hop, when the endpoint gives one. */

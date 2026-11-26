@@ -37,7 +37,7 @@ function destinationCalls(ev: unknown): BackendCall[] {
     const destination = typeof r.destination === "string" ? r.destination.trim() : "";
     if (!destination) return [];
     const str = (k: string) => (typeof r[k] === "string" && r[k] ? (r[k] as string) : undefined);
-    return [{ destination, authMethod: str("authMethod"), credentialID: str("credentialID"), authStatus: str("authStatus") }];
+    return [{ destination, source: str("source"), authMethod: str("authMethod"), credentialID: str("credentialID"), authStatus: str("authStatus") }];
   });
 }
 const withCalls = (calls: BackendCall[]) => (calls.length ? { backendCalls: calls } : {});

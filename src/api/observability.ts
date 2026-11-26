@@ -174,8 +174,10 @@ export interface ObsIntentsPage extends Paged {
  * `authEvidence.backendCalls`): where it went and how it authenticated.
  */
 export interface BackendCall {
-  /** e.g. "POST https://learn.microsoft.com/api/mcp", or just a host. */
+  /** e.g. "POST https://learn.microsoft.com/api/mcp", a host, or a participant's DID ("bafy…"). */
   destination: string;
+  /** Where the check was observed: "server_out" is the receiver calling onward; "client_out" / "server_in" are the hop itself. */
+  source?: string;
   authMethod?: string;
   credentialID?: string;
   /** "accepted", "rejected" or "unknown". */
