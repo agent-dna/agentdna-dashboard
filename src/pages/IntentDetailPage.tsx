@@ -12,10 +12,10 @@ import { InfoStat } from "../components/InfoStat";
 import { StatusPicker } from "../components/StatusPicker";
 import { IntentEvidenceTrail } from "../components/IntentEvidenceTrail";
 // import { IntentCredentials } from "../components/IntentCredentials"; // Credentials tab hidden for now
-import { IntentDestinations } from "../components/IntentDestinations";
+import { IntentResources } from "../components/IntentResources";
 import { TrustStatusChip } from "../components/TrustStatusChip";
 import { useAuth } from "../context/AuthContext";
-import { useIntent, useIntentInteractionsPaged, useIntentParticipants, useIntentThreats } from "../data/hooks";
+import { useIntent, useIntentInteractions, useIntentInteractionsPaged, useIntentParticipants, useIntentThreats } from "../data/hooks";
 import { useDrawer } from "../context/DrawerContext";
 import { useIntentReview } from "../context/IntentReviewContext";
 import { timeAgo, titleOrUnknown } from "../lib/format";
@@ -23,9 +23,11 @@ import { exportIntentPdf } from "../lib/exportIntentPdf";
 import { intentTrustStatus, invalidateIntentInfo, updateIntentStatus, type IntentThreat, type TrustStatus, type WarningCount } from "../data/api";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { branchName, compareInteractionIds, parseInteractionId } from "../lib/interactionBranch";
+import { credentialPath, resourceLabel, resourcePath } from "../lib/resource";
+import { CREDENTIAL_WARNING_CODES, NEW_HOST_WARNING_CODE, credentialsForWarning, intentCredentials, untrustedResources } from "../lib/intentResources";
 import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
 
-type Tab = "evidence" | /* "credentials" | */ "destinations" | "participants";
+type Tab = "evidence" | /* "credentials" | */ "resources" | "participants";
 
 export function IntentDetailPage() {
   const { intentId = "" } = useParams<{ intentId: string }>();
@@ -61,6 +63,8 @@ export function IntentDetailPage() {
   const { data: interactionsPaged } = useIntentInteractionsPaged(intentId, 1);
   const interactions = interactionsPaged.interactions;
   const { data: participants } = useIntentParticipants(intentId);
+  // Every hop, with its auth checks and warnings (the same /intent-info the page already has).
+  const { data: allInteractions, loading: allInteractionsLoading } = useIntentInteractions(intentId);
   const { data: threats, loading: threatsLoading, error: threatsError } = useIntentThreats(intentId);
   if (loading) {
     return (
@@ -100,6 +104,8 @@ export function IntentDetailPage() {
   // Warnings (51xx): each code once, with how many hops carry it. Separate from incidents.
   const warnings: WarningCount[] = intent.warnings ?? [];
   const warningTotal = warnings.reduce((n, w) => n + w.count, 0);
+  // The credentials the hops presented, for the Resources tab and the credential warnings.
+  const credentials = intentCredentials(allInteractions);
 
   const changeStatus = async (next: IntentReviewStatus) => {
     await updateIntentStatus(intent.id, next);
@@ -297,7 +303,7 @@ export function IntentDetailPage() {
                     <button
                       type="button"
                       className="it-trust-btn"
-                      onClick={() => setTab("destinations")}
+                      onClick={() => setTab("resources")}
                       title={
                         trustSummary === "Flagged"
                           ? `${flaggedCount} flagged destination${flaggedCount === 1 ? "" : "s"} — see Destinations`
@@ -404,7 +410,7 @@ export function IntentDetailPage() {
             >
               <Icon name="alerts" size={15} />
               <span className="it-threats-count">
-                {warningTotal} warning{warningTotal === 1 ? "" : "s"} on {warnings.length} kind{warnings.length === 1 ? "" : "s"} of check
+                {warningTotal} warning{warningTotal === 1 ? "" : "s"}
               </span>
               <span className="it-threats-toggle">
                 {warningsOpen ? "Hide details" : "Show details"}
@@ -415,12 +421,47 @@ export function IntentDetailPage() {
               <ul id="intent-warnings" className="it-warnings-list">
                 {warnings.map((w) => (
                   <li key={w.code} className="it-warning">
-                    <span className="it-warning-title">{w.title}</span>
-                    <span className="it-threat-code">code {w.code}</span>
-                    <span className={`it-warning-sev sev-${w.severity.toLowerCase()}`}>{w.severity}</span>
-                    <span className="it-warning-count">
-                      {w.count} hop{w.count === 1 ? "" : "s"}
-                    </span>
+                    <div className="it-warning-top">
+                      <span className="it-warning-title">{w.title}</span>
+                      <span className="it-threat-code">code {w.code}</span>
+                    </div>
+                    {/* 5101: the destinations in this intent that are not trusted. */}
+                    {w.code === NEW_HOST_WARNING_CODE && (
+                      <ul className="it-warning-refs">
+                        {untrustedResources(destinations).map((r) => {
+                          const { title } = resourceLabel(r.url, r.name);
+                          return (
+                            <li key={r.resourceID}>
+                              <button type="button" className="it-warning-ref" onClick={() => navigate(resourcePath(r.resourceID))} title={r.url}>
+                                <Icon name="globe" size={12} />
+                                <span className="t">{title}</span>
+                                <span className="s">{r.url}</span>
+                              </button>
+                              <TrustStatusChip value={r.trustStatus} />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    {/* 5105 / 5107 / 5108: the credentials on the hops that raised it. */}
+                    {CREDENTIAL_WARNING_CODES.has(w.code) && (
+                      <ul className="it-warning-refs">
+                        {(allInteractionsLoading && credentials.length === 0
+                          ? []
+                          : credentialsForWarning(credentials, w.code)
+                        ).map((c) => (
+                          <li key={c.credentialID}>
+                            <button type="button" className="it-warning-ref" onClick={() => navigate(credentialPath(c.credentialID))} title={c.credentialID}>
+                              <Icon name="key" size={12} />
+                              <span className="t">{c.credentialID.length > 22 ? `${c.credentialID.slice(0, 10)}…${c.credentialID.slice(-6)}` : c.credentialID}</span>
+                              <span className="s">
+                                {c.destinations.length} destination{c.destinations.length === 1 ? "" : "s"}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -446,7 +487,7 @@ export function IntentDetailPage() {
           tabs={[
             { key: "evidence", label: "Evidence trail" },
             // { key: "credentials", label: "Credentials" }, // hidden for now
-            { key: "destinations", label: "Destinations", count: destinations.length },
+            { key: "resources", label: "Resources", count: destinations.length + credentials.length },
             { key: "participants", label: "Agents & Apps", count: participantRows.length },
           ]}
         />
@@ -455,7 +496,15 @@ export function IntentDetailPage() {
 
         {/* {tab === "credentials" && <IntentCredentials intentId={intent.id} />} */}
 
-        {tab === "destinations" && <IntentDestinations resources={destinations} isAdmin={isAdmin} onTrustChange={changeTrust} />}
+        {tab === "resources" && (
+          <IntentResources
+            resources={destinations}
+            credentials={credentials}
+            credentialsLoading={allInteractionsLoading}
+            isAdmin={isAdmin}
+            onTrustChange={changeTrust}
+          />
+        )}
 
         {tab === "participants" && (
           <DataTable

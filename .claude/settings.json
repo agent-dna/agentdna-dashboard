@@ -21,7 +21,10 @@
       "Bash(node drive3.cjs)",
       "Bash(xargs kill)",
       "Bash(grep -rnE \">\\\\s*View\\\\s*<|\\\\\"View\\\\\"|'View'|^\\\\s*View\\\\s*$\" src)",
-      "Bash(grep -n \"onViewFlow\\\\s*=\\\\|const onViewFlow\\\\|navigate\\(\\\\`/flow\" -A3 src/components/drawer/IntentDetail.tsx)"
+      "Bash(grep -n \"onViewFlow\\\\s*=\\\\|const onViewFlow\\\\|navigate\\(\\\\`/flow\" -A3 src/components/drawer/IntentDetail.tsx)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(npx --yes tsx /private/tmp/claude-501/-Users-rubix-dashboard-agentDNA-1-agentdna-dashboard/32f7143e-0d86-4262-9425-731d75e946b1/scratchpad/t.ts)"
     ]
   }
 }
