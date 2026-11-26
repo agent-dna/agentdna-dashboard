@@ -3370,7 +3370,8 @@ table.rt .num { text-align: right; }
 .csp-chev { transition: transform 120ms; }
 .csp-chev.up { transform: rotate(180deg); }
 .csp-menu {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: 280px; padding: 6px;
+  /* Portalled to <body> and placed by useAnchoredMenu (position: fixed, top/left/width inline). */
+  z-index: 1000; padding: 6px;
   background: #fff; border: 1px solid var(--line-strong); border-radius: 10px;
   box-shadow: 0 10px 28px rgba(15,32,70,.14), 0 1px 2px rgba(15,32,70,.06);
   display: flex; flex-direction: column; gap: 2px;
@@ -3470,7 +3471,6 @@ table.rt .num { text-align: right; }
 @media (prefers-reduced-motion: reduce) { .ct-toggle svg { transition: none; } }
 
 /* ───────── Resource trust status (TrustStatusPicker, intent Destinations tab) ───────── */
-.csp-menu.right { left: auto; right: 0; }
 .csp-menu .csp-opt:first-child { margin-top: 0; }
 /* Intent page hero: the trust summary chip opens the Destinations tab. */
 .it-trust-btn { background: none; border: 0; padding: 0; cursor: pointer; display: inline-flex; }
@@ -3488,9 +3488,6 @@ table.rt .num { text-align: right; }
 }
 .dest-row-link:hover { background: rgba(37,99,235,.06); text-decoration: underline; }
 .dest-row-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Status menus (credential and trust pickers) hang below their chip; a card or panel clips them
-   otherwise. Only while a menu is open, so rounded corners stay clean the rest of the time. */
-.card:has(.csp-menu), .rt-panel:has(.csp-menu) { overflow: visible; }
 
 /* ───────── Intent page: warnings (51xx), the amber twin of the incidents block ─────────
    One bordered box: the summary bar is its header, and opening it lists the warnings as rows

@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
+import { useAnchoredMenu } from "./useAnchoredMenu";
 import { ApiError } from "../api/client";
 import { CREDENTIAL_STATUSES, updateCredentialStatus, type CredentialStatus, type CredentialStatusValue } from "../data/api";
 import { credentialStatusLabel } from "./CredentialStatusChip";
@@ -26,11 +28,16 @@ export function CredentialStatusPicker({ credentialID, current, onSaved }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  // The menu is portalled to <body> so no table or card can clip it.
+  const { menuStyle, anchor } = useAnchoredMenu(open, wrapRef, 280, close);
 
   useEffect(() => {
     if (!open) return;
     const onOutside = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !menuRef.current?.contains(t)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -47,6 +54,7 @@ export function CredentialStatusPicker({ credentialID, current, onSaved }: {
     if (!open) {
       setReason(current.reason);
       setError(null);
+      anchor();
     }
     setOpen((o) => !o);
   };
@@ -78,8 +86,8 @@ export function CredentialStatusPicker({ credentialID, current, onSaved }: {
         {credentialStatusLabel(current.value)}
         <ChevronDown size={12} className={`csp-chev${open ? " up" : ""}`} />
       </button>
-      {open && (
-        <div className="csp-menu" role="menu">
+      {open && createPortal(
+        <div ref={menuRef} className="csp-menu" role="menu" style={menuStyle} onClick={(e) => e.stopPropagation()}>
           <label className="csp-reason">
             <span>Reason (optional)</span>
             <input
@@ -109,7 +117,8 @@ export function CredentialStatusPicker({ credentialID, current, onSaved }: {
             </button>
           ))}
           {error && <div className="csp-error">{error}</div>}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

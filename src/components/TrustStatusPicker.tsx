@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
+import { useAnchoredMenu } from "./useAnchoredMenu";
 import { ApiError } from "../api/client";
 import { TRUST_STATUSES, updateResourceTrustStatus, type TrustStatus } from "../data/api";
 import { trustStatusLabel, trustStatusTone } from "../lib/trustStatus";
@@ -16,22 +18,25 @@ const HINT: Record<TrustStatus, string> = {
  * gets the saved value back to update its own row, with no refetch. Shares the credential
  * picker's styles (csp-*).
  */
-export function TrustStatusPicker({ resourceID, current, onSaved, align = "left" }: {
+export function TrustStatusPicker({ resourceID, current, onSaved }: {
   resourceID: string;
   current: TrustStatus;
   onSaved: (status: TrustStatus) => void;
-  /** Which edge of the chip the menu hangs from. */
-  align?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  // The menu is portalled to <body> so no table or card can clip it.
+  const { menuStyle, anchor } = useAnchoredMenu(open, wrapRef, 280, close);
 
   useEffect(() => {
     if (!open) return;
     const onOutside = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !menuRef.current?.contains(t)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -78,6 +83,7 @@ export function TrustStatusPicker({ resourceID, current, onSaved, align = "left"
         aria-expanded={open}
         onClick={() => {
           setError(null);
+          if (!open) anchor();
           setOpen((o) => !o);
         }}
         title="Change trust status"
@@ -85,8 +91,15 @@ export function TrustStatusPicker({ resourceID, current, onSaved, align = "left"
         {trustStatusLabel(current)}
         <ChevronDown size={12} className={`csp-chev${open ? " up" : ""}`} />
       </button>
-      {open && (
-        <div className={`csp-menu${align === "right" ? " right" : ""}`} role="menu">
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          className="csp-menu"
+          role="menu"
+          style={menuStyle}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
           {TRUST_STATUSES.map((s) => (
             <button
               key={s}
@@ -105,7 +118,8 @@ export function TrustStatusPicker({ resourceID, current, onSaved, align = "left"
             </button>
           ))}
           {error && <div className="csp-error">{error}</div>}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
