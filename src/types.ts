@@ -1,5 +1,5 @@
 import type { AuthEvidence } from "./api/observability";
-import type { IntentResource, UserApplication } from "./data/api";
+import type { IntentResource, InteractionWarning, UserApplication, WarningCount } from "./data/api";
 
 export type Status = "safe" | "warn" | "threat";
 
@@ -62,6 +62,8 @@ export interface Intent {
   executor?: string;
   /** The destinations the intent reached with their trust status (/intent-info only; absent from list rows). */
   resources?: IntentResource[];
+  /** Each warning code across the intent's interactions with its count (/intent-info only). */
+  warnings?: WarningCount[];
 }
 
 export type IntentReviewStatus = "Unreviewed" | "Acknowledged" | "Flagged";
@@ -83,6 +85,8 @@ export interface Interaction {
   threatID?: string;
   /** Resolved threat message, when the caller already has it (e.g. from /threats-list) — skips the GET /threat-by-id lookup in the drawer. */
   message?: string;
+  /** Warnings (51xx) on this hop, when the endpoint sends them. */
+  warnings?: InteractionWarning[];
   /** What the sender sent in this hop (the endpoint's `message`), shown as the drawer's Message. */
   payload?: string;
   /**

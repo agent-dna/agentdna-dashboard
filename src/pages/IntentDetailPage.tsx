@@ -20,7 +20,7 @@ import { useDrawer } from "../context/DrawerContext";
 import { useIntentReview } from "../context/IntentReviewContext";
 import { timeAgo, titleOrUnknown } from "../lib/format";
 import { exportIntentPdf } from "../lib/exportIntentPdf";
-import { intentTrustStatus, invalidateIntentInfo, updateIntentStatus, type IntentThreat, type TrustStatus } from "../data/api";
+import { intentTrustStatus, invalidateIntentInfo, updateIntentStatus, type IntentThreat, type TrustStatus, type WarningCount } from "../data/api";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { branchName, compareInteractionIds, parseInteractionId } from "../lib/interactionBranch";
 import type { IntentParticipant, Tool, IntentReviewStatus } from "../types";
@@ -53,6 +53,8 @@ export function IntentDetailPage() {
   const [trustEdits, setTrustEdits] = useState<Record<string, TrustStatus>>({});
   /** The incident list starts collapsed to its one-line summary. */
   const [incidentsOpen, setIncidentsOpen] = useState(false);
+  /** Same for the warnings list. */
+  const [warningsOpen, setWarningsOpen] = useState(false);
   const intentState = useIntent(intentId);
   const { data: intent, loading } = intentState;
   // The first page of the intent's interactions: the incident count's fallback and Export use them.
@@ -90,9 +92,14 @@ export function IntentDetailPage() {
   const flaggedCount = destinations.filter((r) => r.trustStatus === "Flagged").length;
   const changeTrust = (resourceID: string, status: TrustStatus) => {
     setTrustEdits((m) => ({ ...m, [resourceID]: status }));
-    // The cached /intent-info still has the old value; the next visit fetches it fresh.
+    // The server recomputes warnings on a trust change, so the intent is read again (the row
+    // already shows the new status from the edit above; the refetch keeps the warnings honest).
     invalidateIntentInfo(intent.id);
+    intentState.refetch();
   };
+  // Warnings (51xx): each code once, with how many hops carry it. Separate from incidents.
+  const warnings: WarningCount[] = intent.warnings ?? [];
+  const warningTotal = warnings.reduce((n, w) => n + w.count, 0);
 
   const changeStatus = async (next: IntentReviewStatus) => {
     await updateIntentStatus(intent.id, next);
@@ -190,11 +197,12 @@ export function IntentDetailPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(6, 1fr)",
-                gap: 24,
+                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                gap: "20px 24px",
               }}
             >
-              <div>
+              {/* Owner takes the first column of both rows; the other six stats fill the rest. */}
+              <div style={{ gridRow: "1 / span 2", minWidth: 0 }}>
                 <div
                   style={{
                     fontSize: 10.5,
@@ -260,6 +268,7 @@ export function IntentDetailPage() {
                     color: "var(--accent)",
                     textDecoration: "none",
                     fontWeight: 600,
+                    whiteSpace: "nowrap",
                   }}
                   onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
                   onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
@@ -313,6 +322,25 @@ export function IntentDetailPage() {
                 }
                 mono
               />
+              <InfoStat
+                label="Warnings"
+                value={
+                  warningTotal > 0 ? (
+                    <button
+                      type="button"
+                      className="it-stat-btn"
+                      style={{ color: "var(--warn)", fontWeight: 600 }}
+                      title={`${warnings.length} kind${warnings.length === 1 ? "" : "s"} of warning across ${warningTotal} hop${warningTotal === 1 ? "" : "s"}`}
+                      onClick={() => setWarningsOpen((o) => !o)}
+                    >
+                      {warningTotal}
+                    </button>
+                  ) : (
+                    <span style={{ fontWeight: 600 }}>0</span>
+                  )
+                }
+                mono
+              />
             </div>
           </div>
 
@@ -361,6 +389,41 @@ export function IntentDetailPage() {
                     <ThreatRow key={t.threatID || t.interactionID} t={t} />
                   ))}
               </ol>
+            )}
+          </div>
+        )}
+
+        {warnings.length > 0 && (
+          <div className={`it-warnings${warningsOpen ? " open" : ""}`}>
+            <button
+              type="button"
+              className="it-warnings-head"
+              aria-expanded={warningsOpen}
+              aria-controls="intent-warnings"
+              onClick={() => setWarningsOpen((o) => !o)}
+            >
+              <Icon name="alerts" size={15} />
+              <span className="it-threats-count">
+                {warningTotal} warning{warningTotal === 1 ? "" : "s"} on {warnings.length} kind{warnings.length === 1 ? "" : "s"} of check
+              </span>
+              <span className="it-threats-toggle">
+                {warningsOpen ? "Hide details" : "Show details"}
+                <Icon name="chevronDown" size={13} />
+              </span>
+            </button>
+            {warningsOpen && (
+              <ul id="intent-warnings" className="it-warnings-list">
+                {warnings.map((w) => (
+                  <li key={w.code} className="it-warning">
+                    <span className="it-warning-title">{w.title}</span>
+                    <span className="it-threat-code">code {w.code}</span>
+                    <span className={`it-warning-sev sev-${w.severity.toLowerCase()}`}>{w.severity}</span>
+                    <span className="it-warning-count">
+                      {w.count} hop{w.count === 1 ? "" : "s"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         )}

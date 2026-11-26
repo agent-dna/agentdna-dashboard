@@ -3491,3 +3491,34 @@ table.rt .num { text-align: right; }
 /* Status menus (credential and trust pickers) hang below their chip; a card or panel clips them
    otherwise. Only while a menu is open, so rounded corners stay clean the rest of the time. */
 .card:has(.csp-menu), .rt-panel:has(.csp-menu) { overflow: visible; }
+
+/* ───────── Intent page: warnings (51xx), the amber twin of the incidents block ─────────
+   One bordered box: the summary bar is its header, and opening it lists the warnings as rows
+   inside the same box. */
+.it-warnings { margin-top: 12px; border: 1px solid rgba(217,119,6,.28); border-radius: 8px; background: #fff; overflow: hidden; }
+.it-warnings:hover { border-color: rgba(217,119,6,.5); }
+.it-warnings-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; cursor: pointer; text-align: left;
+  border: 0; background: transparent; font: 600 13px var(--font-body); color: var(--warn);
+}
+.it-warnings-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.it-warnings.open .it-threats-toggle svg { transform: rotate(180deg); }
+.it-warnings-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(217,119,6,.2); }
+.it-warning { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; padding: 9px 14px 9px 37px; }
+.it-warning + .it-warning { border-top: 1px solid var(--line); }
+.it-warning-title { font-size: 13px; font-weight: 600; color: #B45309; }
+.it-warning-count { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-muted); white-space: nowrap; }
+.it-warning-sev {
+  display: inline-block; padding: 0 7px; border-radius: 999px; font-family: var(--font-mono); font-size: 10.5px; line-height: 18px;
+  color: var(--fg-dim); background: var(--bg-2); border: 1px solid var(--line);
+}
+.it-warning-sev.sev-low { color: #B45309; background: rgba(217,119,6,.08); border-color: rgba(217,119,6,.2); }
+.it-warning-sev.sev-medium { color: #C2410C; background: rgba(234,88,12,.08); border-color: rgba(234,88,12,.2); }
+.it-warning-sev.sev-high, .it-warning-sev.sev-critical { color: var(--threat); background: rgba(220,38,38,.08); border-color: rgba(220,38,38,.2); }
+/* Below the incidents block it sits close; on its own it keeps the incidents block's distance from the stats. */
+.it-warnings { margin-top: 18px; }
+.it-threats + .it-warnings { margin-top: 10px; }
+/* A header stat that is also a button (opens its details below). */
+.it-stat-btn { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
+.it-stat-btn:hover { text-decoration: underline; }
+.it-stat-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }

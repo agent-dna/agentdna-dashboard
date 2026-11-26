@@ -70,6 +70,25 @@ function classifyParticipant(id: string): "agent" | "tool" {
   return isAgentId(id) ? "agent" : "tool";
 }
 
+/**
+ * A warning (51xx code) the middleware computed for an interaction. Separate from threats: it
+ * never changes threat flags or counts. `title` and `severity` come from the server's code list.
+ */
+export interface InteractionWarning {
+  code: number;
+  title: string;
+  severity: string;
+}
+
+/** A warning on an intent or agent, with how many interactions carry the code. */
+export interface WarningCount extends InteractionWarning {
+  count: number;
+}
+
+/** The server promises an array, never null; this guards older builds and bad rows. */
+export const warningList = <T extends InteractionWarning>(v: T[] | null | undefined): T[] =>
+  Array.isArray(v) ? v.filter((w) => w && typeof w.code === "number") : [];
+
 export interface ApiInteraction {
   interactionID: string;
   from: string;
@@ -93,6 +112,8 @@ export interface ApiInteraction {
   authEvidence?: AuthEvidence[] | null;
   /** /intent-info only: "trigger", "delegate", "response", … */
   type?: string;
+  /** Warnings on this hop; `[]` when none. */
+  warnings?: InteractionWarning[] | null;
 }
 
 function mapInteraction(i: ApiInteraction): Interaction {
@@ -114,6 +135,7 @@ function mapInteraction(i: ApiInteraction): Interaction {
     ...(Array.isArray(i.authEvidence) && i.authEvidence.length > 0 ? { authEvidence: i.authEvidence } : {}),
     ...(i.time ? { time: i.time } : {}),
     ...(i.type ? { kind: i.type } : {}),
+    ...(Array.isArray(i.warnings) && i.warnings.length > 0 ? { warnings: warningList(i.warnings) } : {}),
   };
 }
 
@@ -899,6 +921,8 @@ export interface ApiIntentInfo {
   interactions?: ApiInteraction[];
   /** Every destination a server called while serving the intent, most used first; empty when none. */
   resources?: { resourceID: string; name?: string; url?: string; trustStatus?: string }[] | null;
+  /** Each warning code across the intent's interactions, with its count; `[]` when none. */
+  warnings?: WarningCount[] | null;
 }
 
 /**
@@ -1014,7 +1038,7 @@ export async function fetchIntent(id: string): Promise<Intent | null> {
     url: x.url || x.resourceID,
     trustStatus: trustStatusValue(x.trustStatus),
   }));
-  return { ...intent, resources, ...(r.executor ? { executor: r.executor } : {}) };
+  return { ...intent, resources, warnings: warningList(r.warnings), ...(r.executor ? { executor: r.executor } : {}) };
 }
 
 interface PagedAgentInteractions {
