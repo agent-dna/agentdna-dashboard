@@ -51,6 +51,9 @@ export type TokenActivity = "Issued" | "Forwarded" | "Switched";
 /** The warning a Switched token raises: an agent changed the credential partway through the run. */
 export const SWITCHED_WARNING = { code: 5103, label: "Identity switched mid-run" } as const;
 export const switchedTitle = `Warning ${SWITCHED_WARNING.code} · ${SWITCHED_WARNING.label}`;
+/** The warning a No Auth check raises when it still went somewhere: it reached a destination unauthenticated. */
+export const NO_AUTH_WARNING = { code: 5104, label: "No auth or weak auth" } as const;
+export const noAuthTitle = `Warning ${NO_AUTH_WARNING.code} · ${NO_AUTH_WARNING.label}`;
 /** A check, or a hop, made without any credential: no fingerprint and no auth method. */
 export const NO_AUTH = "No Auth";
 export const isNoAuth = (e: AuthEvidence) => {
@@ -210,15 +213,21 @@ export function EvidenceTable({ checks, tokens, name, to }: {
   };
   const seen = [...checks].sort((a, b) => (ms(a.observedAt) ?? 0) - (ms(b.observedAt) ?? 0));
   // A credential seen as sent (client_out) and as received (server_in) with nothing else different
-  // is one row: the first, caller-side one, which also carries the right token activity.
+  // is one row: the first, caller-side one, which also carries the right token activity. The auth
+  // status doesn't split them (one side often didn't see the result); the row shows the decisive
+  // one: rejected if either side rejected, else accepted if either accepted, else as recorded.
   const sameAs = (e: AuthEvidence) =>
-    [e.credentialID, e.keyVersion, e.authMethod, e.identityID, e.authStatus, destinationOf(e).label].join("\u0000");
+    [e.credentialID, e.keyVersion, e.authMethod, e.identityID, destinationOf(e).label].join("\u0000");
   const rank = (e: AuthEvidence) => SOURCE_ORDER[(e.source || "").toLowerCase()] ?? 9;
+  const statusOf = new Map<AuthEvidence, string>();
   const rows = seen.filter((e) => {
     // Of identical checks, keep the caller-side one, whatever order their clocks put them in.
     const twins = seen.filter((x) => sameAs(x) === sameAs(e));
     const keep = twins.reduce((best, x) => (rank(x) < rank(best) ? x : best), twins[0]);
-    return keep === e;
+    if (keep !== e) return false;
+    const decisive = twins.find((x) => authTone(x.authStatus) === "bad") ?? twins.find((x) => authTone(x.authStatus) === "ok") ?? e;
+    statusOf.set(e, decisive.authStatus);
+    return true;
   });
   // When each request was seen: its first check's time (rows are already in that order). Checks
   // without a request ID count on their own, so their time still shows.
@@ -248,8 +257,10 @@ export function EvidenceTable({ checks, tokens, name, to }: {
           </thead>
           <tbody>
             {rows.map((e, k) => {
-              const tone = authTone(e.authStatus);
+              const status = statusOf.get(e) ?? e.authStatus;
+              const tone = authTone(status);
               const tok = tokens?.get(e);
+              const dest = destinationOf(e);
               return (
                 <tr key={`${e.requestID}:${e.source}:${k}`}>
                   <td title={tok?.holder || undefined}>{tok ? name(tok.holder) : <Empty />}</td>
@@ -262,7 +273,10 @@ export function EvidenceTable({ checks, tokens, name, to }: {
                   })()}
                   <td>
                     {tok ? <span className={tokClass(tok.activity)} title={tok.activity === "Switched" ? switchedTitle : undefined}>{tok.activity}</span>
-                      : isNoAuth(e) ? <span className={tokClass(NO_AUTH)} title="Sent without a credential">{NO_AUTH}</span>
+                      : isNoAuth(e)
+                        ? dest.label
+                          ? <span className={`${tokClass(NO_AUTH)} warn`} title={`${noAuthTitle}: sent to ${dest.label} without a credential`}>{NO_AUTH}</span>
+                          : <span className={tokClass(NO_AUTH)} title="Sent without a credential">{NO_AUTH}</span>
                       : <Empty />}
                   </td>
                   <td>{loginLabel(e.authMethod) || <Empty />}</td>
@@ -272,11 +286,8 @@ export function EvidenceTable({ checks, tokens, name, to }: {
                   >
                     {e.credentialID ? shortId(e.credentialID) : <Empty />}
                   </td>
-                  {(() => {
-                    const d = destinationOf(e);
-                    return <td title={d.raw || undefined}>{d.label || <Empty />}</td>;
-                  })()}
-                  <td className={`evt-status ${tone}`}>{statusLabel(e.authStatus)}</td>
+                  <td title={dest.raw || undefined}>{dest.label || <Empty />}</td>
+                  <td className={`evt-status ${tone}`}>{statusLabel(status)}</td>
                 </tr>
               );
             })}

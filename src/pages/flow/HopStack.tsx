@@ -1,6 +1,6 @@
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Icon } from "../../components/Icon";
-import { switchedTitle } from "../observability/EvidenceTable";
+import { noAuthTitle, switchedTitle } from "../observability/EvidenceTable";
 import { branchTone } from "./branchPalette";
 import type { FlowBranch } from "./flowData";
 import { clock, pad2, type TraceHop, type TraceModel } from "./traceModel";
@@ -199,7 +199,7 @@ function HopCard({
               className={`tr-rc-tag tok-${hop.activity.toLowerCase().replace(/\s+/g, "")}${hop.cred?.tone === "bad" ? " bad" : ""}`}
               title={
                 hop.activity === "No Auth"
-                  ? "Sent without a credential"
+                  ? `${noAuthTitle}: sent without a credential`
                   : hop.activity === "Switched" ? switchedTitle
                   : hop.cred?.reusedFrom ? `${hop.activity} · same credential as hop ${pad2(hop.cred.reusedFrom)}` : `Token ${hop.activity.toLowerCase()}`
               }

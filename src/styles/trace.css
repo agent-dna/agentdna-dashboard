@@ -137,7 +137,8 @@
 /* Token activity, coloured as in the intent page's evidence table. No Auth is an outline: nothing was carried. */
 .tr-rc-tag.tok-issued { color: var(--accent); background: rgba(37,99,235,.07); border-color: rgba(37,99,235,.22); }
 .tr-rc-tag.tok-forwarded { color: var(--fg-dim); background: var(--bg-2); border-color: var(--line-strong); }
-.tr-rc-tag.tok-noauth { color: var(--fg-muted); background: transparent; border: 1px dashed var(--line-strong); }
+/* A hop always has a receiver, so No Auth here is warning 5104. */
+.tr-rc-tag.tok-noauth { color: #B45309; background: transparent; border: 1px dashed rgba(217,119,6,.45); }
 .tr-rc-tag.bad { color: var(--threat); background: rgba(220,38,38,.07); border-color: rgba(220,38,38,.25); }
 .tr-rc-tag.warn { color: var(--fg-muted); background: var(--bg-2); border-color: var(--line-strong); }
 .tr-hop-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 2px; min-width: 0; }
