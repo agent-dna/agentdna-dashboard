@@ -443,13 +443,11 @@ export function AgentDetailPage() {
 
         {tab === "history" && (
           <DataTable
-            rows={(() => {
-              const sortedAsc = (history?.history || []).slice().sort((a, b) => a.time - b.time);
-              return sortedAsc
-                .map((h, i) => ({ ...h, id: h.updateID, changeNum: i + 1 }))
-                // Display newest first
-                .sort((a, b) => b.time - a.time);
-            })()}
+            // Oldest first, so the last row is the latest policy.
+            rows={(history?.history || [])
+              .slice()
+              .sort((a, b) => a.time - b.time)
+              .map((h, i) => ({ ...h, id: h.updateID, changeNum: i + 1 }))}
             columns={[
               {
                 key: "changeNum",
@@ -486,10 +484,11 @@ export function AgentDetailPage() {
                 ),
               },
               {
+                // The policy this update brought in.
                 key: "actions",
-                label: "",
+                label: "Updated Policy",
                 align: "right",
-                width: 110,
+                width: 150,
                 render: (r) => (
                   <button
                     className="btn primary"
