@@ -326,7 +326,13 @@ function CredentialTab({ model, hop, c }: { model: TraceModel; hop: TraceHop; c:
                 note="Credential ID · not the secret"
                 actions={<CopyBtn text={e.credentialID} k={`fp${k}`} c={c} />}
               />
-              <Row label="Person" value={e.identityID ? trunc(e.identityID, 12, 8) : ""} mono actions={e.identityID && <CopyBtn text={e.identityID} k={`id${k}`} c={c} />} />
+              <Row
+                label="Person"
+                value={e.identityName || (e.identityID ? trunc(e.identityID, 12, 8) : "")}
+                mono={!e.identityName}
+                note={e.identityName && e.identityID ? trunc(e.identityID, 12, 8) : undefined}
+                actions={e.identityID && <CopyBtn text={e.identityID} k={`id${k}`} c={c} />}
+              />
               <Row
                 label="Request ID"
                 value={revealed[k] ? e.requestID : trunc(e.requestID, 14, 8)}

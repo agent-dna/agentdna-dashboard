@@ -34,6 +34,7 @@ export function EvidenceCheck({ e, at, flat = false }: {
   const ids: [string, string][] = (
     [
       ["Credential", e.credentialID],
+      ["Person", e.identityName],
       ["Identity", e.identityID],
       ["Request", e.requestID],
       ["Run", e.runID],

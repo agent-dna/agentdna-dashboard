@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { authTone, fetchIntentAuthEvidence, type AuthEvidence } from "../api/observability";
 import { useResolveName } from "../context/DirectoryContext";
@@ -6,7 +6,7 @@ import { useIntentInteractions } from "../data/hooks";
 import { buildDestinationRows, type DestinationRow, type TrailLink } from "../lib/credentialTrail";
 import { parseDestination } from "../lib/destination";
 import { clockAt, loginLabel, statusLabel } from "../pages/observability/EvidenceTable";
-import { shortId } from "../pages/observability/format";
+import { identityLabel, shortId } from "../pages/observability/format";
 import { useObsQuery } from "../pages/observability/useObsQuery";
 import { DestinationLogo } from "./DestinationLogo";
 import { Icon } from "./Icon";
@@ -156,7 +156,7 @@ function RowEvidence({ row }: { row: DestinationRow }) {
                   <td>{seenBy ? seenBy[0].toUpperCase() + seenBy.slice(1) : <None />}</td>
                   <td>{loginLabel(e.authMethod) || <None />}</td>
                   <td className="evt-mono evt-key">{e.credentialID || <None />}</td>
-                  <td className="evt-mono" title={e.identityID || undefined}>{e.identityID ? shortId(e.identityID) : <None />}</td>
+                  <PersonCell e={e} empty={<None />} />
                   <td title={e.destination || undefined}>{sentTo(e, to)}</td>
                   <td className={`evt-status ${authTone(e.authStatus)}`}>{statusLabel(e.authStatus)}</td>
                 </tr>
@@ -177,3 +177,10 @@ function RowEvidence({ row }: { row: DestinationRow }) {
 }
 
 const None = () => <span className="evt-none" aria-label="None">—</span>;
+
+/** The person behind a check: their first name, the full name and ID on hover (the short ID when unnamed). */
+function PersonCell({ e, empty }: { e: AuthEvidence; empty: ReactNode }) {
+  const who = identityLabel(e);
+  if (!who) return <td>{empty}</td>;
+  return <td className={who.named ? undefined : "evt-mono"} title={who.title}>{who.text}</td>;
+}

@@ -3,6 +3,7 @@ import { authStatusLabel, authTone, worstAuthTone, type AuthEvidence } from "../
 import { useResolveName } from "../context/DirectoryContext";
 import { IntentIdChip } from "../context/IntentNumbersContext";
 import { timeAgo } from "../lib/format";
+import { identityLabel } from "../pages/observability/format";
 import { EntityLink } from "./EntityLink";
 
 const TD_STYLE = { padding: "14px 22px", borderBottom: "1px solid var(--line)", verticalAlign: "middle", textAlign: "center" } as const;
@@ -160,7 +161,6 @@ export function LedgerTable({
   );
 }
 
-const short = (id: string) => (id.length > 18 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id);
 /** "api_key" → "Api key". */
 const sentence = (v: string) => {
   const t = v.replace(/_/g, " ").trim();
@@ -175,7 +175,8 @@ function EvidenceCells({ checks }: { checks: AuthEvidence[] | undefined }) {
   const faint = <span style={{ font: "500 13px var(--font-mono)", color: "var(--fg-faint)" }}>—</span>;
   if (!checks) return <><td style={TD_STYLE}>{faint}</td><td style={TD_STYLE}>{faint}</td></>;
 
-  const identities = [...new Set(checks.map((c) => c.identityID).filter(Boolean))];
+  // One entry per distinct identity, keeping the first name the checks gave it.
+  const identities = [...new Map(checks.filter((c) => c.identityID || c.identityName).map((c) => [c.identityID || c.identityName, identityLabel(c)!])).values()];
   const methods = [...new Set(checks.map((c) => c.authMethod).filter(Boolean))].map(sentence);
   const tone = worstAuthTone(checks.map((c) => c.authStatus));
   const failed = checks.filter((c) => authTone(c.authStatus) === tone && tone !== "ok");
@@ -191,8 +192,8 @@ function EvidenceCells({ checks }: { checks: AuthEvidence[] | undefined }) {
       <td style={TD_STYLE}>
         {identities.length === 0 ? faint : (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
-            <span title={identities.join("\n")} style={{ font: "500 13px var(--font-mono)", color: "var(--fg)" }}>
-              {short(identities[0])}
+            <span title={identities.map((w) => w.title).join("\n\n")} style={{ font: identities[0].named ? "500 13px var(--font-body)" : "500 13px var(--font-mono)", color: "var(--fg)" }}>
+              {identities[0].text}
               {identities.length > 1 && <span style={{ color: "var(--fg-muted)" }}> +{identities.length - 1}</span>}
             </span>
             {methods.length > 0 && (

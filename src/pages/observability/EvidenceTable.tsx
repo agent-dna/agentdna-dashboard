@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { authTone, type AuthEvidence } from "../../api/observability";
 import { DestinationLogo } from "../../components/DestinationLogo";
 import { parseDestination } from "../../lib/destination";
-import { ms, shortId } from "./format";
+import { identityLabel, ms, shortId } from "./format";
 
 /**
  * A step's auth checks, split the way the calls happened:
@@ -249,7 +249,12 @@ export function EvidenceTable({ checks, tokens, name, to }: {
                 <tr key={`${e.requestID}:${e.source}:${k}`}>
                   <td title={tok?.holder || undefined}>{tok ? name(tok.holder) : <Empty />}</td>
                   {/* Acting as: the identity the credential carries, i.e. on whose behalf it was used. */}
-                  <td className="evt-mono" title={e.identityID || undefined}>{e.identityID ? shortId(e.identityID) : <Empty />}</td>
+                  {(() => {
+                    const who = identityLabel(e);
+                    return who
+                      ? <td className={who.named ? undefined : "evt-mono"} title={who.title}>{who.text}</td>
+                      : <td><Empty /></td>;
+                  })()}
                   <td>
                     {tok ? <span className={tokClass(tok.activity)}>{tok.activity}</span>
                       : isNoAuth(e) ? <span className={tokClass(NO_AUTH)} title="Sent without a credential">{NO_AUTH}</span>

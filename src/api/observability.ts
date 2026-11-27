@@ -300,7 +300,9 @@ export interface AuthEvidence {
   /** e.g. "bearer". */
   authMethod: string;
   credentialID: string;
-  identityID: string;
+  identityID: string | null;
+  /** Who the identity is, e.g. "Shreya Patil (shreya.p@rubix.net)" or "app: <client id>"; null when unnamed. */
+  identityName?: string | null;
   /** "accepted", "rejected" or "unknown" (the check wasn't seen). Only "accepted" passes. */
   authStatus: string;
   keyVersion: string;
