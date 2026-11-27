@@ -999,26 +999,6 @@ export function HomePage() {
             {/* The switch renders in both views — when it only showed on the graph,
                 the incidents view was a one-way door. */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {chartTab === "threats" && (
-                <button
-                  style={{
-                    background: "transparent",
-                    border: "1px solid var(--line)",
-                    borderRadius: 6,
-                    padding: "4px 10px",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "var(--fg-muted)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                >
-                  Last 24h
-                  <Icon name="chevronDown" size={12} style={{ color: "var(--fg-muted)" }} />
-                </button>
-              )}
               <div style={{ display: "flex", background: "var(--bg-3)", borderRadius: 6, padding: 2, flexShrink: 0 }}>
                 {([{ key: "graph", label: "Graph" }, { key: "threats", label: "Incidents" }] as const).map((t) => {
                   const active = chartTab === t.key;
