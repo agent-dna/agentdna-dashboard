@@ -48,6 +48,9 @@ const Empty = () => <span className="evt-none" aria-label="None">—</span>;
 
 /** What happened to the credential on a check, across the whole intent. */
 export type TokenActivity = "Issued" | "Forwarded" | "Switched";
+/** The warning a Switched token raises: an agent changed the credential partway through the run. */
+export const SWITCHED_WARNING = { code: 5103, label: "Identity switched mid-run" } as const;
+export const switchedTitle = `Warning ${SWITCHED_WARNING.code} · ${SWITCHED_WARNING.label}`;
 /** A check, or a hop, made without any credential: no fingerprint and no auth method. */
 export const NO_AUTH = "No Auth";
 export const isNoAuth = (e: AuthEvidence) => {
@@ -69,17 +72,19 @@ const SOURCE_ORDER: Record<string, number> = { client_out: 0, gateway: 1, server
 /**
  * Follows credentials through an intent, step by step in chain order (and within a step in the
  * order its checks were seen):
- *  - the first credential in the intent is Issued;
  *  - a credential seen earlier in the intent is Forwarded;
- *  - a credential never seen before (after the first) is Switched. That includes a server_in that
- *    differs from its own step's client_out.
- * A token's holder is whoever first presented it: the step's `from` for client_out / gateway /
+ *  - a new credential presented by an agent, once a credential is already in play, is Switched:
+ *    the agent changed identity mid-run (warning 5103);
+ *  - any other new credential is Issued: an app, tool or user starting one, or the run's first.
+ * A token's holder is whoever presented it: the step's `from` for client_out / gateway /
  * server_in, and its `to` for server_out (the receiver's own call to its destination).
+ * `isAgent` says whether a holder DID is an agent; unknown parties count as not agents.
  * Checks without a credential ID can't be followed and are left out.
  */
 export function buildTokenTrail(
   steps: { interactionID: string; from: string; to: string }[],
   evidenceOf: Map<string, AuthEvidence[]>,
+  isAgent: (did: string) => boolean,
 ): TokenTrail {
   const trail: TokenTrail = new Map();
   const holderOf = new Map<string, string>();
@@ -98,7 +103,7 @@ export function buildTokenTrail(
         continue;
       }
       const holder = (e.source || "").toLowerCase() === "server_out" ? s.to : s.from;
-      trail.set(e, { activity: holderOf.size === 0 ? "Issued" : "Switched", holder });
+      trail.set(e, { activity: holderOf.size > 0 && isAgent(holder) ? "Switched" : "Issued", holder });
       holderOf.set(id, holder);
     }
   }
@@ -256,7 +261,7 @@ export function EvidenceTable({ checks, tokens, name, to }: {
                       : <td><Empty /></td>;
                   })()}
                   <td>
-                    {tok ? <span className={tokClass(tok.activity)}>{tok.activity}</span>
+                    {tok ? <span className={tokClass(tok.activity)} title={tok.activity === "Switched" ? switchedTitle : undefined}>{tok.activity}</span>
                       : isNoAuth(e) ? <span className={tokClass(NO_AUTH)} title="Sent without a credential">{NO_AUTH}</span>
                       : <Empty />}
                   </td>

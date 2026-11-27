@@ -239,6 +239,7 @@ export function buildTrace(flow: Flow, ixById: Map<string, Interaction>): TraceM
   const tokens = buildTokenTrail(
     hops.map((h) => ({ interactionID: `h${h.n}`, from: h.src, to: h.dst })),
     new Map(hops.map((h) => [`h${h.n}`, h.checks])),
+    (id) => nodeById.get(id)?.kind === "agent",
   );
   for (const h of hops) h.activity = hopTokenActivity(h.checks, tokens);
 

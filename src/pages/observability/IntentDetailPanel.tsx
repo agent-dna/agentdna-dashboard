@@ -217,7 +217,7 @@ export function CustodyChain({
 
   const evidenceOf = new Map((evidence?.interactions ?? []).map((x) => [x.interactionID, x.evidence ?? []]));
   // Followed across the whole chain, so each check knows if its token was issued, forwarded or switched.
-  const tokens = buildTokenTrail(steps, evidenceOf);
+  const tokens = buildTokenTrail(steps, evidenceOf, (did) => resolve(did).kind === "agent");
   const shown = flaggedOnly ? steps.map((s, k) => [s, k] as const).filter(([s]) => s.threat) : steps.map((s, k) => [s, k] as const);
 
   return (
