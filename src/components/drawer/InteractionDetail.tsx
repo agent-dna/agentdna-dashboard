@@ -218,7 +218,6 @@ export function InteractionDetail({ interaction: i }: Props) {
                               {d.authStatus && (
                                 <span className={`ixd-dest-tag ${authTone(d.authStatus)}`}>{authStatusLabel(d.authStatus)}</span>
                               )}
-                              {d.credentialID && <span className="ixd-dest-cred" title={d.credentialID}>{truncateId(d.credentialID)}</span>}
                             </span>
                           </div>
                         </div>
@@ -242,7 +241,6 @@ export function InteractionDetail({ interaction: i }: Props) {
                             {d.authStatus && (
                               <span className={`ixd-dest-tag ${authTone(d.authStatus)}`}>{authStatusLabel(d.authStatus)}</span>
                             )}
-                            {d.credentialID && <span className="ixd-dest-cred" title={d.credentialID}>{truncateId(d.credentialID)}</span>}
                           </span>
                         </div>
                       </div>
