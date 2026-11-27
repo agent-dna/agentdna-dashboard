@@ -1,9 +1,8 @@
 import { useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, KeyRound } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCredentialsPaged, useResourcesPaged } from "../../data/hooks";
 import { CopyId } from "../observability/IntentDetailPanel";
-import { authMethodLabel } from "../../lib/credFormat";
 import { credentialPath, resourceLabel, resourcePath, whenShort } from "../../lib/resource";
 import { DestinationLogo } from "../../components/DestinationLogo";
 import { MetricTile } from "../../components/MetricTile";
@@ -21,7 +20,8 @@ import { CREDENTIAL_STATUSES, TRUST_STATUSES, type CredentialStatusValue, type T
  * table pages on its own; clicking a row opens that resource's or credential's page.
  */
 
-const shortId = (s: string) => (s.length > 20 ? `${s.slice(0, 10)}…${s.slice(-6)}` : s);
+/** A credential key as its first 4 and last 3 characters ("f1c1…f1c"); the full key is on hover. */
+const shortKey = (s: string) => (s.length > 10 ? `${s.slice(0, 4)}…${s.slice(-3)}` : s);
 
 /** "just now", "5m ago", "3h ago", "2d ago", else the date. */
 function ago(iso: string): string {
@@ -234,7 +234,6 @@ export function ResourcesPage() {
             <table className="rt">
               <colgroup>
                 <col />
-                <col style={{ width: 128 }} />
                 <col style={{ width: 112 }} />
                 <col style={{ width: 72 }} />
                 <col style={{ width: 92 }} />
@@ -242,7 +241,6 @@ export function ResourcesPage() {
               <thead>
                 <tr>
                   <th>Credential</th>
-                  <th>Auth method</th>
                   <th>Status</th>
                   <th className="num">Intents</th>
                   <th className="num">Last used</th>
@@ -253,16 +251,12 @@ export function ResourcesPage() {
                   <tr key={c.credentialID} {...rowProps(() => navigate(credentialPath(c.credentialID)))}>
                     <td>
                       <span className="rt-cred">
-                        <KeyRound size={13} className="rt-key" aria-hidden />
-                        <span className="rt-mono" title={c.credentialID}>{shortId(c.credentialID)}</span>
+                        <span className="rt-mono" title={c.credentialID}>{shortKey(c.credentialID)}</span>
                         <span onClick={(e) => e.stopPropagation()}>
                           <CopyId value={c.credentialID} label="credential ID" />
                         </span>
                         <SharedKeyTag userCount={c.userCount} agentCount={c.agentCount} />
                       </span>
-                    </td>
-                    <td>
-                      <span className={`rt-tag${c.authMethod ? "" : " none"}`}>{authMethodLabel(c.authMethod) || "Not reported"}</span>
                     </td>
                     <td>
                       <CredentialStatusChip value={c.status.value} title={c.status.reason || undefined} />
