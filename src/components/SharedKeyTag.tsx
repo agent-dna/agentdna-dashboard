@@ -2,11 +2,11 @@ import { Users } from "lucide-react";
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
-/** A credential is shared when more than one user or agent (counted together) has used it. */
-export const isSharedCredential = (userCount: number, agentCount: number) => userCount + agentCount > 1;
+/** A credential is shared when more than one user has used it; agents don't count. */
+export const isSharedCredential = (userCount: number, _agentCount?: number) => userCount > 1;
 
 /**
- * "Shared access key": the credential was used by more than one user or agent. Renders nothing
+ * "Shared access key": the credential was used by more than one user. Renders nothing
  * otherwise, so callers can drop it in unconditionally.
  */
 export function SharedKeyTag({ userCount, agentCount }: { userCount: number; agentCount: number }) {
