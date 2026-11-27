@@ -54,6 +54,8 @@ export const switchedTitle = `Warning ${SWITCHED_WARNING.code} · ${SWITCHED_WAR
 /** The warning a No Auth check raises when it still went somewhere: it reached a destination unauthenticated. */
 export const NO_AUTH_WARNING = { code: 5104, label: "No auth or weak auth" } as const;
 export const noAuthTitle = `Warning ${NO_AUTH_WARNING.code} · ${NO_AUTH_WARNING.label}`;
+/** Weak auth, which also raises 5104: HTTP Basic (a reusable username and password on every call). */
+export const isWeakAuth = (e: AuthEvidence) => (e.authMethod || "").trim().toLowerCase().startsWith("basic");
 /** A check, or a hop, made without any credential: no fingerprint and no auth method. */
 export const NO_AUTH = "No Auth";
 export const isNoAuth = (e: AuthEvidence) => {
@@ -279,7 +281,11 @@ export function EvidenceTable({ checks, tokens, name, to }: {
                           : <span className={tokClass(NO_AUTH)} title="Sent without a credential">{NO_AUTH}</span>
                       : <Empty />}
                   </td>
-                  <td>{loginLabel(e.authMethod) || <Empty />}</td>
+                  <td>
+                    {isWeakAuth(e)
+                      ? <span className="evt-tok noauth warn" title={`${noAuthTitle}: Basic auth sends a reusable username and password`}>{loginLabel(e.authMethod)}</span>
+                      : loginLabel(e.authMethod) || <Empty />}
+                  </td>
                   <td
                     className="evt-mono evt-key"
                     title={e.credentialID ? `${e.credentialID}${e.keyVersion ? `\nKey version ${e.keyVersion}` : ""}` : undefined}

@@ -1,6 +1,6 @@
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Icon } from "../../components/Icon";
-import { noAuthTitle, switchedTitle } from "../observability/EvidenceTable";
+import { isWeakAuth, noAuthTitle, switchedTitle } from "../observability/EvidenceTable";
 import { branchTone } from "./branchPalette";
 import type { FlowBranch } from "./flowData";
 import { clock, pad2, type TraceHop, type TraceModel } from "./traceModel";
@@ -194,6 +194,9 @@ function HopCard({
         </span>
         <span className="tr-rc-meta">
           <span className="op">{`${hop.protocol} · ${hop.op}`}</span>
+          {hop.checks.some(isWeakAuth) && (
+            <span className="tr-rc-tag" title={`${noAuthTitle}: Basic auth sends a reusable username and password`}>Basic</span>
+          )}
           {hop.activity ? (
             <span
               className={`tr-rc-tag tok-${hop.activity.toLowerCase().replace(/\s+/g, "")}${hop.cred?.tone === "bad" ? " bad" : ""}`}
